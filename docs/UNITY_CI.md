@@ -51,6 +51,29 @@ GameCI закреплён по SHA: Test Runner **v4.3.2** и Builder **v4.8.2**
 Test Runner использует виртуальный дисплей образа. Code Coverage package не
 добавляется; метрики покрытия не являются частью этой настройки.
 
+### Дисковое пространство GitHub-hosted runner
+
+Перед первым запуском GameCI и загрузкой Docker-образа выполняется
+`Tools/ci/prepare_unity_runner.sh`. Он выводит `df -h` до и после очистки
+для корня, checkout и файловой системы Docker, записывает свободное место
+и объём освобождённого пространства в summary. Если осталось менее 30 GiB,
+job завершается понятной ошибкой до загрузки Unity.
+
+Очистка разрешена только при `GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`
+и `RUNNER_OS=Linux`. Удаляется фиксированный список предустановленных SDK:
+Android, .NET, Swift, GHC/ghcup, CodeQL и PowerShell; очищаются APT cache,
+неиспользуемые Docker images и build cache. Checkout, runner tools, Docker,
+Git, системный Python, Node для Actions, volumes и активные containers сохраняются.
+Нельзя запускать этот скрипт на собственной машине; защитная проверка отклонит запуск.
+.NET-тесты остаются в прежнем отдельном job на другой VM, поэтому удаление
+host .NET SDK в Unity job на них не влияет. SDK для Unity находятся в образе.
+
+Когда доступен `linux-il2cpp`, все четыре вызова GameCI используют один и тот же
+digest этого образа: компиляция, Edit Mode, Play Mode и сборка. Отдельный `base`
+не загружается и не занимает дополнительное место. Если Linux IL2CPP образа нет,
+тесты используют `base`, а сборка по-прежнему явно получает NOT RUN.
+Версия Unity, Secrets и тесты при этой оптимизации не меняются.
+
 Проверено 2026-11-12: Docker Registry вернул HTTP 200 и Linux amd64 manifests
 для `unityci/editor:ubuntu-6000.6.9f1-base-3` и
 `unityci/editor:ubuntu-6000.6.9f1-linux-il2cpp-3`. Наличие образа не подтверждает

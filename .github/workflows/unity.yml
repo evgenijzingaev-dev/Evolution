@@ -60,6 +60,9 @@ jobs:
         id: images
         run: python3 Tools/ci/unity_images.py
 
+      - name: Free disk space before pulling Unity
+        run: bash Tools/ci/prepare_unity_runner.sh
+
       - name: Compile Runtime and Editor; prepare prototype assets
         uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2, Unity 6.6 shared-memory fix
         env:

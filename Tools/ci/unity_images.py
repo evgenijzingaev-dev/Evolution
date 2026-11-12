@@ -47,6 +47,9 @@ def main():
     if editor is None:
         raise RuntimeError(f"GameCI editor image unavailable for Unity {version}; no automatic downgrade")
     build = resolve_image(version, "linux-il2cpp", auth["token"])
+    # Reuse one image for compilation, both test modes and the player build.
+    # Pulling base and linux-il2cpp separately can retain two large Editor layers.
+    editor = build or editor
     outputs = {"version": version, "editor_image": editor, "build_image": build or "", "build_supported": str(build is not None).lower()}
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a") as output:
