@@ -13,6 +13,18 @@ namespace Evolution.Editor
             if (UnityEngine.Application.unityVersion != "6000.6.9f1")
                 throw new BuildFailedException("Visual Preview requires Unity 6000.6.9f1.");
             PrototypeSetup.CreatePrototype();
+            // The prototype creates instanced materials at runtime, so scene usage cannot
+            // tell the build stripper that INSTANCING_ON is needed.
+            var graphics = new SerializedObject(UnityEngine.Rendering.GraphicsSettings.GetGraphicsSettings());
+            var instancing = graphics.FindProperty("m_InstancingStripping") ?? graphics.FindProperty("m_InstancingVariants");
+            if (instancing == null)
+                throw new BuildFailedException("Cannot locate Unity instancing stripping settings.");
+            int keepAll = Array.FindIndex(instancing.enumDisplayNames,
+                name => name.Replace(" ", "").Equals("KeepAll", StringComparison.OrdinalIgnoreCase));
+            if (keepAll < 0)
+                throw new BuildFailedException("Cannot locate Keep All instancing option: " + string.Join(", ", instancing.enumDisplayNames));
+            instancing.enumValueIndex = keepAll;
+            graphics.ApplyModifiedPropertiesWithoutUndo();
             var arguments = Environment.GetCommandLineArgs();
             int index = Array.IndexOf(arguments, "-customBuildPath");
             if (index < 0 || index + 1 >= arguments.Length)
