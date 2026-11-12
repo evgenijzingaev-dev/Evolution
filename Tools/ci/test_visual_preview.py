@@ -81,6 +81,7 @@ class TriggerTests(unittest.TestCase):
     def test_visual_push_requests_unity(self):
         for path in ["Assets/Evolution/Runtime/Resources/VolumeBody.shader",
                      "Assets/Evolution/Runtime/CrystalMeshes.cs", "Tools/ci/check_visual_preview.py",
+                     "Assets/Evolution/Presentation/CrystalForms.cs", "Assets/Evolution/Settings/PrototypeURP.asset",
                      "ProjectSettings/GraphicsSettings.asset", "Packages/manifest.json"]:
             with self.subTest(path=path): self.assertTrue(visual_change([path]))
 

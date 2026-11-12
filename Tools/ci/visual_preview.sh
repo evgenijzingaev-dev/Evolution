@@ -53,9 +53,13 @@ if ! timeout --signal=TERM --kill-after=15s 240s "$player" \
   echo '::error::Real Unity render failed or timed out. No substitute images were produced. See docs/VISUAL_PREVIEW.md for GPU setup.'
   # Print only known diagnostic categories, never arbitrary log contents.
   python3 - "$private_log" <<'PY'
-import sys
+import re, sys
 from pathlib import Path
 text = Path(sys.argv[1]).read_text(errors="replace")
+# Our own validation messages contain only static diagnostics and known shader names.
+# Print those without exposing arbitrary player logs or any activation output.
+for message in sorted(set(re.findall(r"Visual Preview: ([^\r\n]{1,200})", text))):
+    print("Capture validation: " + message)
 for category in ("Visual Preview:", "Shader error", "Failed to initialize graphics", "Exception", "Out of memory"):
     if category.lower() in text.lower():
         print("Detected diagnostic category: " + category)

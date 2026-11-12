@@ -7,6 +7,8 @@ import subprocess
 PATTERNS = (
     ".github/workflows/visual-preview.yml", "Tools/ci/*visual_preview*",
     "Assets/Evolution/Editor/VisualPreviewBuild.cs", "Assets/Evolution/Runtime/WaterVisualPreview.cs",
+    "Assets/Evolution/Editor/PrototypeSetup.cs", "Assets/Evolution/Settings/**",
+    "Assets/Evolution/Presentation/CrystalForms.cs", "Assets/Evolution/Volume/WaterSpace.cs",
     "Assets/Evolution/Runtime/WaterPrototype.cs", "Assets/Evolution/Runtime/WaterCamera.cs",
     "Assets/Evolution/Runtime/VolumePainter.cs", "Assets/Evolution/Runtime/CrystalWaterLook.cs",
     "Assets/Evolution/Runtime/CrystalMeshes.cs", "Assets/Evolution/Runtime/MicroMeshes.cs",
