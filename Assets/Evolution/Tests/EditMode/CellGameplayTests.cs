@@ -48,6 +48,7 @@ namespace Evolution.Tests
             s.SetControlActions(true,false,false); s.Step();
             var h = s.GetCell(0); var prey = s.GetCell(1);
             Assert.Greater(h.Budget.Prey,0); Assert.Greater(h.Budget.Attack,0); Assert.Less(prey.Integrity,1);
+            Assert.AreEqual(prey.Id,h.AttackTargetId); Assert.AreEqual(h.Id,prey.DamageSourceId);
             Assert.That(h.Energy - h.Budget.Start,Is.EqualTo(h.Budget.Net).Within(.00001));
             Assert.That(prey.Energy - prey.Budget.Start,Is.EqualTo(prey.Budget.Net).Within(.00001));
         }

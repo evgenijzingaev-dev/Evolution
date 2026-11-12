@@ -96,6 +96,7 @@ namespace Evolution.Core
                 cells[target].Budget.PredationLoss += Math.Max(0, victimBefore - cells[target].Energy);
                 cells[i].Budget.Attack += (.18f + .3f * cells[i].Genes.Predation) * config.StepSeconds;
                 cells[i].AttackLastStep = 1; cells[target].DamageLastStep = 1;
+                cells[i].AttackTargetId = cells[target].Id; cells[target].DamageSourceId = cells[i].Id;
                 float gain = Math.Max(0, cells[i].Energy - before + (.18f + .3f * cells[i].Genes.Predation) * config.StepSeconds);
                 cells[i].Digestion = Math.Min(1, cells[i].Digestion + gain * .7f);
                 cells[i].Budget.Prey += gain; cells[i].FoodLastStep += gain; cells[i].AssimilatedEnergy += gain;

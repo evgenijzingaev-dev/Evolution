@@ -5,6 +5,7 @@
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <Compile Include="../../Assets/Evolution/Core/*.cs" />
+    <Compile Include="../../Assets/Evolution/Presentation/*.cs" />
     <Compile Include="../../Assets/Evolution/Localization/*.cs" />
     <Compile Include="../../Assets/Evolution/Tests/EditMode/*.cs" />
   </ItemGroup>

@@ -1,0 +1,5 @@
+{
+  "name": "Evolution.Presentation",
+  "references": ["Evolution.Core"],
+  "noEngineReferences": true
+}
