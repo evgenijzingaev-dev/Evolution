@@ -5,6 +5,8 @@ namespace Evolution.Localization
 {
     public enum TextKey
     {
+        VolumeTitle,VolumeScope,VolumeWaterOnly,VolumeLife,VolumeFlowOn,VolumeFlowOff,VolumeHeatOn,VolumeHeatOff,VolumeFoodOn,VolumeFoodOff,
+        VolumeSample,VolumeVector,VolumeCell,VolumeIncome,VolumeNet,VolumePhotoDiet,VolumeDiet,VolumeParticles,VolumeControls,VolumeFoodLabel,VolumeChunks,VolumeProbe,
         NaturalColors, NaturalLegend, StyleIdentity, StyleSoloIdentity, SourceAndDrain,
         DietHunter, DietSunlight, DietOrganicGuide, DietGeneralGuide, DivisionDeficit,
         KeyAttack, KeyDefend, KeyBoost, KeyDivide, AbilityHint, ActionSated, ActionNoPrey, ActionApproach,
@@ -38,6 +40,28 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.VolumeTitle]="EVOLUTION · объёмная вода",
+                [TextKey.VolumeScope]="Отдельный опыт: исследуйте воду и питание. Без размножения и сохранения линии.",
+                [TextKey.VolumeWaterOnly]="Скрыть организмы · только вода",
+                [TextKey.VolumeLife]="Показать организмы",
+                [TextKey.VolumeFlowOn]="Показать течения",
+                [TextKey.VolumeFlowOff]="Скрыть течения",
+                [TextKey.VolumeHeatOn]="Показать температуру · 9–35 °C",
+                [TextKey.VolumeHeatOff]="Скрыть тепловую карту",
+                [TextKey.VolumeFoodOn]="Поиск пищи: включить",
+                [TextKey.VolumeFoodOff]="Поиск пищи: выключить",
+                [TextKey.VolumeSample]="Вода: {0:F1} °C · свет {1:P0}\nСкорость течения: {2:F2} ед/с",
+                [TextKey.VolumeVector]="Поток: X {0:+0.00;−0.00;0} · Y {1:+0.00;−0.00;0} · Z {2:+0.00;−0.00;0}",
+                [TextKey.VolumeCell]="Клетка № {0} · высота {1:F1}\nЭнергия {2:F1} / {3:F1}",
+                [TextKey.VolumeIncome]="Субстрат +{0:F2} · органика +{1:F2}\nСвет +{2:F2} · охота +{3:F2} /с",
+                [TextKey.VolumeNet]="Изменение резерва: {0:+0.00;−0.00;0}/с",
+                [TextKey.VolumePhotoDiet]="Фотосинтез использует свет и доступный субстрат. Зелёные частицы — субстрат, не свет.",
+                [TextKey.VolumeDiet]="Зелёный — субстрат; янтарный — органика. Пища поглощается внутри облака; хищнику для укуса нужен контакт.",
+                [TextKey.VolumeParticles]="Взвесь: {0} частиц · серые включения не являются пищей",
+                [TextKey.VolumeChunks]="Регионов рядом: {0} · организмов: {1}\nДалёкие популяции обновляются реже.",
+                [TextKey.VolumeProbe]="Область в центре обзора: {0:F1} °C\nПоток в этой точке: {1:F2} ед/с",
+                [TextKey.VolumeControls]="Правая кнопка — облететь · колесо — масштаб · ЛКМ — выбор · WASD — движение · Е/Q — вверх/вниз · шифт — рывок · пробел — укус · P — пауза · H — интерфейс · табуляция — выбор · Esc — свободная камера · Home — обзор",
+                [TextKey.VolumeFoodLabel]="Субстрат {0:F1} · органика {1:F1}\nКонцентрация {2:F2} ед/объём\nУсвоение до {3:F2}/с",
                 [TextKey.NaturalColors] = "Цвет организмов: естественный",
                 [TextKey.NaturalLegend] = "Пигмент, пластиды, панцирь и форма отражают наследуемые признаки. Научные режимы окраски доступны этой же кнопкой.",
                 [TextKey.StyleIdentity] = "{0} · роль: {1}",

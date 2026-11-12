@@ -3,7 +3,8 @@
   "references": [
     "Evolution.Core",
     "Evolution.Localization",
-    "Evolution.Presentation"
+    "Evolution.Presentation",
+    "Evolution.Volume"
   ],
   "includePlatforms": [
     "Editor"

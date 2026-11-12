@@ -1,0 +1,179 @@
+using Evolution.Core;
+using Evolution.Localization;
+using Evolution.Presentation;
+using Evolution.Volume;
+using System.IO;
+using UnityEngine;
+
+namespace Evolution.Runtime
+{
+    public sealed class WaterPrototype : MonoBehaviour
+    {
+        public int ParticleCount=6144,Seed=42;
+        public bool OrganismsVisible=true,ShowCurrents,ShowTemperature,FindFood,HudVisible=true;
+        public bool PersistRegions=true;
+        public float SoundVolume=.2f;
+        public VolumeWorld World {get;private set;}
+        public Suspension Water {get;private set;}
+        public WaterCamera Rig {get;private set;}
+        public bool Paused {get;set;}
+        public Camera Lens {get;private set;}
+        public ChunkOcean Ocean {get;private set;}
+        VolumeAgent Selection=>selected>=0&&selected<World.Count?World.Get(selected):default;
+        VolumePainter painter;OceanLook look;GameObject cameraObject;
+        AudioSource ambient,effects;AudioClip ambience,feedSound;
+        readonly FlowBody[] flowBodies=new FlowBody[12];readonly float[] flowDistances=new float[12];
+        int selected;bool following=true;double accumulator,lastSound=double.NegativeInfinity;
+        GUISkin skin;GUIStyle panelStyle,heading;Texture2D panel;
+        Vector2 scroll;
+        readonly int[] foodCandidates=new int[4];readonly float[] foodScores=new float[4];readonly Rect[] foodBoxes=new Rect[4];
+        float Scale=>Mathf.Clamp(Mathf.Min(Screen.width/1920f,Screen.height/1080f),.7f,1.5f);
+        Rect Panel=>new Rect(18,18,330,Mathf.Min(700,Screen.height/Scale-110));
+        void Start()
+        {
+            IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
+            Ocean=new ChunkOcean(unchecked((uint)Seed),archive);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
+            Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
+            cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
+            Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.035f,.1f,.15f);
+            Rig=gameObject.AddComponent<WaterCamera>();Rig.Initialize(Lens);Rig.FocusOn(VolumePainter.V(Selection.Position));Rig.ApplyImmediate();
+            look=new OceanLook(transform,Lens);painter=new VolumePainter();
+            ambient=gameObject.AddComponent<AudioSource>();effects=gameObject.AddComponent<AudioSource>();ambient.playOnAwake=effects.playOnAwake=false;
+            const int rate=24000;int frames=(int)(OceanSound.LoopSeconds*rate);var samples=new float[frames*2];
+            for(int i=0;i<frames;i++)for(int c=0;c<2;c++)samples[i*2+c]=OceanSound.Ambience(i/(double)rate,c);
+            ambience=AudioClip.Create("Volume water ambience",frames,2,rate,false);ambience.SetData(samples,0);
+            ambient.clip=ambience;ambient.loop=true;ambient.volume=0;ambient.Play();
+            var pop=new float[4800];for(int i=0;i<pop.Length;i++)pop[i]=OceanSound.Interaction(i/(double)rate,.2,240,-80);
+            feedSound=AudioClip.Create("Volume confirmed intake",pop.Length,1,rate,false);feedSound.SetData(pop,0);
+            Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
+        }
+        public void Observe() {World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
+        public bool PlaySelected() {if(!Selection.Alive)return false;World.Controlled=selected;following=true;return true;}
+        public void Select(int index) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=true;Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
+        void Update()
+        {
+            if(World==null)return;
+            Vector2 pointer=new Vector2(Input.mousePosition.x/Scale,(Screen.height-Input.mousePosition.y)/Scale);
+            bool over=HudVisible&&Panel.Contains(pointer);
+            if(Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
+            if(Input.GetKeyDown(KeyCode.P))Paused=!Paused;
+            if(Input.GetKeyDown(KeyCode.Escape))Observe();
+            if(Input.GetKeyDown(KeyCode.Home)) {Observe();Rig.FocusOn(Rig.Focus,30);}
+            if(Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
+            if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
+                var ray=Lens.ScreenPointToRay(Input.mousePosition);float nearest=float.PositiveInfinity;int picked=-1;
+                for(int i=0;i<World.Count;i++) {var a=World.Get(i);if(!a.Alive)continue;var d=ray.origin-VolumePainter.V(a.Position);
+                    float hit=Observation.RaySphere(d.x,d.y,d.z,ray.direction.x,ray.direction.y,ray.direction.z,a.Biology.Genes.Size*.8f);
+                    if(hit<nearest){nearest=hit;picked=i;}}
+                if(picked>=0)Select(picked);
+            }
+            World.Input=default;World.Boost=World.Attack=false;
+            if(World.Controlled>=0&&!Paused&&!over&&Application.isFocused) {
+                Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
+                if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
+                World.Input=VolumePainter.V(Vector3.ClampMagnitude(command,1));World.Boost=Input.GetKey(KeyCode.LeftShift);World.Attack=Input.GetKey(KeyCode.Space);
+            }
+            if(!Selection.Alive)following=false;
+            if(following&&OrganismsVisible&&Selection.Alive)Rig.Follow(VolumePainter.V(Selection.Position));
+            Rig.Tick(over,following);
+            string identity=Selection.Identity;
+            if(Ocean.Stream(VolumePainter.V(Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0){selected=World.Count>0?Ocean.Nearest(VolumePainter.V(Lens.transform.position)):-1;following=false;}}
+            if(!Paused)accumulator+=Time.unscaledDeltaTime;
+            int steps=0;
+            while(!Paused&&accumulator>=VolumeWorld.StepSeconds&&steps++<8) {
+                World.Step();int count=OrganismsVisible?NearestFlows():0;
+                Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);accumulator-=VolumeWorld.StepSeconds;
+            }
+            if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
+            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible,ShowTemperature&&HudVisible);
+            ambient.volume=SoundVolume<=0?0:Mathf.MoveTowards(ambient.volume,Mathf.Clamp01(SoundVolume)*(Paused?.1f:.6f),Time.unscaledDeltaTime*.5f);
+            effects.volume=Mathf.Clamp01(SoundVolume);
+            var cell=Selection;
+            if(!Paused&&cell.FedAt>lastSound) {lastSound=cell.FedAt;effects.PlayOneShot(feedSound,.18f);}
+        }
+        int NearestFlows()
+        {
+            int count=0;var eye=VolumePainter.V(Lens.transform.position);
+            for(int i=0;i<World.Count;i++) {
+                var a=World.Get(i);if(!a.Alive)continue;float d=(a.Position-eye).Sqr;if(count==12&&d>=flowDistances[11])continue;
+                int at=Mathf.Min(count,11);while(at>0&&flowDistances[at-1]>d) {if(at<12){flowDistances[at]=flowDistances[at-1];flowBodies[at]=flowBodies[at-1];}at--;}
+                flowDistances[at]=d;flowBodies[at]=new FlowBody {Position=a.Position,Direction=a.Direction,Radius=.55f*a.Biology.Genes.Size,
+                    Speed=(a.Velocity-World.Current(a.Position)).Length};count=Mathf.Min(12,count+1);
+            }
+            return count;
+        }
+        void PrepareUi()
+        {
+            if(skin)return;skin=Instantiate(GUI.skin);skin.label.fontSize=16;skin.label.wordWrap=true;skin.label.normal.textColor=new Color(.85f,.94f,.95f);
+            skin.button.fontSize=16;skin.button.padding=new RectOffset(8,8,6,6);skin.button.wordWrap=true;
+            panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.018f,.04f,.065f,.88f));panel.Apply();
+            panelStyle=new GUIStyle(skin.box) {padding=new RectOffset(16,16,12,12)};panelStyle.normal.background=panel;
+            heading=new GUIStyle(skin.label) {fontStyle=FontStyle.Bold,fontSize=20};
+        }
+        void OnGUI()
+        {
+            if(World==null||!HudVisible)return;PrepareUi();var matrix=GUI.matrix;var old=GUI.skin;GUI.skin=skin;GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);
+            GUILayout.BeginArea(Panel,panelStyle);
+            GUILayout.Label(GameText.Get(TextKey.VolumeTitle),heading);
+            if(GUILayout.Button(GameText.Get(OrganismsVisible?TextKey.VolumeWaterOnly:TextKey.VolumeLife))) {OrganismsVisible=!OrganismsVisible;if(!OrganismsVisible)Observe();}
+            GUILayout.BeginHorizontal();
+            if(GUILayout.Button(GameText.Get(Paused?TextKey.Resume:TextKey.Pause)))Paused=!Paused;
+            if(GUILayout.Button(GameText.Get(TextKey.Overview))) {Observe();Rig.FocusOn(Rig.Focus,30);}
+            GUILayout.EndHorizontal();
+            scroll.x=0;scroll=GUILayout.BeginScrollView(scroll,false,true,GUIStyle.none,skin.verticalScrollbar);
+            GUILayout.BeginVertical(GUILayout.Width(Panel.width-panelStyle.padding.horizontal-skin.verticalScrollbar.fixedWidth-8));
+            if(GUILayout.Button(GameText.Get(ShowCurrents?TextKey.VolumeFlowOff:TextKey.VolumeFlowOn)))ShowCurrents=!ShowCurrents;
+            if(GUILayout.Button(GameText.Get(ShowTemperature?TextKey.VolumeHeatOff:TextKey.VolumeHeatOn)))ShowTemperature=!ShowTemperature;
+            if(GUILayout.Button(GameText.Get(FindFood?TextKey.VolumeFoodOff:TextKey.VolumeFoodOn)))FindFood=!FindFood;
+            var agent=Selection;V3 point=OrganismsVisible&&agent.Alive?agent.Position:VolumePainter.V(Lens.transform.position);
+            var sample=World.Sample(point);var current=World.Current(point);
+            GUILayout.Label(GameText.Format(TextKey.VolumeSample,sample.Temperature,sample.Light,current.Length));
+            GUILayout.Label(GameText.Format(TextKey.VolumeVector,current.X,current.Y,current.Z));
+            if(ShowTemperature||ShowCurrents) {var probe=VolumePainter.V(Rig.Focus);GUILayout.Label(GameText.Format(TextKey.VolumeProbe,World.Temperature(probe),World.Current(probe).Length));}
+            if(OrganismsVisible&&selected>=0) {
+                var c=agent.Biology;float budgetSeconds=(float)System.Math.Max(VolumeWorld.StepSeconds,agent.RenderDuration);
+                GUILayout.Label(GameText.Format(TextKey.VolumeCell,c.Id,agent.Position.Y,c.Energy,Biology.Capacity(c.Genes)),heading);
+                GUILayout.Label(GameText.Format(TextKey.VolumeIncome,c.Budget.Substrate/budgetSeconds,c.Budget.Organic/budgetSeconds,c.Budget.Light/budgetSeconds,c.Budget.Prey/budgetSeconds));
+                GUILayout.Label(GameText.Format(TextKey.VolumeNet,c.Budget.Net/budgetSeconds));
+                GUILayout.Label(GameText.Get(c.Genes.Photosynthesis>.5f?TextKey.VolumePhotoDiet:TextKey.VolumeDiet));
+                if(World.Controlled>=0) {if(GUILayout.Button(GameText.Get(TextKey.ReturnObserve)))Observe();}
+                else if(agent.Alive&&GUILayout.Button(GameText.Get(TextKey.PlayOrganism)))PlaySelected();
+            }
+            GUILayout.Label(GameText.Format(TextKey.VolumeParticles,Water.Count));
+            GUILayout.Label(GameText.Format(TextKey.VolumeChunks,Ocean.LoadedCount,World.Count));
+            GUILayout.Label(GameText.Get(TextKey.SoundSetting));SoundVolume=GUILayout.HorizontalSlider(SoundVolume,0,.6f);
+            GUILayout.Label(GameText.Get(TextKey.VolumeScope));
+            GUILayout.EndVertical();GUILayout.EndScrollView();
+            GUILayout.EndArea();
+            if(FindFood)DrawFoodLabels(agent);
+            GUI.Label(new Rect(18,Screen.height/Scale-80,Screen.width/Scale-36,65),GameText.Get(TextKey.VolumeControls),panelStyle);
+            GUI.matrix=matrix;GUI.skin=old;
+        }
+        void DrawFoodLabels(VolumeAgent observer)
+        {
+            int count=0;
+            for(int k=0;k<World.FoodCount;k++) {
+                var food=World.GetFood(k);if(food.Substrate+food.Organic<.01f)continue;
+                Vector3 s=Lens.WorldToScreenPoint(VolumePainter.V(food.Position));if(s.z<=0||s.z>30)continue;
+                Rect rect=new Rect(s.x/Scale-95,(Screen.height-s.y)/Scale-35,190,92);
+                if(rect.x<10||rect.xMax>Screen.width/Scale-10||rect.y<10||rect.yMax>Screen.height/Scale-90||rect.Overlaps(Panel))continue;
+                float potential=World.FoodPotential(k,observer.Biology);if(potential<=0)continue;
+                float score=potential/(1+(food.Position-observer.Position).Length*.1f);
+                if(count==4&&score<=foodScores[3])continue;
+                int at=Mathf.Min(count,3);while(at>0&&foodScores[at-1]<score){foodScores[at]=foodScores[at-1];foodCandidates[at]=foodCandidates[at-1];foodBoxes[at]=foodBoxes[at-1];at--;}
+                foodScores[at]=score;foodCandidates[at]=k;foodBoxes[at]=rect;count=Mathf.Min(4,count+1);
+            }
+            for(int i=0;i<count;i++) {
+                var food=World.GetFood(foodCandidates[i]);Rect rect=foodBoxes[i];
+                GUI.Box(rect,GUIContent.none,panelStyle);
+                GUI.Label(new Rect(rect.x+6,rect.y+4,rect.width-12,rect.height-8),GameText.Format(TextKey.VolumeFoodLabel,food.Substrate,food.Organic,food.Concentration,World.FoodPotential(foodCandidates[i],observer.Biology)));
+            }
+        }
+        void OnDestroy()
+        {
+            painter?.Dispose();look?.Dispose();if(ambient)ambient.Stop();if(effects)effects.Stop();
+            Ocean?.Save();
+            Destroy(ambience);Destroy(feedSound);Destroy(cameraObject);Destroy(panel);Destroy(skin);
+        }
+    }
+}
