@@ -114,3 +114,15 @@ InitTestScene*.unity*
 /Tools/**/bin/
 /Tools/**/obj/
 /TestResults/
+
+# CI outputs and private Unity activation material
+/artifacts/
+/CodeCoverage/
+*.ulf
+*.alf
+*.lic
+*.ulf.meta
+*.alf.meta
+*.lic.meta
+.env
+.env.*

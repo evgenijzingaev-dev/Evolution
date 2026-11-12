@@ -72,6 +72,11 @@ Godot в `Reference/Godot/` используется только как реф�
 
 ## Тесты
 
+Настройка Unity Editor CI (GameCI), Unity Personal и GitHub Secrets:
+[пошаговая инструкция](docs/UNITY_CI.md). CI проверяет Runtime/Editor,
+Edit Mode, Play Mode и собирает Linux IL2CPP player при наличии образа.
+До успешной активации и реального прогона эти Unity-проверки не подтверждены.
+
 В Unity: **Window → General → Test Runner → EditMode → Run All**.
 
 Без Unity, при установленном .NET 8 SDK:
