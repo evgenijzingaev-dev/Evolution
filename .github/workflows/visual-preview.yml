@@ -29,12 +29,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  render:
+  select:
     if: >-
       github.actor != 'dependabot[bot]' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         contains(github.event.pull_request.labels.*.name, 'visual-preview')))
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: select
+        name: Skip Unity when the latest push changes only nonvisual code
+        run: python3 -B Tools/ci/select_visual_preview.py
+
+  render:
+    needs: select
+    if: needs.select.outputs.run == 'true'
     runs-on: ${{ fromJSON(vars.VISUAL_PREVIEW_RUNNER || '["ubuntu-24.04"]') }}
     timeout-minutes: 60
     env:

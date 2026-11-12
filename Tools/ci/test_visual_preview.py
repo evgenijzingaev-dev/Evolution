@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from check_visual_preview import EXPECTED, validate
+from select_visual_preview import visual_change
 
 
 class EvidenceTests(unittest.TestCase):
@@ -71,6 +72,17 @@ class EvidenceTests(unittest.TestCase):
     def test_no_real_food(self):
         self.report["screenshots"][4].update(foodSubstrate=0, foodOrganic=0)
         with self.assertRaises(ValueError): self.check()
+
+
+class TriggerTests(unittest.TestCase):
+    def test_small_nonvisual_push_skips_unity(self):
+        self.assertFalse(visual_change(["Assets/Evolution/Core/Biology.cs", "docs/README.md"]))
+
+    def test_visual_push_requests_unity(self):
+        for path in ["Assets/Evolution/Runtime/Resources/VolumeBody.shader",
+                     "Assets/Evolution/Runtime/CrystalMeshes.cs", "Tools/ci/check_visual_preview.py",
+                     "ProjectSettings/GraphicsSettings.asset", "Packages/manifest.json"]:
+            with self.subTest(path=path): self.assertTrue(visual_change([path]))
 
 
 if __name__ == "__main__":
