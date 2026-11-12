@@ -1,5 +1,7 @@
 using System.Collections;
 using Evolution.Runtime;
+using Evolution.Core;
+using Evolution.Volume;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -54,6 +56,20 @@ namespace Evolution.Tests
             rig.FocusOn(new Vector3(500,300,-700),30);
             for(int i=0;i<8;i++){Vector3 before=lens.transform.position;rig.Tick(true,true);Assert.LessOrEqual(Vector3.Distance(before,lens.transform.position),2.501f);yield return null;}
             Object.Destroy(root);yield return null;
+        }
+        [Test]
+        public void ReferenceDiatomIsSelectableAtItsTipWithoutSelectingEmptyWater()
+        {
+            var root=new GameObject("Crystal surface validation");var lens=root.AddComponent<Camera>();
+            var look=new CrystalWaterLook(root.transform,lens);var painter=new VolumePainter(look);
+            try {
+                var world=new VolumeWorld(1,42,new[] {new VolumeAgent {Position=default,Direction=new V3(1,0,0),
+                    Biology=new Cell {Genes=new Genome {Size=1,Speed=.7f,Uptake=1,Membrane=.9f,PreferredTemperature=22},Energy=16,Growth=1,Integrity=1}}});
+                var before=world.Get(0);
+                Assert.AreEqual(0,painter.Pick(world,new Ray(new Vector3(.9f,3,0),Vector3.down),0));
+                Assert.AreEqual(-1,painter.Pick(world,new Ray(new Vector3(1.2f,3,0),Vector3.down),0));
+                Assert.AreEqual(before,world.Get(0));
+            } finally {painter.Dispose();look.Dispose();Object.DestroyImmediate(root);}
         }
     }
 }

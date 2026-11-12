@@ -48,6 +48,7 @@ MonoBehaviour:
   FindFood: 0
   HudVisible: 1
   PersistRegions: 1
+  CinematicFocus: 1
   SoundVolume: 0.2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

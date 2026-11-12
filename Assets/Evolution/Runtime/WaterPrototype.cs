@@ -12,6 +12,7 @@ namespace Evolution.Runtime
         public int ParticleCount=6144,Seed=42;
         public bool OrganismsVisible=true,ShowCurrents,ShowTemperature,FindFood,HudVisible=true;
         public bool PersistRegions=true;
+        public bool CinematicFocus=true;
         public float SoundVolume=.2f;
         public VolumeWorld World {get;private set;}
         public Suspension Water {get;private set;}
@@ -20,7 +21,7 @@ namespace Evolution.Runtime
         public Camera Lens {get;private set;}
         public ChunkOcean Ocean {get;private set;}
         VolumeAgent Selection=>selected>=0&&selected<World.Count?World.Get(selected):default;
-        VolumePainter painter;OceanLook look;GameObject cameraObject;
+        VolumePainter painter;CrystalWaterLook look;GameObject cameraObject;
         AudioSource ambient,effects;AudioClip ambience,feedSound;
         readonly FlowBody[] flowBodies=new FlowBody[12];readonly float[] flowDistances=new float[12];
         int selected;bool following=true;double accumulator,lastSound=double.NegativeInfinity;
@@ -35,9 +36,9 @@ namespace Evolution.Runtime
             Ocean=new ChunkOcean(unchecked((uint)Seed),archive);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
             Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
             cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
-            Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.035f,.1f,.15f);
+            Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.012f,.07f,.15f);
             Rig=gameObject.AddComponent<WaterCamera>();Rig.Initialize(Lens);Rig.FocusOn(VolumePainter.V(Selection.Position));Rig.ApplyImmediate();
-            look=new OceanLook(transform,Lens);painter=new VolumePainter();
+            look=new CrystalWaterLook(transform,Lens);painter=new VolumePainter(look);
             ambient=gameObject.AddComponent<AudioSource>();effects=gameObject.AddComponent<AudioSource>();ambient.playOnAwake=effects.playOnAwake=false;
             const int rate=24000;int frames=(int)(OceanSound.LoopSeconds*rate);var samples=new float[frames*2];
             for(int i=0;i<frames;i++)for(int c=0;c<2;c++)samples[i*2+c]=OceanSound.Ambience(i/(double)rate,c);
@@ -61,10 +62,7 @@ namespace Evolution.Runtime
             if(Input.GetKeyDown(KeyCode.Home)) {Observe();Rig.FocusOn(Rig.Focus,30);}
             if(Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
             if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
-                var ray=Lens.ScreenPointToRay(Input.mousePosition);float nearest=float.PositiveInfinity;int picked=-1;
-                for(int i=0;i<World.Count;i++) {var a=World.Get(i);if(!a.Alive)continue;var d=ray.origin-VolumePainter.V(a.Position);
-                    float hit=Observation.RaySphere(d.x,d.y,d.z,ray.direction.x,ray.direction.y,ray.direction.z,a.Biology.Genes.Size*.8f);
-                    if(hit<nearest){nearest=hit;picked=i;}}
+                int picked=painter.Pick(World,Lens.ScreenPointToRay(Input.mousePosition),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)));
                 if(picked>=0)Select(picked);
             }
             World.Input=default;World.Boost=World.Attack=false;
@@ -85,7 +83,8 @@ namespace Evolution.Runtime
                 Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);accumulator-=VolumeWorld.StepSeconds;
             }
             if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
-            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible,ShowTemperature&&HudVisible);
+            look.SetFocus(Vector3.Distance(Lens.transform.position,Rig.Focus),CinematicFocus&&following&&OrganismsVisible);
+            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible,ShowTemperature&&HudVisible,selected);
             ambient.volume=SoundVolume<=0?0:Mathf.MoveTowards(ambient.volume,Mathf.Clamp01(SoundVolume)*(Paused?.1f:.6f),Time.unscaledDeltaTime*.5f);
             effects.volume=Mathf.Clamp01(SoundVolume);
             var cell=Selection;
@@ -106,7 +105,7 @@ namespace Evolution.Runtime
         {
             if(skin)return;skin=Instantiate(GUI.skin);skin.label.fontSize=16;skin.label.wordWrap=true;skin.label.normal.textColor=new Color(.85f,.94f,.95f);
             skin.button.fontSize=16;skin.button.padding=new RectOffset(8,8,6,6);skin.button.wordWrap=true;
-            panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.018f,.04f,.065f,.88f));panel.Apply();
+            panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.012f,.045f,.09f,.84f));panel.Apply();
             panelStyle=new GUIStyle(skin.box) {padding=new RectOffset(16,16,12,12)};panelStyle.normal.background=panel;
             heading=new GUIStyle(skin.label) {fontStyle=FontStyle.Bold,fontSize=20};
         }
@@ -125,6 +124,7 @@ namespace Evolution.Runtime
             if(GUILayout.Button(GameText.Get(ShowCurrents?TextKey.VolumeFlowOff:TextKey.VolumeFlowOn)))ShowCurrents=!ShowCurrents;
             if(GUILayout.Button(GameText.Get(ShowTemperature?TextKey.VolumeHeatOff:TextKey.VolumeHeatOn)))ShowTemperature=!ShowTemperature;
             if(GUILayout.Button(GameText.Get(FindFood?TextKey.VolumeFoodOff:TextKey.VolumeFoodOn)))FindFood=!FindFood;
+            if(GUILayout.Button(GameText.Get(CinematicFocus?TextKey.CrystalFocusOn:TextKey.CrystalFocusOff)))CinematicFocus=!CinematicFocus;
             var agent=Selection;V3 point=OrganismsVisible&&agent.Alive?agent.Position:VolumePainter.V(Lens.transform.position);
             var sample=World.Sample(point);var current=World.Current(point);
             GUILayout.Label(GameText.Format(TextKey.VolumeSample,sample.Temperature,sample.Light,current.Length));
@@ -168,6 +168,13 @@ namespace Evolution.Runtime
                 GUI.Box(rect,GUIContent.none,panelStyle);
                 GUI.Label(new Rect(rect.x+6,rect.y+4,rect.width-12,rect.height-8),GameText.Format(TextKey.VolumeFoodLabel,food.Substrate,food.Organic,food.Concentration,World.FoodPotential(foodCandidates[i],observer.Biology)));
             }
+            int threat=-1;float nearest=Ecology.SenseRadius(observer.Biology.Genes);
+            for(int i=0;i<World.Count;i++){var a=World.Get(i);float distance=(a.Position-observer.Position).Length;
+                if(a.Alive&&distance<nearest&&Ecology.CanHunt(a.Biology,observer.Biology)&&
+                    Ecology.Attack(a.Biology)/(observer.Biology.Genes.Size*(1+Ecology.Defense(observer.Biology,0)))>.28f){nearest=distance;threat=i;}}
+            if(threat>=0){Vector3 p=Lens.WorldToScreenPoint(VolumePainter.V(World.Get(threat).Position));
+                Rect tag=new Rect(p.x/Scale-75,(Screen.height-p.y)/Scale-42,150,28);
+                if(p.z>0&&!tag.Overlaps(Panel)){Color previous=GUI.color;GUI.color=new Color(1,.58f,.5f);GUI.Box(tag,GameText.Format(TextKey.CrystalThreat,nearest));GUI.color=previous;}}
         }
         void OnDestroy()
         {

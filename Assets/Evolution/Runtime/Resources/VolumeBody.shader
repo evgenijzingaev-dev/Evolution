@@ -1,5 +1,6 @@
 Shader "Evolution/VolumeBody"
 {
+    Properties { _WaterFade("Water visibility guard",Vector)=(20,36,0,0) }
     SubShader {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" }
         Pass {
