@@ -110,6 +110,7 @@ InitTestScene*.unity*
 
 # Hand-authored standalone biological-core tests
 !Tools/CoreTests/CoreTests.csproj
+!Tools/CoreBenchmarks/CoreBenchmarks.csproj
 /Tools/**/bin/
 /Tools/**/obj/
 /TestResults/

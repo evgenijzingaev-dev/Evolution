@@ -7,12 +7,14 @@ namespace Evolution.Core
         public int Capacity = 4096, InitialPopulation = 160, GridSize = 32;
         public float WorldSize = 40, StepSeconds = .05f, InitialNutrients = 4,
             NutrientRegeneration = .12f, NutrientCapacity = 8, Temperature = 22,
-            MutationProbability = .15f, MutationStrength = .06f, MaxAge = 180;
+            MutationProbability = .15f, MutationStrength = .06f, MaxAge = 180,
+            InitialOrganicEnergy = 0, OrganicDecayRate = .02f;
         public void Validate()
         {
             if (Capacity < 1 || InitialPopulation < 0 || InitialPopulation > Capacity || GridSize < 2 || GridSize > 512 ||
                 !Positive(WorldSize) || !Positive(StepSeconds) || !Positive(MaxAge) || !Positive(NutrientCapacity) ||
                 !Nonnegative(InitialNutrients) || !Nonnegative(NutrientRegeneration) ||
+                !Nonnegative(InitialOrganicEnergy) || !Nonnegative(OrganicDecayRate) ||
                 !Nonnegative(MutationStrength) || !Nonnegative(MutationProbability) || MutationProbability > 1 ||
                 float.IsNaN(Temperature) || float.IsInfinity(Temperature)) throw new ArgumentException("Invalid simulation configuration");
         }
@@ -26,22 +28,12 @@ namespace Evolution.Core
         public Genome Genes;
         public float X, Z, Heading, Energy, Age;
     }
-    public static class Biology
-    {
-        public static float Capacity(Genome g) => 24 * g.Size;
-        public static float Cost(Genome g, float temperature) =>
-            .18f * g.Size + .12f * g.Speed * g.Speed + .08f * g.Uptake * g.Uptake + .025f * Math.Abs(temperature - g.PreferredTemperature);
-        public static float Efficiency(Genome g, float temperature) => 1 / (1 + .04f * Math.Abs(temperature - g.PreferredTemperature));
-        public static bool CanDivide(Cell c) => c.Age >= 5 && c.Energy >= Capacity(c.Genes) * .85f;
-        public static void Divide(ref Cell parent, ref Cell child)
-        { parent.Energy = (parent.Energy - 2) * .5f; child.Energy = parent.Energy; }
-    }
     // Dense storage, stable iteration and deferred births. No engine references or per-cell objects.
     public sealed class Simulation
     {
         readonly SimulationConfig config;
         readonly Cell[] cells;
-        readonly float[] nutrients;
+        readonly float[] nutrients, organicEnergy, pendingRemains;
         RandomSource random;
         int nextId;
         public int Count { get; private set; }
@@ -54,12 +46,17 @@ namespace Evolution.Core
         public uint RandomState => random.State;
         public Cell GetCell(int i) { if (i < 0 || i >= Count) throw new ArgumentOutOfRangeException(nameof(i)); return cells[i]; }
         public float GetNutrient(int i) => nutrients[i];
+        public float GetOrganicEnergy(int i) => organicEnergy[i];
         public Simulation(SimulationConfig settings, uint seed)
         {
             settings.Validate(); config = settings.Copy(); random = new RandomSource(seed);
             cells = new Cell[config.Capacity]; nutrients = new float[config.GridSize * config.GridSize];
+            organicEnergy = new float[nutrients.Length]; pendingRemains = new float[nutrients.Length];
             Temperature = config.Temperature; NutrientRegeneration = config.NutrientRegeneration;
-            for (int i = 0; i < nutrients.Length; i++) nutrients[i] = Math.Min(config.InitialNutrients, config.NutrientCapacity);
+            for (int i = 0; i < nutrients.Length; i++) {
+                nutrients[i] = Math.Min(config.InitialNutrients, config.NutrientCapacity);
+                organicEnergy[i] = config.InitialOrganicEnergy;
+            }
             for (int i = 0; i < config.InitialPopulation; i++) {
                 var g = Genome.Founder(ref random);
                 cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, Genes = g, Energy = Biology.Capacity(g) * .6f,
@@ -76,7 +73,11 @@ namespace Evolution.Core
         public void Step()
         {
             float dt = config.StepSeconds;
-            for (int i = 0; i < nutrients.Length; i++) nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * dt);
+            for (int i = 0; i < nutrients.Length; i++) {
+                nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * dt);
+                // Decay dissipates energy; it does not create another energy-bearing resource.
+                organicEnergy[i] *= Math.Max(0, 1 - config.OrganicDecayRate * dt);
+            }
             int originalCount = Count, survivors = 0, births = 0;
             // Births use the free tail; stable compaction below cannot overwrite it.
             for (int i = 0; i < originalCount; i++) {
@@ -86,20 +87,27 @@ namespace Evolution.Core
                 c.Z = Wrap(c.Z + (float)Math.Sin(c.Heading) * c.Genes.Speed * dt);
                 int tile = Math.Min(config.GridSize - 1, (int)(c.Z / config.WorldSize * config.GridSize)) * config.GridSize
                          + Math.Min(config.GridSize - 1, (int)(c.X / config.WorldSize * config.GridSize));
-                float eaten = Math.Min(nutrients[tile], c.Genes.Uptake * dt);
-                nutrients[tile] -= eaten;
-                c.Energy = Math.Min(Biology.Capacity(c.Genes), c.Energy + eaten * 2 * Biology.Efficiency(c.Genes, Temperature) - Biology.Cost(c.Genes, Temperature) * dt);
-                if (c.Energy <= 0 || c.Age >= config.MaxAge) { Deaths++; continue; }
+                Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], Temperature, dt);
+                c.Energy -= Biology.Cost(c.Genes, Temperature) * dt;
+                if (c.Energy <= 0 || c.Age >= config.MaxAge) {
+                    pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
+                }
                 if (Biology.CanDivide(c) && originalCount + births < cells.Length) {
-                    Cell child = new Cell { Id = ++nextId, ParentId = c.Id, Generation = c.Generation + 1,
+                    Cell child = new Cell { ParentId = c.Id, Generation = c.Generation + 1,
                         Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
-                    Biology.Divide(ref c, ref child);
-                    cells[originalCount + births++] = child; Births++;
+                    if (Biology.TryDivide(ref c, ref child)) {
+                        child.Id = ++nextId;
+                        cells[originalCount + births++] = child; Births++;
+                    }
                 }
                 cells[survivors++] = c;
             }
             Array.Copy(cells, originalCount, cells, survivors, births);
+            // Every cell sees only remains from previous ticks, independent of death order.
+            for (int i = 0; i < organicEnergy.Length; i++) {
+                organicEnergy[i] += pendingRemains[i]; pendingRemains[i] = 0;
+            }
             Count = survivors + births; Tick++;
         }
         float Wrap(float x) => x - (float)Math.Floor(x / config.WorldSize) * config.WorldSize;

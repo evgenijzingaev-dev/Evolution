@@ -1,4 +1,5 @@
 using Evolution.Core;
+using Evolution.Localization;
 using UnityEngine;
 using UnityEngine.Rendering;
 namespace Evolution.Runtime
@@ -16,7 +17,9 @@ namespace Evolution.Runtime
         MaterialPropertyBlock properties;
         Camera view;
         double accumulator;
-        bool paused;
+        bool paused, showDiet;
+        Vector2 menuScroll;
+        GUIStyle labelStyle;
         float speed = 1, pendingTemperature, pendingFood;
         int activeSeed;
         static readonly float[] Speeds = { 1f, 2f, 5f, 10f };
@@ -53,7 +56,7 @@ namespace Evolution.Runtime
                 simulation.Step(); accumulator -= activeSettings.StepSeconds;
             }
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
-            RenderCells(); RenderFood();
+            RenderCells(); RenderFood(); RenderOrganic();
         }
         void RenderCells()
         {
@@ -62,7 +65,9 @@ namespace Evolution.Runtime
                 for (int j = 0; j < count; j++) {
                     var c = simulation.GetCell(start + j);
                     matrices[j] = Matrix4x4.TRS(new Vector3(c.X, .5f, c.Z), Quaternion.identity, Vector3.one * c.Genes.Size * .65f);
-                    colors[j] = Color.Lerp(new Color(.15f, .5f, 1), new Color(1, .3f, .2f), c.Genes.PreferredTemperature / 50);
+                    colors[j] = showDiet
+                        ? Color.Lerp(new Color(.2f, .8f, .45f), new Color(1, .55f, .2f), c.Genes.OrganicSpecialization)
+                        : Color.Lerp(new Color(.15f, .5f, 1), new Color(1, .3f, .2f), c.Genes.PreferredTemperature / 50);
                 }
                 properties.SetVectorArray("_InstanceColor", colors);
                 Graphics.DrawMeshInstanced(mesh, 0, cellsMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
@@ -85,32 +90,62 @@ namespace Evolution.Runtime
                 Graphics.DrawMeshInstanced(mesh, 0, foodMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
             }
         }
+        void RenderOrganic()
+        {
+            int total = activeSettings.GridSize * activeSettings.GridSize;
+            float width = activeSettings.WorldSize / activeSettings.GridSize;
+            for (int start = 0; start < total; start += matrices.Length) {
+                int count = 0, end = Mathf.Min(start + matrices.Length, total);
+                for (int i = start; i < end; i++) {
+                    float abundance = 1 - Mathf.Exp(-simulation.GetOrganicEnergy(i) / 8);
+                    // Empty tiles must not submit singular zero-scale transforms to the lit shader.
+                    if (abundance <= 0) continue;
+                    matrices[count] = Matrix4x4.TRS(new Vector3((i % activeSettings.GridSize + .5f) * width, 0,
+                        (i / activeSettings.GridSize + .5f) * width), Quaternion.identity,
+                        new Vector3(width * .55f, .2f, width * .55f) * abundance);
+                    colors[count++] = new Color(.6f, .28f, .08f);
+                }
+                if (count == 0) continue;
+                properties.SetVectorArray("_InstanceColor", colors);
+                Graphics.DrawMeshInstanced(mesh, 0, foodMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
+            }
+        }
         void OnGUI()
         {
             if (simulation == null) return;
-            GUILayout.BeginArea(new Rect(12, 12, 330, 420), GUI.skin.box);
-            GUILayout.Label("EVOLUTION / cellular laboratory");
-            GUILayout.Label($"Seed {activeSeed} | Tick {simulation.Tick} | {simulation.Tick * activeSettings.StepSeconds:F1} s");
-            GUILayout.Label($"Cells {simulation.Count}/{activeSettings.Capacity} | Births {simulation.Births} | Deaths {simulation.Deaths}");
-            float meanSpeed = 0, meanTemperature = 0, meanEnergy = 0; int generation = 0;
-            for (int i = 0; i < simulation.Count; i++) { var c = simulation.GetCell(i); meanSpeed += c.Genes.Speed; meanTemperature += c.Genes.PreferredTemperature; meanEnergy += c.Energy; generation = Mathf.Max(generation, c.Generation); }
+            if (labelStyle == null) labelStyle = new GUIStyle(GUI.skin.label) { wordWrap = true };
+            GUILayout.BeginArea(new Rect(12, 12, Mathf.Min(380, Screen.width - 24), Mathf.Min(620, Screen.height - 24)), GUI.skin.box);
+            menuScroll = GUILayout.BeginScrollView(menuScroll);
+            GUILayout.Label(GameText.Get(TextKey.Title), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.Clock, activeSeed, simulation.Tick, simulation.Tick * activeSettings.StepSeconds), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.Population, simulation.Count, activeSettings.Capacity, simulation.Births, simulation.Deaths), labelStyle);
+            float meanSpeed = 0, meanTemperature = 0, meanEnergy = 0, meanDiet = 0; int generation = 0;
+            for (int i = 0; i < simulation.Count; i++) { var c = simulation.GetCell(i); meanSpeed += c.Genes.Speed; meanTemperature += c.Genes.PreferredTemperature; meanEnergy += c.Energy; meanDiet += c.Genes.OrganicSpecialization; generation = Mathf.Max(generation, c.Generation); }
             int n = Mathf.Max(1, simulation.Count);
-            GUILayout.Label($"Generation {generation} | Mean energy {meanEnergy / n:F1}");
-            GUILayout.Label($"Mean speed {meanSpeed / n:F2} | Thermal optimum {meanTemperature / n:F1} C");
-            if (GUILayout.Button(paused ? "Resume" : "Pause")) paused = !paused;
+            GUILayout.Label(GameText.Format(TextKey.GenerationEnergy, generation, meanEnergy / n), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.Speed, meanSpeed / n), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.ThermalOptimum, meanTemperature / n), labelStyle);
+            double organicTotal = 0;
+            for (int i = 0; i < activeSettings.GridSize * activeSettings.GridSize; i++) organicTotal += simulation.GetOrganicEnergy(i);
+            GUILayout.Label(GameText.Format(TextKey.Diet, meanDiet / n), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.Remains, organicTotal), labelStyle);
+            if (GUILayout.Button(GameText.Get(showDiet ? TextKey.DietColors : TextKey.TemperatureColors))) showDiet = !showDiet;
+            if (GUILayout.Button(GameText.Get(paused ? TextKey.Resume : TextKey.Pause))) paused = !paused;
             GUILayout.BeginHorizontal();
-            foreach (float value in Speeds) if (GUILayout.Button(value + "x")) speed = value;
+            foreach (float value in Speeds) if (GUILayout.Button(GameText.Format(TextKey.TimeScale, value))) speed = value;
             GUILayout.EndHorizontal();
-            GUILayout.Label($"Temperature {pendingTemperature:F1} C");
+            GUILayout.Label(GameText.Format(TextKey.Temperature, pendingTemperature), labelStyle);
             float t = GUILayout.HorizontalSlider(pendingTemperature, 0, 50);
-            GUILayout.Label($"Nutrient regeneration {pendingFood:F2}/s");
+            GUILayout.Label(GameText.Format(TextKey.Regeneration, pendingFood), labelStyle);
             float f = GUILayout.HorizontalSlider(pendingFood, 0, .5f);
             if (t != pendingTemperature || f != pendingFood) { pendingTemperature = t; pendingFood = f; environmentPending = true; }
-            if (GUILayout.Button("Restart same seed")) ResetWorld();
-            if (GUILayout.Button("Zoom in")) view.transform.position += view.transform.forward * 3;
-            if (GUILayout.Button("Zoom out")) view.transform.position -= view.transform.forward * 3;
-            GUILayout.Label("Blue: cold adapted / Red: heat adapted\nGreen substrate: local nutrient concentration");
-            if (simulation.Count == 0) GUILayout.Label("Population extinct. Restart or adjust conditions.");
+            if (GUILayout.Button(GameText.Get(TextKey.Restart))) ResetWorld();
+            if (GUILayout.Button(GameText.Get(TextKey.ZoomIn))) view.transform.position += view.transform.forward * 3;
+            if (GUILayout.Button(GameText.Get(TextKey.ZoomOut))) view.transform.position -= view.transform.forward * 3;
+            GUILayout.Label(GameText.Get(showDiet ? TextKey.DietLegend : TextKey.TemperatureLegend), labelStyle);
+            GUILayout.Label(GameText.Get(TextKey.FoodLegend), labelStyle);
+            if (simulation.Count == 0) GUILayout.Label(GameText.Get(TextKey.Extinction), labelStyle);
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
         void OnDestroy() { Destroy(mesh); Destroy(cellsMaterial); Destroy(foodMaterial); }

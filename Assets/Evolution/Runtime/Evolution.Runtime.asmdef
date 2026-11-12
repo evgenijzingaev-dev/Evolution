@@ -2,6 +2,7 @@
   "name": "Evolution.Runtime",
   "references": [
     "Evolution.Core",
+    "Evolution.Localization",
     "Unity.RenderPipelines.Universal.Runtime"
   ]
 }

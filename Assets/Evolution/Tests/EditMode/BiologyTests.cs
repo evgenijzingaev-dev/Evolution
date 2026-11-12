@@ -18,6 +18,7 @@ namespace Evolution.Tests
                 g = g.Inherit(ref rng, 1, .3f);
                 Assert.That(g.Speed, Is.InRange(.1f, 3)); Assert.That(g.Size, Is.InRange(.4f, 2));
                 Assert.That(g.Uptake, Is.InRange(.2f, 3)); Assert.That(g.PreferredTemperature, Is.InRange(0, 50));
+                Assert.That(g.OrganicSpecialization, Is.InRange(0, 1));
             }
         }
         [Test] public void MotionAndThermalMismatchHaveEnergyCosts()
@@ -38,8 +39,8 @@ namespace Evolution.Tests
         {
             var parent = new Cell { Genes = new Genome { Size = 1 }, Age = 4, Energy = 24 };
             Assert.IsFalse(Biology.CanDivide(parent)); parent.Age = 5; Assert.IsTrue(Biology.CanDivide(parent));
-            var child = new Cell(); Biology.Divide(ref parent, ref child);
-            Assert.That(parent.Energy, Is.EqualTo(11)); Assert.That(child.Energy, Is.EqualTo(11));
+            var child = new Cell { Genes = parent.Genes }; Assert.IsTrue(Biology.TryDivide(ref parent, ref child));
+            Assert.That(parent.Energy, Is.EqualTo(10.75f)); Assert.That(child.Energy, Is.EqualTo(10.75f));
             parent.Energy = 1; Assert.IsFalse(Biology.CanDivide(parent));
         }
         [Test] public void FedPopulationReproducesWithLineageAndInheritedGenome()
@@ -51,7 +52,7 @@ namespace Evolution.Tests
             var child = world.GetCell(1);
             Assert.AreEqual(founder.Id, child.ParentId); Assert.AreEqual(1, child.Generation);
             Assert.AreEqual(founder.Genes, child.Genes); Assert.AreEqual(0, child.Age);
-            Assert.AreEqual(world.GetCell(0).Energy, child.Energy);
+            Assert.That(world.GetCell(0).Energy, Is.EqualTo(child.Energy).Within(.00001));
         }
         [Test] public void StarvationKillsAndNutrientsNeverBecomeNegative()
         {
@@ -82,7 +83,10 @@ namespace Evolution.Tests
             Assert.AreEqual(a.Count, b.Count); Assert.AreEqual(a.Births, b.Births); Assert.AreEqual(a.Deaths, b.Deaths);
             Assert.AreEqual(a.Tick, b.Tick); Assert.AreEqual(a.RandomState, b.RandomState);
             for (int i = 0; i < a.Count; i++) Assert.AreEqual(a.GetCell(i), b.GetCell(i));
-            for (int i = 0; i < cfg.GridSize * cfg.GridSize; i++) Assert.AreEqual(a.GetNutrient(i), b.GetNutrient(i));
+            for (int i = 0; i < cfg.GridSize * cfg.GridSize; i++) {
+                Assert.AreEqual(a.GetNutrient(i), b.GetNutrient(i));
+                Assert.AreEqual(a.GetOrganicEnergy(i), b.GetOrganicEnergy(i));
+            }
         }
         [Test] public void CapacityBoundsAndPositionsHoldDuringLongRun()
         {
@@ -106,7 +110,7 @@ namespace Evolution.Tests
             for (int i = 0; i < cfg.GridSize * cfg.GridSize; i++) foodAfter += world.GetNutrient(i);
             float consumed = before.Genes.Uptake * cfg.StepSeconds;
             Assert.That(foodBefore - foodAfter, Is.EqualTo(consumed).Within(.0002));
-            float expected = before.Energy + consumed * 2 * Biology.Efficiency(before.Genes, cfg.Temperature)
+            float expected = before.Energy + consumed * Biology.SubstrateYield(before.Genes, cfg.Temperature)
                 - Biology.Cost(before.Genes, cfg.Temperature) * cfg.StepSeconds;
             Assert.That(world.GetCell(0).Energy, Is.EqualTo(expected).Within(.00001));
         }

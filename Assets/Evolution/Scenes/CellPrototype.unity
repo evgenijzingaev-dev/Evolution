@@ -54,6 +54,8 @@ MonoBehaviour:
     MutationProbability: 0.15
     MutationStrength: 0.06
     MaxAge: 180
+    InitialOrganicEnergy: 0
+    OrganicDecayRate: 0.02
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
