@@ -1,5 +1,5 @@
 {
   "name": "Evolution.PlayModeTests",
-  "references": ["Evolution.Core", "Evolution.Runtime"],
+  "references": ["Evolution.Core", "Evolution.Runtime", "Evolution.Presentation"],
   "optionalUnityReferences": ["TestAssemblies"]
 }

@@ -16,6 +16,7 @@ Shader "Evolution/InstancedCells"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_instancing
+            #pragma instancing_options forcemaxcount:256
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "CellSurface.hlsl"
             UNITY_INSTANCING_BUFFER_START(Props)
