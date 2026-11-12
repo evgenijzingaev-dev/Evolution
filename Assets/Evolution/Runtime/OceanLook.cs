@@ -33,7 +33,7 @@ namespace Evolution.Runtime
             var tone = profile.Add<Tonemapping>(true); tone.mode.value = TonemappingMode.Neutral;
             var color = profile.Add<ColorAdjustments>(true); color.postExposure.value = .2f; color.contrast.value = 7; color.saturation.value = -4;
             var vignette = profile.Add<Vignette>(true); vignette.intensity.value = .13f; vignette.smoothness.value = .65f;
-            var volume = root.AddComponent<Volume>(); volume.isGlobal = true; volume.priority = 10; volume.sharedProfile = profile;
+            var volume = root.AddComponent<UnityEngine.Rendering.Volume>(); volume.isGlobal = true; volume.priority = 10; volume.sharedProfile = profile;
             const int resolution = 128;
             surface = Texture("Procedural cytoplasm", resolution); normal = Texture("Procedural membrane microrelief", resolution);
             var density = new float[resolution * resolution];
