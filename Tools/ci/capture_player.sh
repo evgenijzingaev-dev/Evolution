@@ -3,7 +3,7 @@
 # player window; never upload activation/Editor logs or runner home directories.
 set -euo pipefail
 mkdir -p artifacts/visual
-player=$(find build/StandaloneLinux64 -type f -name '*.x86_64' -print -quit)
+player=$(find build/StandaloneLinux64 -type f \( -name '*.x86_64' -o -name 'EVOLUTION' \) -print -quit)
 if [[ -z "$player" ]]; then
   echo '::error::No built Linux player executable found.'
   exit 1
@@ -27,7 +27,7 @@ for attempt in $(seq 1 45); do
 done
 if [[ -z "$window" ]]; then echo '::error::Player did not open a visible window.'; exit 1; fi
 xdotool windowfocus --sync "$window"
-sleep 4
+sleep 8
 xdotool key space
 sleep 1
 import -window "$window" artifacts/visual/01-overview-1920x1080.png
@@ -57,7 +57,9 @@ import -window "$window" artifacts/visual/02-selected-1920x1080.png
 xdotool mousemove --window "$window" 960 540 click --repeat 2 --delay 80 4
 xdotool key g
 sleep 1
-xdotool mousedown 3 mousemove_relative -- 75 30
+xdotool mousedown 3
+sleep .2
+xdotool mousemove_relative -- 75 30
 sleep .2
 xdotool mouseup 3
 xdotool keydown d
@@ -68,6 +70,9 @@ import -window "$window" artifacts/visual/03-orbit-1920x1080.png
 xdotool windowsize --sync "$window" 2560 1440
 sleep 2
 import -window "$window" artifacts/visual/04-selected-2560x1440.png
+if [[ $(identify -format '%wx%h' artifacts/visual/04-selected-2560x1440.png) != '2560x1440' ]]; then
+  echo '::error::Player window did not resize to 2560x1440.'; exit 1
+fi
 xdotool key Home
 sleep 2
 import -window "$window" artifacts/visual/05-overview-2560x1440.png
