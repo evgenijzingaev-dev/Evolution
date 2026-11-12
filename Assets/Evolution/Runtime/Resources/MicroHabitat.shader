@@ -28,12 +28,12 @@ Shader "Evolution/MicroHabitat"
                 float n = OceanNoise(p * .055 + flow), detail = OceanNoise(p * .37 - flow);
                 float depth = OceanNoise(p * .023 - flow * .2);
                 float light = pow(saturate(sin(p.x * .21 + sin(p.y * .19) + _OceanTime * .09)), 18);
-                half3 water = lerp(half3(.012,.045,.09),half3(.035,.18,.19), n);
-                water = lerp(water,half3(.018,.07,.13),depth*.35);
+                half3 water = lerp(half3(.025,.09,.15),half3(.075,.27,.25), n);
+                water = lerp(water,half3(.025,.11,.18),depth*.3);
                 water += half3(.03,.09,.055) * food.r * detail + half3(.10,.065,.018) * food.g;
                 water = lerp(water, water * half3(1.25,1,.8), food.b * .4);
                 water += light * half3(.035,.075,.065) + saturate(_Temperature / 50) * half3(.015,.012,0);
-                water *= .55 + .45 * habitatData.r;
+                water *= .7 + .3 * habitatData.r;
                 water = lerp(water, half3(.12,.075,.145), habitatData.g * .45);
                 return half4(OceanFog(water, i.world),1);
             }

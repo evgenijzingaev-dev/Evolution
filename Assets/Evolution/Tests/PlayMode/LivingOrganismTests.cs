@@ -61,7 +61,7 @@ namespace Evolution.Tests
         [Test]
         public void AtmosphereShadersLoadAndOceanCannotModifyPausedBiology()
         {
-            foreach (string name in new[] { "MicroHabitat", "OceanCloud", "OceanLightShafts", "OceanParticles" }) {
+            foreach (string name in new[] { "MicroHabitat", "OceanCloud", "OceanLightShafts", "OceanLightVolume", "OceanParticles" }) {
                 var shader=Resources.Load<Shader>(name); Assert.IsNotNull(shader,name); Assert.IsTrue(shader.isSupported,name);
 #if UNITY_EDITOR
                 Assert.IsFalse(UnityEditor.ShaderUtil.ShaderHasError(shader),name);
@@ -76,6 +76,16 @@ namespace Evolution.Tests
                 ocean.Draw(world,cameraObject.GetComponent<Camera>(),0,new Vector3(16,0,4));
                 Assert.AreEqual(before,world.GetCell(0)); Assert.AreEqual(random,world.RandomState); Assert.AreEqual(0,world.Tick);
             } finally { ocean.Dispose(); Object.DestroyImmediate(plane); Object.DestroyImmediate(cameraObject); }
+        }
+        [Test]
+        public void SurfacePickingHitsDeformedBodyAndRejectsNearbyEmptyWater()
+        {
+            var world=World(); var c=world.GetCell(0);
+            renderer.Draw(world,4,12,1,0,0,3,new Vector3(4,.54f,4),true);
+            Vector3 center=renderer.Position(c);
+            Assert.That(renderer.HitSurface(c,new Ray(center+Vector3.up*4,Vector3.down),center),Is.InRange(3f,4f));
+            Assert.IsTrue(float.IsPositiveInfinity(renderer.HitSurface(c,new Ray(center+new Vector3(0,4,1.5f),Vector3.down),center)));
+            Assert.AreEqual(c,world.GetCell(0)); Assert.AreEqual(0,world.Tick);
         }
         [TearDown]
         public void TearDown()

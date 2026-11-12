@@ -11,6 +11,8 @@ namespace Evolution.Runtime
         public float OceanSpan = 120;
         public bool DetailedOrganisms = true;
         public bool HudVisible = true;
+        public bool WorldHints = true;
+        public bool CautiousSwimming { get; set; }
         public float SoundVolume = .3f;
         public SimulationConfig Settings = new SimulationConfig();
         Simulation simulation;
@@ -27,7 +29,7 @@ namespace Evolution.Runtime
         AudioListener ownedListener;
         double accumulator, visualTime;
         bool paused;
-        int colorMode = 3, selectedId;
+        int colorMode = 4, selectedId;
         float speed = 1, pendingTemperature, pendingFood;
         static readonly float[] Speeds = { 1f, 2f, 5f, 10f };
         bool environmentPending;
@@ -40,7 +42,7 @@ namespace Evolution.Runtime
             if (!simulation.TryControl(selectedId)) return false;
             Journey.Begin(simulation, selectedId); FocusSelected(true); speed = 1; return true;
         }
-        public void ObserveWorld() { simulation.ReleaseControl(); rig.StopFollowing(); }
+        public void ObserveWorld() { simulation.ReleaseControl(); rig.StopFollowing(); CautiousSwimming=false; }
         public bool PlayOffspring()
         {
             int child = simulation.LastOffspringId;
@@ -56,7 +58,7 @@ namespace Evolution.Runtime
             view = Camera.main;
             if (!view) { ownedCamera = new GameObject("Microscope Camera", typeof(Camera)); view = ownedCamera.GetComponent<Camera>(); view.tag = "MainCamera"; }
             if (!FindFirstObjectByType<AudioListener>()) ownedListener = view.gameObject.AddComponent<AudioListener>();
-            view.backgroundColor = new Color(.035f, .19f, .23f); view.clearFlags = CameraClearFlags.SolidColor;
+            view.backgroundColor = new Color(.055f, .22f, .25f); view.clearFlags = CameraClearFlags.SolidColor;
             oceanLook = new OceanLook(transform, view); oceanLook.Apply(cellsMaterial); oceanLook.Apply(membraneMaterial);
             sound = new OceanAudio(transform);
             rig = gameObject.AddComponent<MicroscopeCamera>();
@@ -79,6 +81,7 @@ namespace Evolution.Runtime
             ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh, activeSettings.NutrientCapacity);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
             survivalTick = -1; survivalId = 0;
+            CautiousSwimming=false;
             pendingTemperature = activeSettings.Temperature; pendingFood = activeSettings.NutrientRegeneration; environmentPending = false;
         }
         public bool SelectCell(int id)
@@ -117,8 +120,8 @@ namespace Evolution.Runtime
             Ray ray = view.ScreenPointToRay(screenPoint); float nearest = float.PositiveInfinity; int id = 0;
             for (int i = 0; i < simulation.Count; i++) {
                 var c = simulation.GetCell(i); Vector3 point = organismRenderer.Position(c);
-                Vector3 center = rig.NearestImage(point), offset = ray.origin - center;
-                float hit = Observation.RaySphere(offset.x, offset.y, offset.z, ray.direction.x, ray.direction.y, ray.direction.z, c.Genes.Size * (.6f + .3f * Mathf.Clamp01(c.Genes.Speed/2) + .15f*c.Genes.Predation));
+                Vector3 center = rig.NearestImage(point);
+                float hit = organismRenderer.HitSurface(c,ray,center);
                 if (hit < nearest) { nearest = hit; id = c.Id; }
             }
             return id;
@@ -147,7 +150,9 @@ namespace Evolution.Runtime
                     if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) z++;
                     if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) z--;
                 }
-                Vector3 direction = rig.ControlDirection(new Vector2(x,z)); simulation.SetControlInput(direction.x,direction.z);
+                bool cautious=(CautiousSwimming || Input.GetKey(KeyCode.LeftControl)) && !Input.GetKey(KeyCode.LeftShift);
+                float throttle=cautious ? .38f : 1;
+                Vector3 direction = rig.ControlDirection(new Vector2(x,z)*throttle); simulation.SetControlInput(direction.x,direction.z);
                 bool input = !overUI && Application.isFocused && !paused;
                 simulation.SetControlActions(input && Input.GetKey(KeyCode.E), input && Input.GetKey(KeyCode.LeftShift), input && Input.GetKey(KeyCode.Q));
                 if (input && Input.GetKeyDown(KeyCode.R)) simulation.RequestDivision();
