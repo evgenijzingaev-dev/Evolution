@@ -1,5 +1,8 @@
 # Результаты проверок этапа 2
 
+Это исторический отчёт PR #4. Последующий GameCI из PR #5 и отдельная
+интеграция в `main` описаны в [INTEGRATION.md](INTEGRATION.md) и [UNITY_CI.md](UNITY_CI.md).
+
 Дата: 2026-11-12. Основа — **PR #3, `4e35b4d587d727eb7c38733582216eeb59c1f3b4`**.
 Ветка `codex/multicellular-life-stage2` создана непосредственно от этого коммита;
 новый PR направлен в `codex/unity-cell-resource-cycle`, чтобы показывать только

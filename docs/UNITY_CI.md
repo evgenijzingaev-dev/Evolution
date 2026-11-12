@@ -1,9 +1,10 @@
 # Unity Editor CI и Unity Personal
 
-CI подготовлен поверх актуального PR #4: `1a08e10de0d8f25262911364145f78f2c02a26ab`,
-ветка `codex/multicellular-life-stage2`. Отдельный CI PR направлен в эту ветку.
-PR #3 и #4 остаются открытыми; настройка CI не выполняет их слияние и не меняет
-механику, сцену, Runtime, Core или пакеты проекта.
+CI из PR #5 подготовлен поверх PR #4: `1a08e10de0d8f25262911364145f78f2c02a26ab`.
+Интеграционная ветка `codex/integrate-evolution-main` переносит всю цепочку
+PR #3 → #4 → #5 в отдельный PR в `main`, сохраняя исходные коммиты.
+История, решения и проверки — в [INTEGRATION.md](INTEGRATION.md).
+Исходные PR и ветки сохраняются; автоматическое слияние не выполняется.
 
 ## Что запускается
 
@@ -11,7 +12,7 @@ PR #3 и #4 остаются открытыми; настройка CI не вы
 50 существующих NUnit-тестов настоящих Core/Localization и проверку каталога.
 Эти проверки работают без Unity и без секретов, включая PR из fork.
 
-Новый `.github/workflows/unity.yml` автоматически работает при `pull_request`
+`.github/workflows/unity.yml` автоматически работает при `pull_request`
 и push в `main`, `migration/godot-reference` и ветки PR #3/#4. После попадания
 workflow в default branch доступен также `workflow_dispatch` с выбором ветки.
 Для текущего отдельного PR достаточно его открытия и последующих push.
@@ -165,13 +166,19 @@ digest этого образа: компиляция, Edit Mode, Play Mode и с
 - Smoke-тесты не доказывают корректность изображения, кириллицы и производительности
   на GPU или запуск готового player. Ручные проверки из `VALIDATION.md` остаются.
 
-## Что действительно проверено при подготовке
+## Что действительно проверено в исходном PR #5
 
-В облачной среде: **50 .NET-тестов прошли, 0 failed, 0 skipped** на SDK 8.0.428;
-проверка локализации прошла. Проверены доступность точных образов и конфигурация
-workflow. Unity Editor/лицензия здесь не предоставлены. **Компиляция Unity,
-Edit Mode, Play Mode и player build ещё не подтверждены** — результаты появятся
-после добавления владельцем Secrets и реального запуска Actions.
+На коммите `86650332017285f542fe9e11318359d00dd748e0` реально завершились:
+
+- [Unity Editor CI](https://github.com/evgenijzingaev-dev/Evolution/actions/runs/43207955811):
+  компиляция Core/Localization/Runtime/Editor, 50 Edit Mode, 2 Play Mode,
+  Linux IL2CPP build; опубликованы XML и player.
+- [.NET CI](https://github.com/evgenijzingaev-dev/Evolution/actions/runs/43207956062):
+  50 passed, 0 failed, 0 skipped и локализация.
+
+Это результаты исходного PR #5. Новый интеграционный PR запускает собственные
+проверки; их итог фиксируется в его описании. Unity Editor/лицензия локально
+не предоставлены, GitHub Secrets не переносятся в облачную среду.
 
 Исходники `.github/workflows/core-tests.yml`, `Tools/CoreTests` и прежних
 Edit Mode тестов сохранены. Добавлены только CI entry points и Play Mode тесты;
