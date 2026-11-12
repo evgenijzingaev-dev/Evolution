@@ -31,13 +31,13 @@ namespace Evolution.Core
             float organic = Math.Min(organicEnergy, Math.Min(room / assimilation,
                 budget * SubstrateEnergy * (.2f + .8f * c.Genes.OrganicSpecialization)));
             organicEnergy -= organic;
-            c.Energy += organic * assimilation;
+            c.Budget.Organic += organic * assimilation; c.Energy += organic * assimilation;
             budget = Math.Max(0, budget - organic / SubstrateEnergy);
             room = Math.Max(0, Capacity(c.Genes) - c.Energy);
             float yield = SubstrateYield(c.Genes, temperature);
             float eaten = Math.Min(substrate, Math.Min(budget, room / yield));
             substrate -= eaten;
-            c.Energy = Math.Min(Capacity(c.Genes), c.Energy + eaten * yield);
+            c.Budget.Substrate += eaten * yield; c.Energy = Math.Min(Capacity(c.Genes), c.Energy + eaten * yield);
         }
 
         public static bool CanDivide(Cell c) => c.Age >= Multicellularity.MaturityAge(c) && c.Energy >= Capacity(c.Genes) * Multicellularity.DivisionThreshold(c);

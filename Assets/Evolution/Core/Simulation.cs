@@ -33,6 +33,10 @@ namespace Evolution.Core
         public Genome Genes;
         public float X, Z, Heading, Energy, Age;
         public float AssimilatedEnergy, FoodLastStep;
+        public float TargetHeading, AngularVelocity, VelocityX, VelocityZ, SwimSpeed;
+        public float Growth, Digestion, RepairLastStep;
+        public bool Boosting, Defending, Attacking;
+        public EnergyBudget Budget;
         // Persistent tree edge uses IDs, never dense array indices. ColonyId is derived.
         public int BondParentId, ColonyId, TissueSlot;
         public float BondAngle, Specialization;
@@ -84,14 +88,16 @@ namespace Evolution.Core
                     Cell f = founders[i];
                     if (!Multicellularity.ValidFounder(f, config)) throw new ArgumentException("Invalid founder");
                     f.Id = ++nextId; f.LineageId = f.Id; f.Integrity = 1; f.Consumed = false; f.TargetId = 0; f.AttackLastStep = f.DamageLastStep = f.TransportLastStep = 0; f.Activity = CellActivity.Wandering; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
+                    f.TargetHeading = f.Heading; f.AngularVelocity = f.VelocityX = f.VelocityZ = f.SwimSpeed = 0; f.Growth = 1; f.Digestion = 0; f.Budget = default;
                     f.BirthMutationMask = 0; f.AssimilatedEnergy = f.FoodLastStep = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
                     cells[Count++] = f; continue;
                 }
                 var g = Genome.Founder(ref random);
                 if (config.Ecosystem) g = Genome.EcologicalFounder(g, random.State);
-                cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, LineageId = nextId, Integrity = 1, Genes = g, Energy = Biology.Capacity(g) * .6f,
+                cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, LineageId = nextId, Integrity = 1, Growth = 1, Genes = g, Energy = Biology.Capacity(g) * .6f,
                     X = random.Range(0, config.WorldSize), Z = random.Range(0, config.WorldSize), Heading = random.Range(0, 6.283185f) };
             }
+            for (int i = 0; i < Count; i++) cells[i].TargetHeading = cells[i].Heading;
             if (config.Ecosystem) InitializeEcology(seed);
         }
         // Apply environmental commands at tick boundaries for replay.
@@ -104,6 +110,7 @@ namespace Evolution.Core
         public void Step()
         {
             float dt = config.StepSeconds; bool divide = divisionRequested; divisionRequested = false;
+            PrepareActions();
             if (config.Ecosystem) UpdateNaturalEvents();
             for (int i = 0; i < nutrients.Length; i++) {
                 nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * SampleTile(i).Fertility * dt);
@@ -128,18 +135,29 @@ namespace Evolution.Core
                 var local = EnvironmentAt(c.X, c.Z);
                 float localTemperature = local.Temperature;
                 float beforeFood = c.Energy;
-                if (config.Ecosystem) SunlightEnergy += Ecology.Photosynthesize(ref c, ref nutrients[tile], local, dt);
+                if (config.Ecosystem) {
+                    c.Budget.Light = Ecology.Photosynthesize(ref c, ref nutrients[tile], local, dt);
+                    SunlightEnergy += c.Budget.Light;
+                }
                 Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], localTemperature, dt);
                 c.FoodLastStep = Math.Max(0, c.Energy - beforeFood); c.AssimilatedEnergy += c.FoodLastStep;
-                c.Energy -= Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
+                c.Budget.Upkeep = Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
+                c.Budget.Movement = CellMotion.Cost(c) * dt;
+                c.Budget.Defense = c.Defending ? (.3f + .5f * c.Genes.Membrane) * dt : 0;
+                c.Energy -= c.Budget.Upkeep + c.Budget.Movement + c.Budget.Defense;
                 if (config.Ecosystem) {
-                    c.Energy -= Ecology.Stress(c, local) * dt;
-                    if (c.Activity == CellActivity.Hunting || c.Activity == CellActivity.Fleeing) c.Energy -= .12f * c.Genes.Speed * dt;
+                    c.Budget.Stress = Ecology.Stress(c, local) * dt; c.Energy -= c.Budget.Stress;
+
                     if (c.Integrity < 1 && c.Energy > Biology.Capacity(c.Genes) * .25f) {
                         float repair = Math.Min(1 - c.Integrity, .025f * dt);
-                        c.Integrity += repair; c.Energy -= repair * c.Genes.Size * 2;
+                        c.RepairLastStep = repair; c.Integrity += repair; c.Budget.Repair = repair * c.Genes.Size * 2; c.Energy -= c.Budget.Repair;
                     }
                 }
+                if (c.Growth < 1 && c.Energy > Biology.Capacity(c.Genes) * .35f) {
+                    float growth = Math.Min(1 - c.Growth, .15f * dt);
+                    c.Growth += growth; c.Budget.Growth = growth * c.Genes.Size * .8f; c.Energy -= c.Budget.Growth;
+                }
+                c.Digestion = Math.Min(1, Math.Max(0, c.Digestion - dt * .6f) + c.FoodLastStep * .7f);
                 cells[i] = c;
             }
             if (config.Ecosystem) Hunt();
@@ -157,6 +175,8 @@ namespace Evolution.Core
                         Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength, config.Ecosystem),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
                     if (Biology.TryDivide(ref c, ref child)) {
+                        child.TargetHeading = child.Heading; child.Budget.Start = child.Energy;
+                        c.Budget.Division = Biology.StructureEnergy(child.Genes) + Biology.BirthOverhead(child.Genes) + child.Energy;
                         child.BirthMutationMask = Observation.MutationMask(c.Genes, child.Genes);
                         child.Id = ++nextId;
                         if (config.Ecosystem) RecordAdaptation(c, child);

@@ -109,6 +109,7 @@ namespace Evolution.Core
                 || !Multicellularity.Compatible(anchor.Genes, bud.Genes)
                 || anchor.Energy <= Multicellularity.BondCost || bud.Energy <= Multicellularity.BondCost) return false;
             anchor.Energy -= Multicellularity.BondCost; bud.Energy -= Multicellularity.BondCost;
+            anchor.Budget.Contact += Multicellularity.BondCost; bud.Budget.Contact += Multicellularity.BondCost;
             bud.BondParentId = anchor.Id; bud.TissueSlot = anchor.TissueSlot + 1 + children[i];
             bud.BondAngle = anchor.Genes.Branching > .45f ? (children[i] == 0 ? -1 : 1) * (.5f + anchor.Genes.Branching * .6f) : 0;
             children[i]++; size[r]++; limits[r] = Math.Min(limits[r], Multicellularity.SizeLimit(bud.Genes, cfg.MaxColonyCells)); return true;
@@ -165,20 +166,19 @@ namespace Evolution.Core
             int controlledRoot = indices.TryGetValue(controlledId, out int controlledIndex) ? root[controlledIndex] : -1;
             for (int i = 0; i < count; i++) if (parent[i] < 0) {
                 float autonomousTurn = rng.Range(-1, 1) * cfg.StepSeconds * 2 / (1 + .15f * (size[i] - 1));
-                if (i != controlledRoot && !directed) cells[i].Heading += autonomousTurn;
+                if (i != controlledRoot && !directed) cells[i].TargetHeading += autonomousTurn;
                 float speed = motors[i] / size[i] / (1 + .09f * (size[i] - 1));
                 if (i == controlledRoot) {
                     float throttle = (float)Math.Sqrt(inputX * inputX + inputZ * inputZ);
-                    if (throttle > 0) cells[i].Heading = (float)Math.Atan2(inputZ, inputX);
+                    if (throttle > 0) cells[i].TargetHeading = (float)Math.Atan2(inputZ, inputX);
                     speed *= Math.Min(1, throttle);
                 }
-                cells[i].X = Wrap(cells[i].X + (float)Math.Cos(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
-                cells[i].Z = Wrap(cells[i].Z + (float)Math.Sin(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
-                if (cfg.OceanZones) {
-                    var flow = OceanEnvironment.Sample(cells[i].X, cells[i].Z, cfg.WorldSize, time, cfg.Temperature, true);
-                    cells[i].X = Wrap(cells[i].X + flow.CurrentX * currentScale * cfg.StepSeconds, cfg.WorldSize);
-                    cells[i].Z = Wrap(cells[i].Z + flow.CurrentZ * currentScale * cfg.StepSeconds, cfg.WorldSize);
-                }
+                if (cells[i].Energy < Biology.Capacity(cells[i].Genes) * .2f && i != controlledRoot) speed *= .5f;
+                if (cells[i].Boosting) speed *= 1.8f;
+                if (cells[i].Defending) speed *= .35f;
+                var flow = cfg.OceanZones ? OceanEnvironment.Sample(cells[i].X, cells[i].Z, cfg.WorldSize, time, cfg.Temperature, true) : default;
+                CellMotion.Integrate(ref cells[i], speed, flow.CurrentX * currentScale, flow.CurrentZ * currentScale, cfg.StepSeconds, size[i]);
+                cells[i].X = Wrap(cells[i].X, cfg.WorldSize); cells[i].Z = Wrap(cells[i].Z, cfg.WorldSize);
             }
             Layout(cells, count, cfg.WorldSize);
         }
@@ -187,7 +187,9 @@ namespace Evolution.Core
             for (int i = 0; i < count; i++) if (parent[i] >= 0) {
                 Cell p = cells[parent[i]];
                 float h = p.Heading + cells[i].BondAngle, distance = .29f * (p.Genes.Size + cells[i].Genes.Size);
-                cells[i].Heading = h;
+                cells[i].Heading = h; cells[i].TargetHeading = h;
+                cells[i].VelocityX = p.VelocityX; cells[i].VelocityZ = p.VelocityZ;
+                cells[i].SwimSpeed = p.SwimSpeed; cells[i].AngularVelocity = p.AngularVelocity;
                 cells[i].X = Wrap(p.X + (float)Math.Cos(h) * distance, worldSize);
                 cells[i].Z = Wrap(p.Z + (float)Math.Sin(h) * distance, worldSize);
             }
@@ -200,7 +202,10 @@ namespace Evolution.Core
             {
                 float direction = cells[parent[i]].Energy / Biology.Capacity(cells[parent[i]].Genes)
                     >= cells[i].Energy / Biology.Capacity(cells[i].Genes) ? 1 : -1;
+                float a = cells[parent[i]].Energy, b = cells[i].Energy;
                 float transfer = Multicellularity.Transfer(ref cells[parent[i]], ref cells[i], dt);
+                cells[parent[i]].Budget.Transport += cells[parent[i]].Energy - a;
+                cells[i].Budget.Transport += cells[i].Energy - b;
                 cells[i].TransportLastStep = direction * transfer; received += transfer;
             }
             return received;

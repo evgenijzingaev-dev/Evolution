@@ -32,7 +32,7 @@ namespace Evolution.Core
             return gain;
         }
         public static float Defense(Cell c, float colonyProtection) =>
-            .15f + 1.4f * c.Genes.Membrane + colonyProtection * 1.4f
+            .15f + (c.Defending ? 1.2f * c.Genes.Membrane : 0) + 1.4f * c.Genes.Membrane + colonyProtection * 1.4f
             + (c.Role == CellRole.Defense ? .7f * c.Specialization : 0);
         public static float Attack(Cell c) => c.Genes.Predation * c.Genes.Size * (1 + .22f * c.Genes.Speed);
         public static bool CanHunt(Cell hunter, Cell prey) => hunter.Id != prey.Id && !Observation.SameOrganism(hunter, prey)

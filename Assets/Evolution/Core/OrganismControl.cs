@@ -15,7 +15,7 @@ namespace Evolution.Core
             if (!Observation.TryFind(this, id, out _)) return false;
             ReleaseControl(); ControlledId = id; LastOffspringId = LastDivisionParentId = 0; return true;
         }
-        public void ReleaseControl() { ControlledId = 0; controlX = controlZ = 0; divisionRequested = false; }
+        public void ReleaseControl() { ControlledId = 0; controlX = controlZ = 0; divisionRequested = false; attackHeld = boostHeld = defenseHeld = false; }
         public void SetControlInput(float x, float z)
         {
             if (float.IsNaN(x) || float.IsNaN(z) || float.IsInfinity(x) || float.IsInfinity(z))

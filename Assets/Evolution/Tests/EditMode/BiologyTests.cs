@@ -29,11 +29,11 @@ namespace Evolution.Tests
             Assert.Less(Biology.Efficiency(g, 45), Biology.Efficiency(g, 22));
             var fast = g; fast.Speed = 2; Assert.Greater(Biology.Cost(fast, 22), Biology.Cost(g, 22));
         }
-        [Test] public void OneTickWithoutFoodSpendsExactlyMetabolicCost()
+        [Test] public void OneTickWithoutFoodSpendsMaintenanceAndActualMovementCost()
         {
             var cfg = new SimulationConfig { InitialPopulation = 1, InitialNutrients = 0, NutrientRegeneration = 0 };
             var world = new Simulation(cfg, 1); var before = world.GetCell(0); world.Step();
-            Assert.That(world.GetCell(0).Energy, Is.EqualTo(before.Energy - Biology.Cost(before.Genes, cfg.Temperature) * cfg.StepSeconds).Within(.00001));
+            Assert.That(world.GetCell(0).Energy, Is.EqualTo(before.Energy - Biology.Cost(before.Genes, cfg.Temperature) * cfg.StepSeconds - world.GetCell(0).Budget.Movement).Within(.00001));
         }
         [Test] public void DivisionRequiresMaturityAndPaysEnergyCost()
         {
@@ -112,7 +112,7 @@ namespace Evolution.Tests
             Assert.That(foodBefore - foodAfter, Is.EqualTo(consumed).Within(.0002));
             float expected = before.Energy + consumed * Biology.SubstrateYield(before.Genes, cfg.Temperature)
                 - Biology.Cost(before.Genes, cfg.Temperature) * cfg.StepSeconds;
-            Assert.That(world.GetCell(0).Energy, Is.EqualTo(expected).Within(.00001));
+            Assert.That(world.GetCell(0).Energy, Is.EqualTo(expected - world.GetCell(0).Budget.Movement).Within(.00001));
         }
         [Test] public void TemperatureFavoursMatchingInheritedOptimum()
         {

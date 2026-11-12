@@ -33,14 +33,14 @@ namespace Evolution.Core
                     c.Activity = CellActivity.Fleeing; c.TargetId = cells[threat].Id;
                     float dx = Observation.PeriodicDelta(c.X - cells[threat].X, config.WorldSize);
                     float dz = Observation.PeriodicDelta(c.Z - cells[threat].Z, config.WorldSize);
-                    c.Heading = (float)Math.Atan2(dz, dx);
+                    c.TargetHeading = (float)Math.Atan2(dz, dx);
                 } else if (prey >= 0 && preyScore > .05f && c.Energy < Biology.Capacity(c.Genes) * .9f) {
                     c.Activity = CellActivity.Hunting; c.TargetId = cells[prey].Id;
-                    c.Heading = (float)Math.Atan2(Observation.PeriodicDelta(cells[prey].Z - c.Z, config.WorldSize),
+                    c.TargetHeading = (float)Math.Atan2(Observation.PeriodicDelta(cells[prey].Z - c.Z, config.WorldSize),
                         Observation.PeriodicDelta(cells[prey].X - c.X, config.WorldSize));
                 } else {
                     // Sample a small gradient including actual depleted resources, sunlight and physiological stress.
-                    float best = HabitatValue(c, c.X, c.Z); float heading = c.Heading;
+                    float best = HabitatValue(c, c.X, c.Z); float heading = c.TargetHeading;
                     float distance = Math.Min(range, config.WorldSize * .25f);
                     for (int n = 0; n < 8; n++) {
                         float h = c.Heading + n * .7853982f;
@@ -48,7 +48,7 @@ namespace Evolution.Core
                         float score = HabitatValue(c, x, z) - .015f * Math.Abs(n < 4 ? n : n - 8);
                         if (score > best) { best = score; heading = h; }
                     }
-                    c.Heading = heading + random.Range(-.12f, .12f);
+                    c.TargetHeading = heading + random.Range(-.12f, .12f);
                 }
                 cells[i] = c;
             }
@@ -80,7 +80,7 @@ namespace Evolution.Core
             ecologyIndex.Build(cells, Count, Tick);
             for (int n = 0; n < Count; n++) {
                 int i = (int)((n + Tick) % Count);
-                if (cells[i].Consumed || cells[i].Age >= config.MaxAge || cells[i].Genes.Predation <= .2f) continue;
+                if ((IsPlayerOrganism(cells[i]) && !cells[i].Attacking) || cells[i].Consumed || cells[i].Age >= config.MaxAge || cells[i].Genes.Predation <= .2f) continue;
                 float reach = .32f * (cells[i].Genes.Size + 2); int target = -1; float nearest = reach * reach;
                 var query = ecologyIndex.Nearby(cells[i], reach);
                 while (query.Next(out int j)) {
@@ -91,11 +91,13 @@ namespace Evolution.Core
                     if (d2 < nearest && d2 <= contact * contact) { nearest = d2; target = j; }
                 }
                 if (target < 0 || cells[i].Energy >= Biology.Capacity(cells[i].Genes) * .97f) continue;
-                float before = cells[i].Energy;
+                float before = cells[i].Energy, victimBefore = cells[target].Energy;
                 bool killed = Ecology.Bite(ref cells[i], ref cells[target], colonies.Protection(target), config.StepSeconds, out float remains);
+                cells[target].Budget.PredationLoss += Math.Max(0, victimBefore - cells[target].Energy);
+                cells[i].Budget.Attack += (.18f + .3f * cells[i].Genes.Predation) * config.StepSeconds;
                 cells[i].AttackLastStep = 1; cells[target].DamageLastStep = 1;
                 float gain = Math.Max(0, cells[i].Energy - before + (.18f + .3f * cells[i].Genes.Predation) * config.StepSeconds);
-                cells[i].FoodLastStep += gain; cells[i].AssimilatedEnergy += gain;
+                cells[i].Budget.Prey += gain; cells[i].FoodLastStep += gain; cells[i].AssimilatedEnergy += gain;
                 pendingRemains[Tile(cells[target])] += remains;
                 if (killed) {
                     PredationDeaths++;
