@@ -79,6 +79,43 @@ namespace Evolution.Tests
             Assert.That(c.FoodLastStep,Is.EqualTo(c.Budget.Intake).Within(.00001));
             Assert.That(c.Energy-c.Budget.Start,Is.EqualTo(c.Budget.Net).Within(.00001));
         }
+        [Test] public void YoungDescendantsMustFundTheirGrowthBeforeReproducing()
+        {
+            var c = Founder(Genes()); c.Generation = 1; c.Age = 20; c.Energy = 24; c.Growth = .5f;
+            Assert.IsFalse(Biology.CanDivide(c)); c.Growth = 1; Assert.IsTrue(Biology.CanDivide(c));
+        }
+        [Test] public void ActiveShellDefenseReducesRealBiteDamage()
+        {
+            var hunter = Founder(Genes()); hunter.Id = hunter.LineageId = 1;
+            hunter.Genes.Size = 1.8f; hunter.Genes.Predation = 1;
+            var passive = Founder(Genes()); passive.Id = passive.LineageId = 2; passive.Integrity = 1;
+            passive.Genes.Membrane = .8f; var active = passive; active.Defending = true; var secondHunter = hunter;
+            Ecology.Bite(ref hunter,ref passive,0,.1f,out _);
+            Ecology.Bite(ref secondHunter,ref active,0,.1f,out _);
+            Assert.Less(passive.Integrity,1); Assert.Greater(active.Integrity,passive.Integrity);
+        }
+        [Test] public void LowReservesDisableOptionalAbilitiesWithoutCreatingEnergy()
+        {
+            var g = Genes(); g.Predation = g.Membrane = 1;
+            var c = Founder(g); c.Energy = 1;
+            var s = new Simulation(Config(),1,new[] {c}); s.TryControl(1);
+            Assert.AreEqual(ActionBlock.LowEnergy,s.ActionStatus(CellAction.Attack));
+            Assert.AreEqual(ActionBlock.LowEnergy,s.ActionStatus(CellAction.Boost));
+            Assert.AreEqual(ActionBlock.LowEnergy,s.ActionStatus(CellAction.Defend));
+            s.SetControlActions(true,true,true); s.Step(); c = s.GetCell(0);
+            Assert.IsFalse(c.Boosting || c.Defending || c.Attacking); Assert.Less(c.Energy,1);
+            Assert.That(c.Energy-c.Budget.Start,Is.EqualTo(c.Budget.Net).Within(.00001));
+        }
+        [Test] public void SizeAndShellReduceAgilityAndCurrentsCanMoveAnIdleCell()
+        {
+            var small = Founder(Genes()); small.TargetHeading = 1.57f;
+            var large = small; large.Genes.Size = 2; large.Genes.Membrane = 1;
+            CellMotion.Integrate(ref small,1,0,0,.05f); CellMotion.Integrate(ref large,1,0,0,.05f);
+            Assert.Greater(small.AngularVelocity,large.AngularVelocity);
+            Assert.Greater(small.VelocityX,large.VelocityX);
+            var idle = Founder(Genes()); CellMotion.Integrate(ref idle,0,1,0,.05f);
+            Assert.Greater(idle.VelocityX,0); Assert.AreEqual(0,idle.SwimSpeed); Assert.AreEqual(0,CellMotion.Cost(idle));
+        }
         [Test] public void MixedColoniesAndAutonomousPredatorsRetainAnExactEnergyLedger()
         {
             var cfg = Config(); cfg.InitialNutrients = 8; cfg.InitialOrganicEnergy = 4; cfg.InitialPopulation = 24;

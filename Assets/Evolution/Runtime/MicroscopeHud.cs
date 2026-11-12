@@ -250,6 +250,7 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Get(TextKey.VitalityHelp), hintStyle);
             if (simulation.Count >= activeSettings.Capacity) GUILayout.Label(GameText.Get(TextKey.PopulationFull));
             else if (Biology.CanDivide(c)) GUILayout.Label(GameText.Get(TextKey.ReproductionReady));
+            else if (c.Generation > 0 && c.Growth < 1) GUILayout.Label(GameText.Format(TextKey.ReproductionGrowth, c.Growth));
             else if (c.Age < Multicellularity.MaturityAge(c)) GUILayout.Label(GameText.Format(TextKey.ReproductionYoung, Multicellularity.MaturityAge(c) - c.Age));
             else GUILayout.Label(GameText.Format(TextKey.ReproductionEnergy, Mathf.Clamp01(c.Energy / (Biology.Capacity(c.Genes) * Multicellularity.DivisionThreshold(c)))));
             if (showGenes) {

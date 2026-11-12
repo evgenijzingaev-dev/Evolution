@@ -40,7 +40,7 @@ namespace Evolution.Core
             c.Budget.Substrate += eaten * yield; c.Energy = Math.Min(Capacity(c.Genes), c.Energy + eaten * yield);
         }
 
-        public static bool CanDivide(Cell c) => c.Age >= Multicellularity.MaturityAge(c) && c.Energy >= Capacity(c.Genes) * Multicellularity.DivisionThreshold(c);
+        public static bool CanDivide(Cell c) => c.Age >= Multicellularity.MaturityAge(c) && (c.Generation == 0 || c.Growth >= 1) && c.Energy >= Capacity(c.Genes) * Multicellularity.DivisionThreshold(c);
 
         // Parent retains its structure and funds every part of the new cell.
         // Failed provisioning changes neither value; callers commit lineage only on success.

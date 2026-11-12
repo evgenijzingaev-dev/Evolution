@@ -46,7 +46,7 @@ namespace Evolution.Core
             if (!Observation.TryFind(this, ControlledId, out var c)) return ActionBlock.NoControl;
             if (action == CellAction.Divide) {
                 if (Count >= cells.Length) return ActionBlock.PopulationFull;
-                if (c.Age < Multicellularity.MaturityAge(c)) return ActionBlock.Immature;
+                if (c.Age < Multicellularity.MaturityAge(c) || (c.Generation > 0 && c.Growth < 1)) return ActionBlock.Immature;
                 return Biology.CanDivide(c) ? ActionBlock.None : ActionBlock.LowEnergy;
             }
             if ((action == CellAction.Attack && (!config.Ecosystem || c.Genes.Predation <= .2f)) ||

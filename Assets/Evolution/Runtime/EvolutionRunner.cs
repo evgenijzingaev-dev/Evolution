@@ -38,7 +38,7 @@ namespace Evolution.Runtime
         public bool PlaySelected()
         {
             if (!simulation.TryControl(selectedId)) return false;
-            Journey.Begin(simulation, selectedId); showGoals = true; FocusSelected(true); speed = 1; return true;
+            Journey.Begin(simulation, selectedId); FocusSelected(true); speed = 1; return true;
         }
         public void ObserveWorld() { simulation.ReleaseControl(); rig.StopFollowing(); }
         public bool PlayOffspring()
@@ -70,8 +70,8 @@ namespace Evolution.Runtime
                 float ratio = OceanSpan / activeSettings.WorldSize;
                 activeSettings.WorldSize = OceanSpan;
                 activeSettings.GridSize = Mathf.Clamp(Mathf.RoundToInt(activeSettings.GridSize * ratio), 2, 128);
-                activeSettings.InitialPopulation = Mathf.Min(activeSettings.Capacity / 2,
-                    Mathf.RoundToInt(activeSettings.InitialPopulation * ratio * ratio));
+                if (activeSettings.InitialPopulation > 1) activeSettings.InitialPopulation = Mathf.Clamp(Mathf.RoundToInt(activeSettings.InitialPopulation * ratio * ratio),
+                    activeSettings.InitialPopulation, Mathf.Max(activeSettings.InitialPopulation, activeSettings.Capacity / 2));
             }
             activeSettings.Ecosystem = DynamicEcosystem; activeSettings.NaturalEvents = DynamicEcosystem;
             simulation = new Simulation(activeSettings, unchecked((uint)Seed)); Journey = new EvolutionJourney(); accumulator = visualTime = 0;
@@ -113,7 +113,6 @@ namespace Evolution.Runtime
         public int Pick(Vector2 screenPoint)
         {
             Ray ray = view.ScreenPointToRay(screenPoint); float nearest = float.PositiveInfinity; int id = 0;
-            float world = activeSettings.WorldSize;
             for (int i = 0; i < simulation.Count; i++) {
                 var c = simulation.GetCell(i); Vector3 point = organismRenderer.Position(c);
                 Vector3 center = rig.NearestImage(point), offset = ray.origin - center;
@@ -161,10 +160,12 @@ namespace Evolution.Runtime
             }
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
-            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 1 : Mathf.Clamp01((float)(accumulator / activeSettings.StepSeconds)), rig.Distance, rig.FocusPoint, DetailedOrganisms);
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
-            rig.Tick(overUI, IsControlling); ocean.Draw(simulation, view, (float)visualTime, rig.FocusPoint);
-            if (LivingOcean) ocean.DrawVents(simulation, rig.FocusPoint, (float)visualTime);
+            rig.Tick(overUI, IsControlling);
+            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime,
+                paused ? 1 : Mathf.Clamp01((float)(accumulator / activeSettings.StepSeconds)), rig.Distance, rig.RenderedFocus, DetailedOrganisms);
+            ocean.Draw(simulation, view, (float)visualTime, rig.RenderedFocus);
+            if (LivingOcean) ocean.DrawVents(simulation, rig.RenderedFocus, (float)visualTime);
             sound.Tick(simulation, selectedId, SoundVolume, paused);
         }
         void OnDestroy()

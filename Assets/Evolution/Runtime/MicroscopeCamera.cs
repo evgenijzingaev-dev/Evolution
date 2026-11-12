@@ -11,10 +11,11 @@ namespace Evolution.Runtime
         Vector3 previousPointer;
         public bool Following { get; private set; }
         public Vector3 FocusPoint => targetFocus;
+        public Vector3 RenderedFocus => focus;
         public float Distance => targetDistance;
         float MaximumDistance => Mathf.Max(2.5f, Mathf.Min(world * .32f, world * .23f / (Mathf.Tan(24 * Mathf.Deg2Rad) * Mathf.Max(1, lens.aspect))));
-        public Vector3 NearestImage(Vector3 point) => new Vector3(targetFocus.x + Observation.PeriodicDelta(point.x - targetFocus.x, world),
-            point.y, targetFocus.z + Observation.PeriodicDelta(point.z - targetFocus.z, world));
+        public Vector3 NearestImage(Vector3 point) => new Vector3(focus.x + Observation.PeriodicDelta(point.x - focus.x, world),
+            point.y, focus.z + Observation.PeriodicDelta(point.z - focus.z, world));
         public void Initialize(Camera camera, float worldSize)
         {
             lens = camera; world = worldSize;
@@ -30,7 +31,8 @@ namespace Evolution.Runtime
             if (!Following) return;
             targetFocus = Bound(point);
         }
-        Vector3 Bound(Vector3 point) { point = NearestImage(point); point.y = .54f; return point; }
+        Vector3 Bound(Vector3 point) => new Vector3(targetFocus.x + Observation.PeriodicDelta(point.x-targetFocus.x,world),
+            .54f,targetFocus.z + Observation.PeriodicDelta(point.z-targetFocus.z,world));
         public Vector3 ControlDirection(Vector2 input) => Quaternion.Euler(0, targetYaw, 0) * new Vector3(input.x, 0, input.y);
         public void Tick(bool pointerOverUI, bool controlling = false)
         {
