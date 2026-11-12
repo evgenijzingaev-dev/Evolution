@@ -1,3 +1,4 @@
+using System.Text;
 using Evolution.Core;
 using Evolution.Localization;
 using UnityEngine;
@@ -5,7 +6,7 @@ namespace Evolution.Runtime
 {
     public sealed partial class EvolutionRunner
     {
-        bool showEnergyDetails;
+        bool showEnergyDetails, showAncestry;
         static readonly TextKey[] BlockKeys = { TextKey.ActionReady, TextKey.ActionNoControl, TextKey.ActionPhysiology,
             TextKey.ActionEnergy, TextKey.ActionImmature, TextKey.ActionFull, TextKey.ActionBracing };
         void DrawCellGameplay(Cell c)
@@ -43,10 +44,38 @@ namespace Evolution.Runtime
                 GUILayout.Label(GameText.Get(TextKey.FoodTip), hintStyle);
                 GUILayout.Label(GameText.Get(TextKey.GrowthHelp), hintStyle);
             }
+            if (c.BirthMutationMask != 0) {
+                var changes = new StringBuilder();
+                for (int bit = 0; bit < MutationKeys.Length; bit++) if ((c.BirthMutationMask & (1 << bit)) != 0) {
+                    if (changes.Length > 0) changes.Append(", "); changes.Append(GameText.Get(MutationKeys[bit]));
+                }
+                GUILayout.Label(GameText.Format(TextKey.MutationSummary, changes.ToString()), hintStyle);
+            }
+            if (GUILayout.Button(GameText.Get(showAncestry ? TextKey.AncestryHide : TextKey.AncestryShow))) showAncestry = !showAncestry;
+            if (showAncestry) DrawAncestry(c);
             if (c.ParentId > 0) {
                 GUILayout.Label(GameText.Format(TextKey.InheritedComparison, c.ParentGenes.Speed, c.Genes.Speed, c.ParentGenes.Size, c.Genes.Size), hintStyle);
                 GUILayout.Label(GameText.Format(TextKey.InheritedDiet, c.ParentGenes.Photosynthesis, c.Genes.Photosynthesis, c.ParentGenes.Predation, c.Genes.Predation), hintStyle);
             }
+        }
+        void DrawAncestry(Cell c)
+        {
+            int ancestor = c.Id;
+            for (int depth = 0; depth < 6 && ancestor > 0; depth++) {
+                if (!simulation.History.TryFind(ancestor, out var entry)) { GUILayout.Label(GameText.Get(TextKey.AncestryEvicted),hintStyle); break; }
+                GUILayout.Label(GameText.Format(TextKey.AncestryRecord, entry.Id, entry.ParentId, entry.Generation,
+                    entry.DiedAtTick < 0 ? GameText.Get(TextKey.AncestryAlive) : GameText.Get(TextKey.AncestryDead)),hintStyle);
+                if (entry.DiedAtTick < 0 && entry.Id != c.Id && GUILayout.Button(GameText.Format(TextKey.AncestrySelect,entry.Id))) SelectCell(entry.Id);
+                ancestor = entry.ParentId;
+            }
+            int shown = 0;
+            for (int i = 0; i < simulation.History.Count && shown < 6; i++) {
+                var entry = simulation.History.Recent(i); if (entry.ParentId != c.Id) continue; shown++;
+                GUILayout.Label(GameText.Format(TextKey.DescendantRecord, entry.Id, entry.Generation,
+                    entry.DiedAtTick < 0 ? GameText.Get(TextKey.AncestryAlive) : GameText.Get(TextKey.AncestryDead)),hintStyle);
+                if (entry.DiedAtTick < 0 && GUILayout.Button(GameText.Format(TextKey.AncestrySelect,entry.Id))) SelectCell(entry.Id);
+            }
+            GUILayout.Label(GameText.Format(TextKey.AncestryLimit,simulation.History.Capacity),hintStyle);
         }
         void DrawOceanMap()
         {

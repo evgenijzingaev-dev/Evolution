@@ -63,6 +63,7 @@ namespace Evolution.Core
         public float NutrientRegeneration { get; private set; }
         public SimulationConfig Config => config.Copy();
         public uint RandomState => random.State;
+        public LineageHistory History { get; } = new LineageHistory();
         public Cell GetCell(int i) { if (i < 0 || i >= Count) throw new ArgumentOutOfRangeException(nameof(i)); return cells[i]; }
         public OceanSample EnvironmentAt(float x, float z) => ApplyEcology(OceanEnvironment.Sample(x, z, config.WorldSize,
             Tick * config.StepSeconds, Temperature, config.OceanZones), x, z);
@@ -97,7 +98,7 @@ namespace Evolution.Core
                 cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, LineageId = nextId, Integrity = 1, Growth = 1, Genes = g, Energy = Biology.Capacity(g) * .6f,
                     X = random.Range(0, config.WorldSize), Z = random.Range(0, config.WorldSize), Heading = random.Range(0, 6.283185f) };
             }
-            for (int i = 0; i < Count; i++) cells[i].TargetHeading = cells[i].Heading;
+            for (int i = 0; i < Count; i++) { cells[i].TargetHeading = cells[i].Heading; History.Birth(cells[i], 0); }
             if (config.Ecosystem) InitializeEcology(seed);
         }
         // Apply environmental commands at tick boundaries for replay.
@@ -168,6 +169,7 @@ namespace Evolution.Core
                 Cell c = cells[i];
                 int tile = Tile(c);
                 if (c.Energy <= 0 || c.Age >= config.MaxAge) {
+                    History.Death(c.Id, Tick + 1);
                     if (!c.Consumed) pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
                 }
                 if ((c.Id != ControlledId || divide) && Biology.CanDivide(c) && originalCount + births < cells.Length) {
@@ -182,6 +184,7 @@ namespace Evolution.Core
                         if (config.Ecosystem) RecordAdaptation(c, child);
                         if (c.Id == ControlledId) { LastOffspringId = child.Id; LastDivisionParentId = c.Id; LastDivisionTick = Tick + 1; }
                         colonies.Retain(ref c, ref child, i, config, ref random);
+                        History.Birth(child, Tick + 1);
                         cells[originalCount + births++] = child; Births++;
                     }
                 }
