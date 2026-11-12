@@ -32,6 +32,7 @@ namespace Evolution.Editor
                 pipeline = UniversalRenderPipelineAsset.Create(renderer);
                 AssetDatabase.CreateAsset(pipeline, pipelinePath);
             }
+            pipeline.supportsHDR = true; pipeline.supportsCameraOpaqueTexture = true;
             GraphicsSettings.defaultRenderPipeline = pipeline;
             QualitySettings.renderPipeline = pipeline;
             if (!File.Exists(ScenePath)) {

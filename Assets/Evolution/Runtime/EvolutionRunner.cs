@@ -11,9 +11,10 @@ namespace Evolution.Runtime
         Simulation simulation;
         OrganismRenderer organismRenderer;
         SimulationConfig activeSettings;
-        Mesh mesh, habitat;
+        Mesh mesh, habitat, membraneMesh;
         Material cellsMaterial, membraneMaterial;
         OceanRenderer ocean;
+        OceanLook oceanLook;
         Camera view;
         MicroscopeCamera rig;
         GameObject ownedCamera;
@@ -29,11 +30,12 @@ namespace Evolution.Runtime
         public bool IsPaused { get => paused; set => paused = value; }
         void Start()
         {
-            mesh = MicroMeshes.Cell(); habitat = MicroMeshes.Habitat();
+            mesh = MicroMeshes.Cell(); membraneMesh = MicroMeshes.Cell(16, 24); habitat = MicroMeshes.Habitat();
             cellsMaterial = MakeMaterial("InstancedCells"); membraneMaterial = MakeMaterial("CellMembrane");
             view = Camera.main;
             if (!view) { ownedCamera = new GameObject("Microscope Camera", typeof(Camera)); view = ownedCamera.GetComponent<Camera>(); view.tag = "MainCamera"; }
             view.backgroundColor = new Color(.035f, .19f, .23f); view.clearFlags = CameraClearFlags.SolidColor;
+            oceanLook = new OceanLook(transform, view); oceanLook.Apply(cellsMaterial); oceanLook.Apply(membraneMaterial);
             rig = gameObject.AddComponent<MicroscopeCamera>();
             ResetWorld();
         }
@@ -42,7 +44,7 @@ namespace Evolution.Runtime
         {
             activeSettings = Settings.Copy(); activeSettings.OceanZones = LivingOcean;
             simulation = new Simulation(activeSettings, unchecked((uint)Seed)); accumulator = visualTime = 0;
-            organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity);
+            organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
             ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
             pendingTemperature = activeSettings.Temperature; pendingFood = activeSettings.NutrientRegeneration; environmentPending = false;
@@ -117,7 +119,7 @@ namespace Evolution.Runtime
         }
         void OnDestroy()
         {
-            Destroy(mesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); ocean?.Dispose();
+            Destroy(mesh); Destroy(membraneMesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); ocean?.Dispose(); oceanLook?.Dispose();
             Destroy(panelTexture); Destroy(hudSkin); if (ownedCamera) Destroy(ownedCamera);
         }
     }

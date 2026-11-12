@@ -7,7 +7,7 @@ namespace Evolution.Runtime
     // A few instanced passes, no per-cell objects/materials. Visual state never enters biology.
     internal sealed class OrganismRenderer
     {
-        readonly Mesh mesh;
+        readonly Mesh mesh, membraneMesh;
         readonly Material body, membrane;
         Material current;
         readonly Matrix4x4[] matrices = new Matrix4x4[1023];
@@ -25,9 +25,9 @@ namespace Evolution.Runtime
         readonly List<int> expired = new List<int>();
         int used;
         float world, visualTime;
-        public OrganismRenderer(Mesh mesh, Material body, Material membrane, int capacity)
+        public OrganismRenderer(Mesh mesh, Material body, Material membrane, int capacity, Mesh membraneMesh)
         {
-            this.mesh = mesh; this.body = body; this.membrane = membrane;
+            this.mesh = mesh; this.membraneMesh = membraneMesh; this.body = body; this.membrane = membrane;
             byId = new Dictionary<int, Cell>(capacity); positions = new Dictionary<int, Vector3>(capacity);
         }
         public static Vector3 Center(Cell c) => new Vector3(c.X, .54f, c.Z);
@@ -157,7 +157,7 @@ namespace Evolution.Runtime
                 float s = c.Genes.Size * growth * (1 + .025f * Mathf.Sin(visualTime * 2 + c.Id));
                 float stretch = 1 + (c.Genes.Speed - .6f) * .10f + c.Specialization * (c.Role == CellRole.Movement ? .2f : -.08f);
                 float pinch = divisions.TryGetValue(c.Id, out float dividedAt) ? Mathf.Clamp01(1 - (time - dividedAt) / .8f) : 0;
-                shape = new Vector4(c.Genes.Branching * .085f, 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
+                shape = new Vector4(c.Genes.Branching * .14f, 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
                 membrane.SetFloat("_OceanTime", time);
                 Color color = Tint(c, mode); color.a = .22f;
                 Add(p, r, new Vector3(.82f * stretch, .65f, .76f) * s, color);
@@ -188,7 +188,7 @@ namespace Evolution.Runtime
         {
             if (used == 0) return;
             properties.SetVectorArray("_Shape", shapes); properties.SetVectorArray("_InstanceColor", colors); properties.SetFloat("_WorldSize", world);
-            Graphics.DrawMeshInstanced(mesh, 0, current, matrices, used, properties, ShadowCastingMode.Off, false);
+            Graphics.DrawMeshInstanced(current == membrane ? membraneMesh : mesh, 0, current, matrices, used, properties, ShadowCastingMode.Off, false);
             used = 0;
         }
     }
