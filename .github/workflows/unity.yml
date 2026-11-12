@@ -132,6 +132,22 @@ jobs:
           dockerCpuLimit: 2
           customParameters: -job-worker-count 2
 
+      - name: Render Linux player smoke captures
+        if: ${{ success() && steps.images.outputs.build_supported == 'true' }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool imagemagick
+          bash Tools/ci/capture_player.sh
+
+      - name: Upload rendered player captures
+        if: ${{ !cancelled() && steps.images.outputs.build_supported == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: evolution-player-captures
+          path: artifacts/visual/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Explain unavailable build image
         if: ${{ success() && steps.images.outputs.build_supported == 'false' }}
         run: |
