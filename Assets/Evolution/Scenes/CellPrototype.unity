@@ -44,6 +44,7 @@ MonoBehaviour:
   Settings:
     Capacity: 4096
     InitialPopulation: 160
+    MaxColonyCells: 16
     GridSize: 32
     WorldSize: 40
     StepSeconds: 0.05

@@ -9,6 +9,7 @@ namespace Evolution.Runtime
         public int Seed = 42;
         public SimulationConfig Settings = new SimulationConfig();
         Simulation simulation;
+        OrganismRenderer organismRenderer;
         SimulationConfig activeSettings;
         Mesh mesh;
         Material cellsMaterial, foodMaterial;
@@ -17,7 +18,8 @@ namespace Evolution.Runtime
         MaterialPropertyBlock properties;
         Camera view;
         double accumulator;
-        bool paused, showDiet;
+        bool paused;
+        int colorMode = 2;
         Vector2 menuScroll;
         GUIStyle labelStyle;
         float speed = 1, pendingTemperature, pendingFood;
@@ -44,6 +46,7 @@ namespace Evolution.Runtime
         {
             activeSettings = Settings.Copy(); activeSeed = Seed;
             simulation = new Simulation(activeSettings, unchecked((uint)activeSeed)); accumulator = 0;
+            organismRenderer = new OrganismRenderer(mesh, cellsMaterial, activeSettings.Capacity);
             pendingTemperature = Settings.Temperature; pendingFood = Settings.NutrientRegeneration; environmentPending = false;
         }
         void Update()
@@ -58,21 +61,7 @@ namespace Evolution.Runtime
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
             RenderCells(); RenderFood(); RenderOrganic();
         }
-        void RenderCells()
-        {
-            for (int start = 0; start < simulation.Count; start += matrices.Length) {
-                int count = Mathf.Min(matrices.Length, simulation.Count - start);
-                for (int j = 0; j < count; j++) {
-                    var c = simulation.GetCell(start + j);
-                    matrices[j] = Matrix4x4.TRS(new Vector3(c.X, .5f, c.Z), Quaternion.identity, Vector3.one * c.Genes.Size * .65f);
-                    colors[j] = showDiet
-                        ? Color.Lerp(new Color(.2f, .8f, .45f), new Color(1, .55f, .2f), c.Genes.OrganicSpecialization)
-                        : Color.Lerp(new Color(.15f, .5f, 1), new Color(1, .3f, .2f), c.Genes.PreferredTemperature / 50);
-                }
-                properties.SetVectorArray("_InstanceColor", colors);
-                Graphics.DrawMeshInstanced(mesh, 0, cellsMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
-            }
-        }
+        void RenderCells() => organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize);
         void RenderFood()
         {
             int total = activeSettings.GridSize * activeSettings.GridSize;
@@ -129,7 +118,30 @@ namespace Evolution.Runtime
             for (int i = 0; i < activeSettings.GridSize * activeSettings.GridSize; i++) organicTotal += simulation.GetOrganicEnergy(i);
             GUILayout.Label(GameText.Format(TextKey.Diet, meanDiet / n), labelStyle);
             GUILayout.Label(GameText.Format(TextKey.Remains, organicTotal), labelStyle);
-            if (GUILayout.Button(GameText.Get(showDiet ? TextKey.DietColors : TextKey.TemperatureColors))) showDiet = !showDiet;
+            GUILayout.Label(GameText.Format(TextKey.Colonies, simulation.ColonyCount, simulation.ColonialCells, simulation.LargestColony), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.Transport, simulation.EnergyTransferred / activeSettings.StepSeconds), labelStyle);
+            float adhesion = 0, differentiation = 0, transport = 0, branching = 0, potential = 0, sizeLimit = 0;
+            int feeding = 0, moving = 0, defense = 0, reproduction = 0;
+            for (int i = 0; i < simulation.Count; i++) {
+                var c = simulation.GetCell(i);
+                branching += c.Genes.Branching; potential += c.Genes.Differentiation;
+                sizeLimit += Multicellularity.SizeLimit(c.Genes, activeSettings.MaxColonyCells);
+                adhesion += c.Genes.Adhesion; differentiation += c.Specialization; transport += c.Genes.Transport;
+                if (c.Specialization < .25f) continue;
+                switch (c.Role) {
+                    case CellRole.Feeding: feeding++; break;
+                    case CellRole.Movement: moving++; break;
+                    case CellRole.Defense: defense++; break;
+                    case CellRole.Reproduction: reproduction++; break;
+                }
+            }
+            GUILayout.Label(GameText.Format(TextKey.ColonyTraits, adhesion / n, differentiation / n, transport / n), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.ColonyBlueprint, sizeLimit / n, branching / n, potential / n), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.FeedingCells, feeding), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.MovementCells, moving), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.DefenseCells, defense), labelStyle);
+            GUILayout.Label(GameText.Format(TextKey.ReproductiveCells, reproduction), labelStyle);
+            if (GUILayout.Button(GameText.Get(colorMode == 0 ? TextKey.TemperatureColors : colorMode == 1 ? TextKey.DietColors : TextKey.RoleColors))) colorMode = (colorMode + 1) % 3;
             if (GUILayout.Button(GameText.Get(paused ? TextKey.Resume : TextKey.Pause))) paused = !paused;
             GUILayout.BeginHorizontal();
             foreach (float value in Speeds) if (GUILayout.Button(GameText.Format(TextKey.TimeScale, value))) speed = value;
@@ -142,8 +154,10 @@ namespace Evolution.Runtime
             if (GUILayout.Button(GameText.Get(TextKey.Restart))) ResetWorld();
             if (GUILayout.Button(GameText.Get(TextKey.ZoomIn))) view.transform.position += view.transform.forward * 3;
             if (GUILayout.Button(GameText.Get(TextKey.ZoomOut))) view.transform.position -= view.transform.forward * 3;
-            GUILayout.Label(GameText.Get(showDiet ? TextKey.DietLegend : TextKey.TemperatureLegend), labelStyle);
+            GUILayout.Label(GameText.Get(colorMode == 0 ? TextKey.TemperatureLegend : colorMode == 1 ? TextKey.DietLegend : TextKey.RoleLegend), labelStyle);
             GUILayout.Label(GameText.Get(TextKey.FoodLegend), labelStyle);
+            GUILayout.Label(GameText.Get(TextKey.ColonyHelp), labelStyle);
+            GUILayout.Label(GameText.Get(TextKey.SelectionHelp), labelStyle);
             if (simulation.Count == 0) GUILayout.Label(GameText.Get(TextKey.Extinction), labelStyle);
             GUILayout.EndScrollView();
             GUILayout.EndArea();

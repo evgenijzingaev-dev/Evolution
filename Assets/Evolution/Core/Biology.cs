@@ -22,7 +22,7 @@ namespace Evolution.Core
         // Both foods share one uptake budget. A full cell leaves food for its neighbours.
         public static void Feed(ref Cell c, ref float substrate, ref float organicEnergy, float temperature, float dt)
         {
-            float budget = c.Genes.Uptake * dt;
+            float budget = c.Genes.Uptake * Multicellularity.Feeding(c) * dt;
             float room = Math.Max(0, Capacity(c.Genes) - c.Energy);
             float assimilation = OrganicAssimilation(c.Genes, temperature);
             float organic = Math.Min(organicEnergy, Math.Min(room / assimilation,
@@ -37,7 +37,7 @@ namespace Evolution.Core
             c.Energy = Math.Min(Capacity(c.Genes), c.Energy + eaten * yield);
         }
 
-        public static bool CanDivide(Cell c) => c.Age >= 5 && c.Energy >= Capacity(c.Genes) * .85f;
+        public static bool CanDivide(Cell c) => c.Age >= Multicellularity.MaturityAge(c) && c.Energy >= Capacity(c.Genes) * Multicellularity.DivisionThreshold(c);
 
         // Parent retains its structure and funds every part of the new cell.
         // Failed provisioning changes neither value; callers commit lineage only on success.

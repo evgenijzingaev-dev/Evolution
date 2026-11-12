@@ -7,7 +7,8 @@ namespace Evolution.Localization
     {
         Title, Clock, Population, GenerationEnergy, Speed, ThermalOptimum, Diet, Remains,
         DietColors, TemperatureColors, Resume, Pause, TimeScale, Temperature, Regeneration,
-        Restart, ZoomIn, ZoomOut, DietLegend, TemperatureLegend, FoodLegend, Extinction
+        Restart, ZoomIn, ZoomOut, DietLegend, TemperatureLegend, FoodLegend, Extinction, Colonies, Transport, ColonyTraits, FeedingCells,
+        MovementCells, DefenseCells, ReproductiveCells, RoleColors, RoleLegend, ColonyHelp, SelectionHelp, ColonyBlueprint
     }
 
     // UI uses keys. Future languages supply a separate catalog with the same keys.
@@ -46,6 +47,18 @@ namespace Evolution.Localization
                 [TextKey.DietLegend] = "Зелёные клетки лучше усваивают субстрат; оранжевые — органику.",
                 [TextKey.TemperatureLegend] = "Синие клетки приспособлены к холоду; красные — к теплу.",
                 [TextKey.FoodLegend] = "Зелёный грунт — питательный субстрат. Коричневые участки — конечные органические остатки.",
+                [TextKey.Colonies] = "Колонии: {0} | Клеток в колониях: {1} | Крупнейшая: {2}",
+                [TextKey.Transport] = "Передача энергии внутри организмов: {0:F2}/с",
+                [TextKey.ColonyBlueprint] = "Наследуемый предел колонии: {0:F1} | Ветвление: {1:P0} | Потенциал тканей: {2:P0}",
+                [TextKey.ColonyTraits] = "Адгезия: {0:P0} | Развитие тканей: {1:P0} | Транспорт: {2:P0}",
+                [TextKey.FeedingCells] = "Питающие клетки: {0}",
+                [TextKey.MovementCells] = "Двигательные клетки: {0}",
+                [TextKey.DefenseCells] = "Защитные клетки: {0}",
+                [TextKey.ReproductiveCells] = "Репродуктивные клетки: {0}",
+                [TextKey.RoleColors] = "Цвет клеток: функции",
+                [TextKey.RoleLegend] = "Зелёный — питание; голубой — движение; золотой — защита; розовый — размножение. Функции развиваются постепенно; счётчики учитывают развитие от 25%.",
+                [TextKey.ColonyHelp] = "Общая оболочка и перемычки объединяют клетки в организм. Адгезия удерживает соседей и потомство; геном задаёт ветвление, предел размера и распределение функций. Энергия идёт по связям от сытых клеток к голодным с потерями.",
+                [TextKey.SelectionHelp] = "Колонии платят за связи и ткани, движутся медленнее. Питающие клетки лучше собирают пищу, двигательные ускоряют организм, защитные смягчают температурный стресс, репродуктивные раньше созревают. При голоде связи и ткани могут стать обузой. Одиночная жизнь остаётся жизнеспособной стратегией.",
                 [TextKey.Extinction] = "Популяция вымерла. Начните новый опыт и измените условия."
             });
         public static TextCatalog Current { get; set; } = Russian;
