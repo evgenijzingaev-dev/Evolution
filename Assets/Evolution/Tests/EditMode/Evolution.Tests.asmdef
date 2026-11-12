@@ -1,0 +1,13 @@
+{
+  "name": "Evolution.Tests",
+  "references": [
+    "Evolution.Core",
+    "Evolution.Localization"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

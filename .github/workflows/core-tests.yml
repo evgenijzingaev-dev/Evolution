@@ -1,0 +1,19 @@
+name: Unity biological core
+on:
+  pull_request:
+  push:
+    branches: [main, migration/godot-reference, codex/unity-cell-resource-cycle]
+permissions:
+  contents: read
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test actual Unity core sources (no Unity Editor)
+        run: dotnet test Tools/CoreTests/CoreTests.csproj --configuration Release --nologo
+      - name: Check UI text comes from localization catalog
+        run: python3 Tools/check_localization.py

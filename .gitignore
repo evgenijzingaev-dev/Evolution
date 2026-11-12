@@ -107,3 +107,22 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Hand-authored standalone biological-core tests
+!Tools/CoreTests/CoreTests.csproj
+!Tools/CoreBenchmarks/CoreBenchmarks.csproj
+/Tools/**/bin/
+/Tools/**/obj/
+/TestResults/
+
+# CI outputs and private Unity activation material
+/artifacts/
+/CodeCoverage/
+*.ulf
+*.alf
+*.lic
+*.ulf.meta
+*.alf.meta
+*.lic.meta
+.env
+.env.*

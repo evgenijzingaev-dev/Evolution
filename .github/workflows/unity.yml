@@ -1,0 +1,165 @@
+name: Unity Editor CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, migration/godot-reference, codex/unity-cell-resource-cycle, codex/multicellular-life-stage2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize license use across runs as well as within a run. Do not interrupt activation.
+concurrency:
+  group: evolution-unity-personal
+  cancel-in-progress: false
+
+jobs:
+  unity:
+    name: Compile, Edit Mode, Play Mode, Linux build
+    # Fork PRs and Dependabot do not receive account secrets. Never use pull_request_target.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check Personal activation secrets
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import base64
+          import re
+          import sys
+          missing = [name for name in ('UNITY_LICENSE', 'UNITY_EMAIL', 'UNITY_PASSWORD') if not os.environ.get(name, '').strip()]
+          if missing:
+              print('::error::Missing GitHub Actions secrets: ' + ', '.join(missing) + '. See docs/UNITY_CI.md.')
+              sys.exit(1)
+          # GameCI derives a serial from DeveloperData and masks it when it is 27 characters.
+          # Reject incompatible/malformed input before handing it to the third-party actions.
+          try:
+              match = re.search(r'<DeveloperData Value="([A-Za-z0-9+/=]+)"/>', os.environ['UNITY_LICENSE'])
+              serial = base64.b64decode(match[1], validate=True)[4:].decode('ascii')
+              if not re.fullmatch(r'[A-Za-z0-9]{2}(?:-[A-Za-z0-9]{4}){5}', serial):
+                  raise ValueError()
+          except (TypeError, ValueError, UnicodeError):
+              print('::error::UNITY_LICENSE is incompatible with the pinned GameCI Personal activation method. See docs/UNITY_CI.md.')
+              sys.exit(1)
+          print('Required secret names are configured; activation has not yet been verified.')
+          PY
+
+      - name: Resolve exact project version and available GameCI images
+        id: images
+        run: python3 Tools/ci/unity_images.py
+
+      - name: Free disk space before pulling Unity
+        run: bash Tools/ci/prepare_unity_runner.sh
+
+      - name: Compile Runtime and Editor; prepare prototype assets
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2, Unity 6.6 shared-memory fix
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          unityVersion: ${{ steps.images.outputs.version }}
+          customImage: ${{ steps.images.outputs.editor_image }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: Evolution.Editor.ContinuousIntegration.ValidateCompilation
+          versioning: None
+          dockerShmSize: 1025m
+
+      - name: Edit Mode tests in Unity Editor
+        id: editmode
+        uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2, Unity 6.6 shared-memory fix
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          unityVersion: ${{ steps.images.outputs.version }}
+          customImage: ${{ steps.images.outputs.editor_image }}
+          testMode: editmode
+          artifactsPath: artifacts/tests
+
+      - name: Play Mode tests in Unity Editor
+        id: playmode
+        if: ${{ !cancelled() && steps.editmode.outcome != 'skipped' }}
+        uses: game-ci/unity-test-runner@fa6ced25861c16ef56187828c43f76d00df43a23 # v4.3.2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          unityVersion: ${{ steps.images.outputs.version }}
+          customImage: ${{ steps.images.outputs.editor_image }}
+          testMode: playmode
+          artifactsPath: artifacts/tests
+
+      - name: Require executed, passing tests in both modes
+        if: ${{ !cancelled() && steps.editmode.outcome != 'skipped' }}
+        run: python3 Tools/ci/check_unity_results.py artifacts/tests
+
+      - name: Linux IL2CPP verification build
+        if: ${{ success() && steps.images.outputs.build_supported == 'true' }}
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          unityVersion: ${{ steps.images.outputs.version }}
+          customImage: ${{ steps.images.outputs.build_image }}
+          targetPlatform: StandaloneLinux64
+          buildName: EVOLUTION
+          buildsPath: build
+          buildMethod: Evolution.Editor.ContinuousIntegration.BuildLinux
+          versioning: None
+          allowDirtyBuild: true # PrototypeSetup generates URP assets in this disposable checkout.
+          dockerShmSize: 1025m
+          dockerCpuLimit: 2
+          customParameters: -job-worker-count 2
+
+      - name: Explain unavailable build image
+        if: ${{ success() && steps.images.outputs.build_supported == 'false' }}
+        run: |
+          echo '::warning::Linux build NOT RUN: no GameCI Linux IL2CPP image for the project version.'
+          echo 'Linux player build: NOT RUN (image unavailable).' >> "$GITHUB_STEP_SUMMARY"
+
+      # Upload only result XML, never raw Editor/activation logs, license files, or runner home.
+      - name: Upload test results
+        if: ${{ !cancelled() && steps.editmode.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-test-results
+          path: artifacts/tests/*-results.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload verification player
+        if: ${{ success() && steps.images.outputs.build_supported == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: evolution-linux-il2cpp
+          path: build/StandaloneLinux64/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Runner resource diagnostics
+        if: ${{ always() }}
+        run: |
+          df -h
+          free -h
+          sudo dmesg | grep -Ei 'out of memory|oom-kill|killed process' | tail -n 20 || true
