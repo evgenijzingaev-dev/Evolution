@@ -30,7 +30,9 @@ namespace Evolution.Runtime
             hudSkin.label.fontSize = 16; hudSkin.label.wordWrap = true;
             hudSkin.label.normal.textColor = new Color(.81f, .91f, .93f);
             hudSkin.label.margin = new RectOffset(2, 2, 5, 5);
-            hudSkin.button.fontSize = 16; hudSkin.button.fixedHeight = 32;
+            hudSkin.button.fontSize = 16; hudSkin.button.wordWrap = true;
+            hudSkin.button.fixedHeight = 0;
+            hudSkin.button.padding = new RectOffset(8, 8, 7, 7);
             hudSkin.button.normal.textColor = new Color(.82f, 1, .94f);
             hudSkin.button.margin = new RectOffset(2, 2, 5, 5);
             hudSkin.horizontalSlider.margin = new RectOffset(4, 4, 12, 12);
@@ -41,6 +43,19 @@ namespace Evolution.Runtime
             titleStyle.normal.textColor = new Color(.55f, 1, .84f);
             hintStyle = new GUIStyle(hudSkin.label) { fontSize = 15 };
             hintStyle.normal.textColor = new Color(.53f, .72f, .78f);
+        }
+        void BeginPanelScroll(ref Vector2 scroll, Rect panel)
+        {
+            // IMGUI otherwise sizes scroll content from the longest control and clips wrapped labels.
+            scroll.x = 0;
+            scroll = GUILayout.BeginScrollView(scroll, false, true, GUIStyle.none, hudSkin.verticalScrollbar);
+            float scrollbarWidth = hudSkin.verticalScrollbar.fixedWidth + hudSkin.verticalScrollbar.margin.horizontal;
+            float contentWidth = Mathf.Max(1, panel.width - panelStyle.padding.horizontal - scrollbarWidth - 4);
+            GUILayout.BeginVertical(GUILayout.Width(contentWidth));
+        }
+        static void EndPanelScroll()
+        {
+            GUILayout.EndVertical(); GUILayout.EndScrollView();
         }
         void OnGUI()
         {
@@ -64,7 +79,7 @@ namespace Evolution.Runtime
             if (GUILayout.Button(GameText.Get(TextKey.Overview), GUILayout.Width(170))) { ObserveWorld(); rig.Overview(); }
             GUILayout.EndHorizontal(); GUILayout.EndArea();
             GUILayout.BeginArea(LeftPanel, panelStyle);
-            environmentScroll = GUILayout.BeginScrollView(environmentScroll);
+            BeginPanelScroll(ref environmentScroll, LeftPanel);
             GUILayout.Label(GameText.Format(TextKey.PopulationShort, simulation.Count, simulation.ColonyCount), titleStyle);
             GUILayout.Label(GameText.Format(TextKey.Population, simulation.Count, activeSettings.Capacity, simulation.Births, simulation.Deaths));
             GUILayout.Label(GameText.Format(TextKey.Colonies, simulation.ColonyCount, simulation.ColonialCells, simulation.LargestColony));
@@ -80,15 +95,15 @@ namespace Evolution.Runtime
             if (GUILayout.Button(GameText.Get(showJournal ? TextKey.HideJournal : TextKey.ShowJournal))) showJournal = !showJournal;
             if (showJournal) DrawJournal();
             if (simulation.Count == 0) GUILayout.Label(GameText.Get(TextKey.Extinction));
-            GUILayout.EndScrollView(); GUILayout.EndArea();
+            EndPanelScroll(); GUILayout.EndArea();
             GUILayout.BeginArea(RightPanel, panelStyle);
-            selectionScroll = GUILayout.BeginScrollView(selectionScroll);
+            BeginPanelScroll(ref selectionScroll, RightPanel);
             if (Observation.TryFind(simulation, selectedId, out var selected)) DrawSelection(selected);
             else {
                 GUILayout.Label(GameText.Get(TextKey.NothingSelected), titleStyle);
                 GUILayout.Label(GameText.Get(TextKey.PickHelp));
             }
-            GUILayout.EndScrollView(); GUILayout.EndArea();
+            EndPanelScroll(); GUILayout.EndArea();
             GUILayout.BeginArea(BottomPanel, panelStyle);
             GUILayout.Label(GameText.Get(IsControlling ? TextKey.PlayHelp : TextKey.ControlHelp), hintStyle);
             if (!IsControlling) GUILayout.Label(GameText.Get(TextKey.ShortcutHelp), hintStyle);
