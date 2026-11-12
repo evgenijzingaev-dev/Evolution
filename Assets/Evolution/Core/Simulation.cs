@@ -4,7 +4,7 @@ namespace Evolution.Core
     [Serializable]
     public sealed class SimulationConfig
     {
-        public bool OceanZones;
+        public bool OceanZones, Ecosystem, NaturalEvents;
         public int Capacity = 4096, InitialPopulation = 160, GridSize = 32, MaxColonyCells = 16;
         public float WorldSize = 40, StepSeconds = .05f, InitialNutrients = 4,
             NutrientRegeneration = .12f, NutrientCapacity = 8, Temperature = 22,
@@ -25,7 +25,10 @@ namespace Evolution.Core
     }
     public struct Cell
     {
-        public int Id, ParentId, Generation;
+        public int Id, ParentId, Generation, LineageId, TargetId;
+        public float Integrity, AttackLastStep, DamageLastStep, TransportLastStep;
+        public bool Consumed;
+        public CellActivity Activity;
         public int BirthMutationMask; // Actual changed traits relative to the parent at birth.
         public Genome Genes;
         public float X, Z, Heading, Energy, Age;
@@ -57,8 +60,8 @@ namespace Evolution.Core
         public SimulationConfig Config => config.Copy();
         public uint RandomState => random.State;
         public Cell GetCell(int i) { if (i < 0 || i >= Count) throw new ArgumentOutOfRangeException(nameof(i)); return cells[i]; }
-        public OceanSample EnvironmentAt(float x, float z) => OceanEnvironment.Sample(x, z, config.WorldSize,
-            Tick * config.StepSeconds, Temperature, config.OceanZones);
+        public OceanSample EnvironmentAt(float x, float z) => ApplyEcology(OceanEnvironment.Sample(x, z, config.WorldSize,
+            Tick * config.StepSeconds, Temperature, config.OceanZones), x, z);
         public float GetNutrient(int i) => nutrients[i];
         public float GetOrganicEnergy(int i) => organicEnergy[i];
         public Simulation(SimulationConfig settings, uint seed) : this(settings, seed, null) { }
@@ -67,6 +70,7 @@ namespace Evolution.Core
         {
             settings.Validate(); config = settings.Copy(); random = new RandomSource(seed);
             if (founders != null && founders.Length > config.Capacity) throw new ArgumentException("Too many founders");
+            ecologyIndex = new SpatialIndex(config.Capacity, config.WorldSize);
             cells = new Cell[config.Capacity]; colonies = new ColonySystem(config.Capacity, config.WorldSize);
             nutrients = new float[config.GridSize * config.GridSize];
             organicEnergy = new float[nutrients.Length]; pendingRemains = new float[nutrients.Length];
@@ -79,14 +83,16 @@ namespace Evolution.Core
                 if (founders != null) {
                     Cell f = founders[i];
                     if (!Multicellularity.ValidFounder(f, config)) throw new ArgumentException("Invalid founder");
-                    f.Id = ++nextId; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
+                    f.Id = ++nextId; f.LineageId = f.Id; f.Integrity = 1; f.Consumed = false; f.TargetId = 0; f.AttackLastStep = f.DamageLastStep = f.TransportLastStep = 0; f.Activity = CellActivity.Wandering; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
                     f.BirthMutationMask = 0; f.AssimilatedEnergy = f.FoodLastStep = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
                     cells[Count++] = f; continue;
                 }
                 var g = Genome.Founder(ref random);
-                cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, Genes = g, Energy = Biology.Capacity(g) * .6f,
+                if (config.Ecosystem) g = Genome.EcologicalFounder(g, random.State);
+                cells[Count++] = new Cell { Id = ++nextId, ParentId = -1, LineageId = nextId, Integrity = 1, Genes = g, Energy = Biology.Capacity(g) * .6f,
                     X = random.Range(0, config.WorldSize), Z = random.Range(0, config.WorldSize), Heading = random.Range(0, 6.283185f) };
             }
+            if (config.Ecosystem) InitializeEcology(seed);
         }
         // Apply environmental commands at tick boundaries for replay.
         public void SetEnvironment(float temperature, float regeneration)
@@ -98,27 +104,45 @@ namespace Evolution.Core
         public void Step()
         {
             float dt = config.StepSeconds; bool divide = divisionRequested; divisionRequested = false;
+            if (config.Ecosystem) UpdateNaturalEvents();
             for (int i = 0; i < nutrients.Length; i++) {
                 nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * SampleTile(i).Fertility * dt);
-                // Decay dissipates energy; it does not create another energy-bearing resource.
-                organicEnergy[i] *= Math.Max(0, 1 - config.OrganicDecayRate * dt);
+                // Decomposition dissipates energy; ecology recovers only part of the loss.
+                float decayed = organicEnergy[i] * Math.Min(1, config.OrganicDecayRate * dt);
+                organicEnergy[i] -= decayed;
+                // Mineralization retains a quarter of the decayed chemical energy, dissipating the rest.
+                if (config.Ecosystem) nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + decayed * .125f);
             }
+            if (config.Ecosystem && Tick % 4 == 0) DiffuseResources();
             colonies.Prepare(cells, Count, config);
             colonies.Contact(cells, Count, config, ref random);
             colonies.Prepare(cells, Count, config);
-            colonies.Move(cells, Count, config, ref random, Tick * dt, ControlledId, controlX, controlZ);
+            if (config.Ecosystem) SteerEcology();
+            colonies.Move(cells, Count, config, ref random, Tick * dt, ControlledId, controlX, controlZ, config.Ecosystem, CurrentScale);
             // Feed and pay upkeep first, then transport can rescue a hungry living neighbour.
-            for (int i = 0; i < Count; i++) {
-                Cell c = cells[i]; c.Age += dt;
+            for (int n = 0; n < Count; n++) {
+                int i = config.Ecosystem ? (int)((n + Tick) % Count) : n;
+                Cell c = cells[i]; c.Age += dt; c.AttackLastStep = c.DamageLastStep = c.TransportLastStep = 0;
                 colonies.Develop(ref c, dt);
                 int tile = Tile(c);
-                float localTemperature = EnvironmentAt(c.X, c.Z).Temperature;
+                var local = EnvironmentAt(c.X, c.Z);
+                float localTemperature = local.Temperature;
                 float beforeFood = c.Energy;
+                if (config.Ecosystem) SunlightEnergy += Ecology.Photosynthesize(ref c, ref nutrients[tile], local, dt);
                 Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], localTemperature, dt);
                 c.FoodLastStep = Math.Max(0, c.Energy - beforeFood); c.AssimilatedEnergy += c.FoodLastStep;
                 c.Energy -= Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
+                if (config.Ecosystem) {
+                    c.Energy -= Ecology.Stress(c, local) * dt;
+                    if (c.Activity == CellActivity.Hunting || c.Activity == CellActivity.Fleeing) c.Energy -= .12f * c.Genes.Speed * dt;
+                    if (c.Integrity < 1 && c.Energy > Biology.Capacity(c.Genes) * .25f) {
+                        float repair = Math.Min(1 - c.Integrity, .025f * dt);
+                        c.Integrity += repair; c.Energy -= repair * c.Genes.Size * 2;
+                    }
+                }
                 cells[i] = c;
             }
+            if (config.Ecosystem) Hunt();
             EnergyTransferred = colonies.Exchange(cells, Count, dt, config.MaxAge);
             int originalCount = Count, survivors = 0, births = 0;
             // Births use the free tail; stable compaction below cannot overwrite it.
@@ -126,15 +150,16 @@ namespace Evolution.Core
                 Cell c = cells[i];
                 int tile = Tile(c);
                 if (c.Energy <= 0 || c.Age >= config.MaxAge) {
-                    pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
+                    if (!c.Consumed) pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
                 }
                 if ((c.Id != ControlledId || divide) && Biology.CanDivide(c) && originalCount + births < cells.Length) {
-                    Cell child = new Cell { ParentId = c.Id, Generation = c.Generation + 1,
-                        Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength),
+                    Cell child = new Cell { ParentId = c.Id, Generation = c.Generation + 1, LineageId = c.LineageId, Integrity = 1,
+                        Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength, config.Ecosystem),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
                     if (Biology.TryDivide(ref c, ref child)) {
                         child.BirthMutationMask = Observation.MutationMask(c.Genes, child.Genes);
                         child.Id = ++nextId;
+                        if (config.Ecosystem) RecordAdaptation(c, child);
                         if (c.Id == ControlledId) { LastOffspringId = child.Id; LastDivisionParentId = c.Id; LastDivisionTick = Tick + 1; }
                         colonies.Retain(ref c, ref child, i, config, ref random);
                         cells[originalCount + births++] = child; Births++;
@@ -150,12 +175,14 @@ namespace Evolution.Core
             Count = survivors + births;
             colonies.Prepare(cells, Count, config);
             colonies.Layout(cells, Count, config.WorldSize); Tick++;
+            if (config.Ecosystem && Tick >= nextCensusTick) Census();
             if (ControlledId != 0 && !Observation.TryFind(this, ControlledId, out _)) ReleaseControl();
         }
         OceanSample SampleTile(int i) => EnvironmentAt((i % config.GridSize + .5f) * config.WorldSize / config.GridSize,
             (i / config.GridSize + .5f) * config.WorldSize / config.GridSize);
-        int Tile(Cell c) => Math.Min(config.GridSize - 1, (int)(c.Z / config.WorldSize * config.GridSize)) * config.GridSize
-            + Math.Min(config.GridSize - 1, (int)(c.X / config.WorldSize * config.GridSize));
+        int Tile(Cell c) => TileAt(c.X, c.Z);
+        int TileAt(float x, float z) => Math.Min(config.GridSize - 1, (int)(z / config.WorldSize * config.GridSize)) * config.GridSize
+            + Math.Min(config.GridSize - 1, (int)(x / config.WorldSize * config.GridSize));
         float Wrap(float x)
         {
             float wrapped = x - (float)Math.Floor(x / config.WorldSize) * config.WorldSize;

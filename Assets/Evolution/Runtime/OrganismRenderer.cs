@@ -43,7 +43,14 @@ namespace Evolution.Runtime
                 default: return new Color(.4f, .85f, .85f);
             }
         }
-        Color Tint(Cell c, int mode) => mode == 1 ? Color.Lerp(new Color(.18f, .9f, .55f), new Color(1, .52f, .24f), c.Genes.OrganicSpecialization)
+        static Color StrategyColor(Cell c)
+        {
+            var g = c.Genes;
+            Color color = Color.Lerp(new Color(.2f, .65f, .85f), new Color(.2f, .95f, .35f), g.Photosynthesis);
+            color = Color.Lerp(color, new Color(.95f, .35f, .16f), g.Predation);
+            return Color.Lerp(color, new Color(.9f, .72f, .4f), g.Membrane * .5f);
+        }
+        Color Tint(Cell c, int mode) => mode == 3 ? Color.Lerp(StrategyColor(c), RoleColor(c.Role), c.Specialization * .55f) : mode == 1 ? Color.Lerp(new Color(.18f, .9f, .55f), new Color(1, .52f, .24f), c.Genes.OrganicSpecialization)
             : mode == 2 ? Color.Lerp(RoleColor(CellRole.Generalist), RoleColor(c.Role), c.Specialization)
             : Color.Lerp(new Color(.2f, .5f, 1), new Color(1, .3f, .22f), c.Genes.PreferredTemperature / 50);
         public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float frameSeconds, float cameraDistance)
@@ -87,6 +94,47 @@ namespace Evolution.Runtime
                     float angle = j * Mathf.PI * .5f + c.Id;
                     Vector3 offset = new Vector3(Mathf.Cos(angle) * .22f, .02f, Mathf.Sin(angle) * .2f) * s;
                     Add(p + r * offset, r * Quaternion.Euler(0, j * 45, 20), new Vector3(.12f, .08f, .065f) * s, Color.Lerp(color, Color.white, .35f));
+                }
+                // Chloroplast stacks, capture jaws and shell plates express continuous traits.
+                if (c.Genes.Photosynthesis > .25f) {
+                    for (int j = 0; j < (closeView ? 4 : 2); j++) {
+                        float angle = j * 1.5708f + c.Id;
+                        Add(p + r * new Vector3(Mathf.Cos(angle) * .24f, .14f, Mathf.Sin(angle) * .22f) * s,
+                            r * Quaternion.Euler(0, j * 45, 0), new Vector3(.15f, .04f, .1f) * s * (.6f + c.Genes.Photosynthesis), new Color(.15f, .75f, .23f));
+                    }
+                }
+                if (c.Genes.Predation > .25f) {
+                    float opening = c.AttackLastStep > 0 ? .2f : .1f;
+                    for (int side = -1; side <= 1; side += 2)
+                        Add(p + r * new Vector3(.4f, .01f, side * opening) * s,
+                            r * Quaternion.Euler(0, side * 28, 0), new Vector3(.28f, .065f, .055f) * s * c.Genes.Predation,
+                            new Color(.95f, .4f, .18f));
+                }
+                if (closeView && c.Genes.Membrane > .35f) {
+                    for (int j = 0; j < 6; j++) {
+                        float angle = j * Mathf.PI / 3;
+                        Add(p + r * new Vector3(Mathf.Cos(angle) * .34f, .1f, Mathf.Sin(angle) * .31f) * s, r * Quaternion.Euler(0, -angle * Mathf.Rad2Deg, 0),
+                            new Vector3(.09f, .12f, .22f) * s * c.Genes.Membrane, new Color(.8f, .67f, .38f));
+                    }
+                }
+                if (closeView && c.Activity == CellActivity.Hunting && byId.TryGetValue(c.TargetId, out var prey)) {
+                    Vector3 delta = Position(prey) - p;
+                    delta.x = Observation.PeriodicDelta(delta.x, world); delta.z = Observation.PeriodicDelta(delta.z, world);
+                    for (int j = 0; j < 3; j++) {
+                        float phase = Mathf.Repeat(visualTime * .7f + j / 3f, 1);
+                        Add(p + delta * phase + Vector3.up * .08f, r, Vector3.one * .025f * s, new Color(.95f, .48f, .22f));
+                    }
+                }
+                if (c.AttackLastStep > 0) {
+                    float bite = Mathf.Repeat(visualTime * 3 + c.Id * .17f, 1);
+                    Add(p + r * new Vector3(.65f - bite * .3f, .1f, 0) * s, r, Vector3.one * .09f * s, new Color(1, .25f, .08f));
+                }
+                if (Mathf.Abs(c.TransportLastStep) > .00001f && byId.TryGetValue(c.BondParentId, out var donor)) {
+                    Vector3 delta = Position(donor) - p;
+                    delta.x = Observation.PeriodicDelta(delta.x, world); delta.z = Observation.PeriodicDelta(delta.z, world);
+                    float phase = Mathf.Repeat(visualTime * .8f + c.Id * .31f, 1);
+                    if (c.TransportLastStep > 0) phase = 1 - phase;
+                    Add(p + delta * phase + Vector3.up * .09f, r, Vector3.one * .045f * s, new Color(.75f, 1, .7f));
                 }
                 // Motility structures are inherited; tissue development adds further specialization.
                 if (closeView && c.Genes.Speed > .8f) {
@@ -158,7 +206,9 @@ namespace Evolution.Runtime
                 float stretch = 1 + (c.Genes.Speed - .6f) * .10f + c.Specialization * (c.Role == CellRole.Movement ? .2f : -.08f);
                 float pinch = divisions.TryGetValue(c.Id, out float dividedAt) ? Mathf.Clamp01(1 - (time - dividedAt) / .8f) : 0;
                 shape = new Vector4(c.Genes.Branching * .14f, 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
-                Color color = Tint(c, mode); color.a = .22f;
+                Color color = Tint(c, mode);
+                if (c.DamageLastStep > 0) color = Color.Lerp(color, new Color(1, .18f, .1f), .65f);
+                color.a = .22f + .16f * c.Genes.Membrane;
                 Add(p, r, new Vector3(.82f * stretch, .65f, .76f) * s, color);
                 shape = Vector4.zero;
                 if (c.BondParentId > 0 && byId.TryGetValue(c.BondParentId, out var parent)) {

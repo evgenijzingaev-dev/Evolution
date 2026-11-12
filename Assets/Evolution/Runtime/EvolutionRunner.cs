@@ -7,6 +7,7 @@ namespace Evolution.Runtime
     {
         public int Seed = 42;
         public bool LivingOcean = true;
+        public bool DynamicEcosystem = true;
         public SimulationConfig Settings = new SimulationConfig();
         Simulation simulation;
         OrganismRenderer organismRenderer;
@@ -20,7 +21,7 @@ namespace Evolution.Runtime
         GameObject ownedCamera;
         double accumulator, visualTime;
         bool paused;
-        int colorMode = 2, selectedId;
+        int colorMode = 3, selectedId;
         float speed = 1, pendingTemperature, pendingFood;
         static readonly float[] Speeds = { 1f, 2f, 5f, 10f };
         bool environmentPending;
@@ -57,6 +58,7 @@ namespace Evolution.Runtime
         public void ResetWorld()
         {
             activeSettings = Settings.Copy(); activeSettings.OceanZones = LivingOcean;
+            activeSettings.Ecosystem = DynamicEcosystem; activeSettings.NaturalEvents = DynamicEcosystem;
             simulation = new Simulation(activeSettings, unchecked((uint)Seed)); Journey = new EvolutionJourney(); accumulator = visualTime = 0;
             organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
             ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh);

@@ -42,3 +42,8 @@
 - `docs/STAGE1.md`
 
 Для всех файлов и каталогов внутри Assets также созданы `.meta` с постоянными GUID. README.md и .gitignore обновлены. URP assets в Assets/Evolution/Settings генерируются редактором при первом открытии; стандартные отсутствующие ProjectSettings создаст Unity.
+
+Этап D: `Core/Ecology.cs`, `Core/SpatialIndex.cs`, `Core/EcosystemBehavior.cs`,
+`Core/EcosystemEvents.cs`, `Tests/EditMode/EcosystemTests.cs` (под `Assets/Evolution/`,
+каждый с `.meta`). Отчёт — `docs/ECOSYSTEM_STAGE_D.md`; подготовленное описание PR —
+`docs/STAGE_D_PR.md`.
