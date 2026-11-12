@@ -4,101 +4,145 @@ using UnityEngine;
 using UnityEngine.Rendering;
 namespace Evolution.Runtime
 {
-    // Shared skin, intercellular bridges and role organelles use the same instanced 3D mesh.
-    // Rendering reads biology; it never changes topology, energy or random state.
+    // A few instanced passes, no per-cell objects/materials. Visual state never enters biology.
     internal sealed class OrganismRenderer
     {
         readonly Mesh mesh;
-        readonly Material material;
+        readonly Material body, membrane;
+        Material current;
         readonly Matrix4x4[] matrices = new Matrix4x4[1023];
         readonly Vector4[] colors = new Vector4[1023];
         readonly MaterialPropertyBlock properties = new MaterialPropertyBlock();
         readonly Dictionary<int, Cell> byId;
+        readonly Dictionary<int, Vector3> positions;
+        readonly List<int> expired = new List<int>();
         int used;
-        float world;
-        public OrganismRenderer(Mesh mesh, Material material, int capacity)
-        { this.mesh = mesh; this.material = material; byId = new Dictionary<int, Cell>(capacity); }
+        float world, visualTime;
+        public OrganismRenderer(Mesh mesh, Material body, Material membrane, int capacity)
+        {
+            this.mesh = mesh; this.body = body; this.membrane = membrane;
+            byId = new Dictionary<int, Cell>(capacity); positions = new Dictionary<int, Vector3>(capacity);
+        }
+        public static Vector3 Center(Cell c) => new Vector3(c.X, .54f, c.Z);
+        public Vector3 Position(Cell c) => positions.TryGetValue(c.Id, out var p) ? p : Center(c);
         public static Color RoleColor(CellRole role)
         {
             switch (role) {
-                case CellRole.Feeding: return new Color(.4f, .95f, .5f);
-                case CellRole.Movement: return new Color(.25f, .8f, 1);
-                case CellRole.Defense: return new Color(1, .7f, .3f);
-                case CellRole.Reproduction: return new Color(.95f, .4f, .75f);
-                default: return new Color(.6f, .8f, .85f);
+                case CellRole.Feeding: return new Color(.3f, .95f, .65f);
+                case CellRole.Movement: return new Color(.22f, .75f, 1);
+                case CellRole.Defense: return new Color(1, .72f, .3f);
+                case CellRole.Reproduction: return new Color(.95f, .35f, .7f);
+                default: return new Color(.4f, .85f, .85f);
             }
         }
-        static Color Skin(Cell c) => Color.HSVToRGB((c.ColonyId * .618034f) % 1, .4f, .62f);
-        public void Draw(Simulation simulation, int mode, float worldSize)
+        Color Tint(Cell c, int mode) => mode == 1 ? Color.Lerp(new Color(.18f, .9f, .55f), new Color(1, .52f, .24f), c.Genes.OrganicSpecialization)
+            : mode == 2 ? Color.Lerp(RoleColor(CellRole.Generalist), RoleColor(c.Role), c.Specialization)
+            : Color.Lerp(new Color(.2f, .5f, 1), new Color(1, .3f, .22f), c.Genes.PreferredTemperature / 50);
+        public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float frameSeconds)
         {
-            world = worldSize; used = 0; byId.Clear();
-            for (int i = 0; i < simulation.Count; i++) byId.Add(simulation.GetCell(i).Id, simulation.GetCell(i));
+            world = worldSize; visualTime = time; used = 0; byId.Clear();
             for (int i = 0; i < simulation.Count; i++) {
-                var c = simulation.GetCell(i);
-                var position = new Vector3(c.X, .48f, c.Z);
-                var rotation = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
-                float s = c.Genes.Size;
-                if (c.ColonyId != 0) {
-                    Add(position, rotation, new Vector3(.78f, .48f, .72f) * s, Skin(c));
-                    if (c.BondParentId > 0 && byId.TryGetValue(c.BondParentId, out var parent)) {
-                        Vector3 d = new Vector3(Delta(parent.X - c.X), 0, Delta(parent.Z - c.Z));
-                        if (d.sqrMagnitude > .0001f) {
-                            float thickness = .38f * Mathf.Min(s, parent.Genes.Size);
-                            Add(position + d * .5f, Quaternion.FromToRotation(Vector3.right, d.normalized),
-                                new Vector3(d.magnitude + thickness, thickness, thickness), Skin(c));
+                var c = simulation.GetCell(i); byId.Add(c.Id, c);
+                Vector3 point = Center(c);
+                if (positions.TryGetValue(c.Id, out var previous)) {
+                    Vector3 delta = point - previous;
+                    delta.x = Observation.PeriodicDelta(delta.x, world); delta.z = Observation.PeriodicDelta(delta.z, world);
+                    point = previous + delta * (1 - Mathf.Exp(-18 * frameSeconds));
+                    point.x = Mathf.Repeat(point.x, world); point.z = Mathf.Repeat(point.z, world);
+                }
+                positions[c.Id] = point;
+            }
+            expired.Clear(); foreach (int id in positions.Keys) if (!byId.ContainsKey(id)) expired.Add(id);
+            foreach (int id in expired) positions.Remove(id);
+            byId.TryGetValue(selectedId, out var selected);
+            int grid = simulation.Config.GridSize;
+            // Opaque organelles first, translucent membranes last; transparent depth writes are disabled.
+            current = body;
+            for (int i = 0; i < simulation.Count; i++) {
+                var c = simulation.GetCell(i); Vector3 p = Position(c);
+                var r = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
+                float growth = c.Generation == 0 ? 1 : Mathf.Lerp(.55f, 1, Mathf.Clamp01(c.Age / .7f));
+                float s = c.Genes.Size * growth;
+                Color color = Tint(c, mode);
+                Add(p, r, new Vector3(.26f, .29f, .27f) * s, Color.Lerp(color, new Color(.35f, .2f, .55f), .65f));
+                Add(p + r * new Vector3(.03f, .08f, .04f) * s, r, Vector3.one * .09f * s, new Color(.8f, .8f, 1));
+                for (int j = 0; j < 4; j++) {
+                    float angle = j * Mathf.PI * .5f + c.Id;
+                    Vector3 offset = new Vector3(Mathf.Cos(angle) * .22f, .02f, Mathf.Sin(angle) * .2f) * s;
+                    Add(p + r * offset, r * Quaternion.Euler(0, j * 45, 20), new Vector3(.12f, .08f, .065f) * s, Color.Lerp(color, Color.white, .35f));
+                }
+                float d = c.Specialization;
+                if (d > .15f) {
+                    if (c.Role == CellRole.Movement) {
+                        for (int j = 0; j < 3; j++) {
+                            float wave = Mathf.Sin(visualTime * 5 + c.Id + j * .8f) * .07f;
+                            Add(p + r * new Vector3(-.4f - j * .12f, wave, wave) * s, r * Quaternion.Euler(0, wave * 90, 0), new Vector3(.22f, .035f, .04f) * s, color);
                         }
+                    } else if (c.Role == CellRole.Defense) {
+                        for (int j = 0; j < 5; j++) {
+                            float angle = j * Mathf.PI * .4f;
+                            Add(p + r * new Vector3(Mathf.Cos(angle) * .25f, .14f, Mathf.Sin(angle) * .24f) * s, r,
+                                new Vector3(.19f, .08f, .18f) * s, color);
+                        }
+                    } else if (c.Role == CellRole.Feeding) {
+                        Add(p + r * new Vector3(.25f, .05f, 0) * s, r, new Vector3(.18f, .21f, .24f) * s, color * .65f);
+                    } else if (c.Role == CellRole.Reproduction) {
+                        Add(p + r * new Vector3(-.19f, .09f, .14f) * s, r, Vector3.one * .17f * s, color);
+                    }
+                }
+                // Nutrient motes move into the membrane only while local food and reserve room exist.
+                int tile = Mathf.Min(grid - 1, (int)(c.Z / world * grid)) * grid + Mathf.Min(grid - 1, (int)(c.X / world * grid));
+                if (c.Energy < Biology.Capacity(c.Genes) * .97f && (simulation.GetNutrient(tile) > .01f || simulation.GetOrganicEnergy(tile) > .01f)) {
+                    float phase = Mathf.Repeat(visualTime * .8f + c.Id * .37f, 1);
+                    float angle = c.Id * 2.4f;
+                    Add(p + new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle)) * (.65f * (1 - phase) + .16f) * s,
+                        r, Vector3.one * .045f * s, new Color(.45f, 1, .65f));
+                }
+                if (selected.Id > 0 && Observation.SameOrganism(selected, c)) {
+                    // A ring of beads remains visible from every orbit angle, without covering organelles.
+                    for (int j = 0; j < 12; j++) {
+                        float angle = j * Mathf.PI / 6;
+                        Add(p + new Vector3(Mathf.Cos(angle) * .48f, .02f, Mathf.Sin(angle) * .45f) * s,
+                            r, Vector3.one * .045f * s, new Color(.55f, 1, 1));
+                    }
+                }
+            }
+            Flush(); current = membrane;
+            for (int i = 0; i < simulation.Count; i++) {
+                var c = simulation.GetCell(i); var p = Position(c);
+                var r = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
+                float growth = c.Generation == 0 ? 1 : Mathf.Lerp(.55f, 1, Mathf.Clamp01(c.Age / .7f));
+                float s = c.Genes.Size * growth * (1 + .025f * Mathf.Sin(visualTime * 2 + c.Id));
+                float stretch = 1 + c.Specialization * (c.Role == CellRole.Movement ? .4f : -.08f);
+                Color color = Tint(c, mode); color.a = .22f;
+                Add(p, r, new Vector3(.82f * stretch, .65f, .76f) * s, color);
+                if (c.BondParentId > 0 && byId.TryGetValue(c.BondParentId, out var parent)) {
+                    Vector3 delta = Position(parent) - p;
+                    delta.x = Observation.PeriodicDelta(delta.x, world); delta.z = Observation.PeriodicDelta(delta.z, world);
+                    if (delta.sqrMagnitude > .0001f) {
+                        float thickness = .25f * Mathf.Min(s, parent.Genes.Size);
+                        Add(p + delta * .5f, Quaternion.FromToRotation(Vector3.right, delta.normalized),
+                            new Vector3(delta.magnitude + thickness, thickness, thickness), color);
                     }
                 }
             }
             Flush();
-            for (int i = 0; i < simulation.Count; i++) {
-                var c = simulation.GetCell(i);
-                var position = new Vector3(c.X, .54f, c.Z);
-                var rotation = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
-                float s = c.Genes.Size, d = c.Specialization;
-                Color color = mode == 1 ? Color.Lerp(new Color(.2f, .8f, .45f), new Color(1, .55f, .2f), c.Genes.OrganicSpecialization)
-                    : mode == 2 ? Color.Lerp(RoleColor(CellRole.Generalist), RoleColor(c.Role), d)
-                    : Color.Lerp(new Color(.15f, .5f, 1), new Color(1, .3f, .2f), c.Genes.PreferredTemperature / 50);
-                if (c.ColonyId != 0 && mode != 2) color = Color.Lerp(Skin(c), color, .35f);
-                float stretch = c.Role == CellRole.Movement ? 1 + .3f * d : 1;
-                Add(position, rotation, new Vector3(.65f * stretch, .45f, .6f) * s, color);
-                Color nucleus = Color.Lerp(new Color(.65f, .85f, .9f), RoleColor(c.Role), d);
-                Add(position + Vector3.up * .21f * s, rotation, new Vector3(.2f, .13f, .2f) * s, nucleus);
-                if (d < .15f) continue;
-                if (c.Role == CellRole.Movement) {
-                    for (int tail = -1; tail <= 1; tail++)
-                        Add(position + rotation * new Vector3(-.4f, .04f, tail * .15f) * s,
-                            rotation * Quaternion.Euler(0, tail * 20, 0), new Vector3(.45f * d, .055f, .065f) * s, nucleus);
-                } else if (c.Role == CellRole.Defense) {
-                    Add(position + Vector3.up * .2f * s, rotation, new Vector3(.68f, .12f, .65f) * s, nucleus);
-                } else if (c.Role == CellRole.Feeding) {
-                    Add(position + rotation * new Vector3(.25f, .12f, 0) * s, rotation, new Vector3(.22f, .18f, .3f) * s, nucleus * .65f);
-                } else if (c.Role == CellRole.Reproduction) {
-                    Add(position + rotation * new Vector3(-.16f, .23f, .12f) * s, rotation, Vector3.one * .16f * s * d, nucleus);
-                }
-            }
-            Flush();
         }
-        float Delta(float d) => d - Mathf.Floor(d / world + .5f) * world;
-        void Add(Vector3 position, Quaternion rotation, Vector3 scale, Color color)
+        void Add(Vector3 p, Quaternion rotation, Vector3 scale, Color color)
         {
-            // Periodic copies meet at the dish boundary; shader clips everything outside the world.
             float radius = Mathf.Max(scale.x, Mathf.Max(scale.y, scale.z)) * .5f;
-            int minX = position.x + radius > world ? -1 : 0;
-            int maxX = position.x - radius < 0 ? 1 : 0;
-            int minZ = position.z + radius > world ? -1 : 0;
-            int maxZ = position.z - radius < 0 ? 1 : 0;
+            int minX = p.x + radius > world ? -1 : 0, maxX = p.x - radius < 0 ? 1 : 0;
+            int minZ = p.z + radius > world ? -1 : 0, maxZ = p.z - radius < 0 ? 1 : 0;
             for (int x = minX; x <= maxX; x++) for (int z = minZ; z <= maxZ; z++) {
-                matrices[used] = Matrix4x4.TRS(position + new Vector3(x * world, 0, z * world), rotation, scale);
-                colors[used++] = color;
-                if (used == matrices.Length) Flush();
+                matrices[used] = Matrix4x4.TRS(p + new Vector3(x * world, 0, z * world), rotation, scale);
+                colors[used++] = color; if (used == matrices.Length) Flush();
             }
         }
         void Flush()
         {
             if (used == 0) return;
             properties.SetVectorArray("_InstanceColor", colors); properties.SetFloat("_WorldSize", world);
-            Graphics.DrawMeshInstanced(mesh, 0, material, matrices, used, properties, ShadowCastingMode.Off, false);
+            Graphics.DrawMeshInstanced(mesh, 0, current, matrices, used, properties, ShadowCastingMode.Off, false);
             used = 0;
         }
     }

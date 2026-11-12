@@ -47,6 +47,56 @@ namespace Evolution.Tests
             Assert.That(world.Tick, Is.EqualTo(initialTick));
         }
 
+        [UnityTest]
+        public IEnumerator SelectionAndCameraDoNotAdvancePausedBiology()
+        {
+            runner.IsPaused = true;
+            var world = runner.World; long tick = world.Tick; uint random = world.RandomState;
+            int id = world.GetCell(0).Id;
+            Assert.That(runner.SelectCell(id), Is.True);
+            runner.FocusSelected(true);
+            yield return null;
+            Assert.That(runner.SelectedId, Is.EqualTo(id));
+            Assert.That(runner.CameraRig.Following, Is.True);
+            Assert.That(runner.CameraRig.Distance, Is.LessThanOrEqualTo(5));
+            Assert.That(world.Tick, Is.EqualTo(tick)); Assert.That(world.RandomState, Is.EqualTo(random));
+            runner.CameraRig.Overview();
+            Assert.That(runner.CameraRig.Following, Is.False);
+            Assert.That(runner.CameraRig.Distance, Is.GreaterThan(5));
+        }
+
+        [UnityTest]
+        public IEnumerator PickerSelectsRenderedCellAtItsScreenPosition()
+        {
+            runner.IsPaused = true;
+            var cell = runner.World.GetCell(0);
+            var screen = Camera.main.WorldToScreenPoint(new Vector3(cell.X, .54f, cell.Z));
+            Assert.That(screen.z, Is.GreaterThan(0));
+            int picked = runner.Pick(new Vector2(screen.x, screen.y));
+            Assert.That(picked, Is.GreaterThan(0));
+            Assert.That(runner.SelectCell(picked), Is.True);
+            Assert.That(runner.SelectCell(int.MaxValue), Is.False);
+            runner.ClearSelection(); Assert.That(runner.SelectedId, Is.Zero);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator CameraBoundsAndResetClearStaleSelection()
+        {
+            runner.IsPaused = true;
+            runner.SelectCell(runner.World.GetCell(0).Id);
+            runner.CameraRig.FocusOn(new Vector3(-100, -20, 10000), true);
+            Assert.That(runner.CameraRig.FocusPoint.x, Is.Zero);
+            Assert.That(runner.CameraRig.FocusPoint.z, Is.EqualTo(runner.Settings.WorldSize));
+            runner.CameraRig.Zoom(10000);
+            Assert.That(runner.CameraRig.Distance, Is.GreaterThanOrEqualTo(2));
+            runner.ResetWorld();
+            Assert.That(runner.SelectedId, Is.Zero); Assert.That(runner.CameraRig.Following, Is.False);
+            Assert.That(Resources.Load<Shader>("CellMembrane"), Is.Not.Null);
+            Assert.That(Resources.Load<Shader>("MicroHabitat"), Is.Not.Null);
+            yield return null;
+        }
+
         [UnityTearDown]
         public IEnumerator UnloadPrototype()
         {
