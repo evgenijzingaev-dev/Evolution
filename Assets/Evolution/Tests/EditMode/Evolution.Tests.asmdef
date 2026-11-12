@@ -1,0 +1,12 @@
+{
+  "name": "Evolution.Tests",
+  "references": [
+    "Evolution.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

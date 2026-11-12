@@ -1,0 +1,7 @@
+{
+  "name": "Evolution.Runtime",
+  "references": [
+    "Evolution.Core",
+    "Unity.RenderPipelines.Universal.Runtime"
+  ]
+}
