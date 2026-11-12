@@ -78,12 +78,14 @@ namespace Evolution.Runtime
             organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
             ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh, activeSettings.NutrientCapacity);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
+            survivalTick = -1; survivalId = 0;
             pendingTemperature = activeSettings.Temperature; pendingFood = activeSettings.NutrientRegeneration; environmentPending = false;
         }
         public bool SelectCell(int id)
         {
             if (!Observation.TryFind(simulation, id, out _)) return false;
             if (IsControlling && selectedId != id) ObserveWorld();
+            if (selectedId != id) selectionScroll = Vector2.zero;
             selectedId = id; if (!IsControlling) rig.StopFollowing(); return true;
         }
         public void ClearSelection() { ObserveWorld(); selectedId = 0; rig.StopFollowing(); }
@@ -116,7 +118,7 @@ namespace Evolution.Runtime
             for (int i = 0; i < simulation.Count; i++) {
                 var c = simulation.GetCell(i); Vector3 point = organismRenderer.Position(c);
                 Vector3 center = rig.NearestImage(point), offset = ray.origin - center;
-                float hit = Observation.RaySphere(offset.x, offset.y, offset.z, ray.direction.x, ray.direction.y, ray.direction.z, c.Genes.Size * .6f);
+                float hit = Observation.RaySphere(offset.x, offset.y, offset.z, ray.direction.x, ray.direction.y, ray.direction.z, c.Genes.Size * (.6f + .3f * Mathf.Clamp01(c.Genes.Speed/2) + .15f*c.Genes.Predation));
                 if (hit < nearest) { nearest = hit; id = c.Id; }
             }
             return id;

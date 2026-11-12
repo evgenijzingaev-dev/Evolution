@@ -31,6 +31,7 @@ Shader "Evolution/CellMembrane"
                 UNITY_DEFINE_INSTANCED_PROP(float4, _Response)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _Contact)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _Vital)
+                UNITY_DEFINE_INSTANCED_PROP(float4, _Anatomy)
             UNITY_INSTANCING_BUFFER_END(Props)
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct Varyings { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; float3 positionWS : TEXCOORD1; float4 tangentWS : TEXCOORD2; float2 uv : TEXCOORD3; UNITY_VERTEX_INPUT_INSTANCE_ID };
@@ -41,12 +42,14 @@ Shader "Evolution/CellMembrane"
                 float4 motor = UNITY_ACCESS_INSTANCED_PROP(Props,_Motor);
                 float4 response = UNITY_ACCESS_INSTANCED_PROP(Props,_Response);
                 float4 contact = UNITY_ACCESS_INSTANCED_PROP(Props,_Contact);
-                float3 p = LivingPoint(input.positionOS.xyz,shape,motor,response,contact);
+                float4 anatomy = UNITY_ACCESS_INSTANCED_PROP(Props,_Anatomy);
+                float taper = UNITY_ACCESS_INSTANCED_PROP(Props,_Vital).w;
+                float3 p = LivingPoint(input.positionOS.xyz,shape,motor,response,contact,anatomy,taper);
                 // Differentiate the displaced surface instead of shading the original rigid sphere.
                 float3 t = input.tangentOS.xyz;
                 float3 b = cross(input.normalOS,t);
-                float3 pt = LivingPoint(normalize(input.positionOS.xyz+t*.003)*.5,shape,motor,response,contact);
-                float3 pb = LivingPoint(normalize(input.positionOS.xyz+b*.003)*.5,shape,motor,response,contact);
+                float3 pt = LivingPoint(normalize(input.positionOS.xyz+t*.003)*.5,shape,motor,response,contact,anatomy,taper);
+                float3 pb = LivingPoint(normalize(input.positionOS.xyz+b*.003)*.5,shape,motor,response,contact,anatomy,taper);
                 float3 normal = normalize(cross(pt-p,pb-p));
                 o.positionWS = TransformObjectToWorld(p); o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.normalWS = TransformObjectToWorldNormal(normal);

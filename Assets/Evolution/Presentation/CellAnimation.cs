@@ -109,14 +109,25 @@ namespace Evolution.Presentation
     public struct MembranePose
     {
         public float Amplitude, Phase, Stretch, Pinch, Drive, Turn, Acceleration, Amoeba;
-        public float Feed, Damage, Defense, Stress, ContactX, ContactZ, InjuryX, InjuryZ;
+        public float Feed, Damage, Defense, Stress, Repair, ContactX, ContactZ, InjuryX, InjuryZ;
+        public float Axial, Flatness, Breadth, Lobes, Taper;
+        public MembranePose WithGenome(Genome g)
+        {
+            float speed = AnimationTargets.Clamp((g.Speed - .5f) / 1.5f);
+            Axial = .55f * speed + .24f * g.Predation;
+            Flatness = .3f * g.Photosynthesis - .1f * g.Membrane;
+            Breadth = -.22f * speed + .2f * g.Photosynthesis + .12f * g.Membrane;
+            Lobes = .065f * g.Photosynthesis + .04f * g.OrganicSpecialization;
+            Taper = .23f * g.Predation;
+            return this;
+        }
         public static MembranePose From(CellAnimation a, double time, float phase)
         {
             return new MembranePose { Amplitude = a.Compliance * (.3f + .7f * a.Activity), Phase = phase,
                 Stretch = .08f * a.Drive + .055f * a.Acceleration + .06f * a.Readiness + .24f * a.Division(time), Pinch = a.Division(time),
                 Drive = a.Drive, Turn = a.Turn, Acceleration = a.Acceleration,
                 Amoeba = a.Target.Style == SwimmingStyle.Amoeboid ? a.Drive : 0,
-                Feed = a.Feeding(time), Damage = a.Damage(time), Defense = a.Defense, Stress = a.Stress,
+                Feed = a.Feeding(time), Damage = a.Damage(time), Defense = a.Defense, Stress = a.Stress, Repair = a.Repair,
                 ContactX = (float)Math.Cos(a.ContactAngle), ContactZ = (float)Math.Sin(a.ContactAngle),
                 InjuryX = (float)Math.Cos(a.DamageAngle), InjuryZ = (float)Math.Sin(a.DamageAngle) };
         }
@@ -137,6 +148,11 @@ namespace Evolution.Presentation
             float neck = 1 - .32f * Pinch * (float)Math.Exp(-originalX * originalX * 65);
             y *= neck; z *= neck;
             z += Turn * .09f * originalX * originalX + Acceleration * .025f * originalX;
+            // Stable inherited silhouette, shared by the membrane, organelles and motor roots.
+            float outline = 1 + Lobes * (float)Math.Cos(3 * angle) * equator;
+            x *= (1 + Axial) * outline;
+            y *= (1 - Flatness) * outline;
+            z *= (1 + Breadth) * outline * (1 - Taper * nx);
         }
         // Organelle centers stay in the central quarter-radius, before the shared deformation.
         public void Interior(float x, float y, float z, out float px, out float py, out float pz)

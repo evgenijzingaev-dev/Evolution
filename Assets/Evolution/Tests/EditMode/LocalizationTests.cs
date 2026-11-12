@@ -30,7 +30,7 @@ namespace Evolution.Tests
                 Assert.AreEqual("Температура: 22,5 °C", GameText.Format(TextKey.Temperature, 22.5f));
                 Assert.AreEqual("10×", GameText.Format(TextKey.TimeScale, 10));
                 foreach (TextKey key in Enum.GetValues(typeof(TextKey)))
-                    Assert.DoesNotThrow(() => GameText.Format(key, 1, 2, 3, 4), key.ToString());
+                    Assert.DoesNotThrow(() => GameText.Format(key, 1, 2, 3, 4, 5), key.ToString());
             } finally { CultureInfo.CurrentCulture = previous; }
         }
     }

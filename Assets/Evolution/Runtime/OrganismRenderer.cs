@@ -13,6 +13,7 @@ namespace Evolution.Runtime
         Material current;
         readonly Matrix4x4[] matrices = new Matrix4x4[256];
         readonly Vector4[] colors = new Vector4[256], shapes = new Vector4[256], motors = new Vector4[256], responses = new Vector4[256], contacts = new Vector4[256], vitals = new Vector4[256];
+        readonly Vector4[] anatomies = new Vector4[256];
         readonly MaterialPropertyBlock properties = new MaterialPropertyBlock();
         readonly Dictionary<int, Cell> previousTick, byId;
         readonly Dictionary<int, CellAnimation> animations;
@@ -64,7 +65,7 @@ namespace Evolution.Runtime
                 var c = pair.Value;
                 remnants[remnantCursor++ % remnants.Length] = new Remnant { Position = Position(c), Rotation = Rotation(c),
                     Color = StrategyColor(c), Time = time, Size = c.Genes.Size * Mathf.Lerp(.55f, 1, c.Growth),
-                    Pose = animations.TryGetValue(c.Id,out var dying) ? MembranePose.From(dying,time,(float)dying.Phase) : default };
+                    Pose = (animations.TryGetValue(c.Id,out var dying) ? MembranePose.From(dying,time,(float)dying.Phase) : default).WithGenome(c.Genes) };
             }
             foreach (var pair in byId) {
                 var c = pair.Value; bool existed = previousTick.TryGetValue(c.Id, out var previous);
@@ -162,7 +163,7 @@ namespace Evolution.Runtime
                 Vector3 cameraDelta = p - cameraFocus; cameraDelta.x = Observation.PeriodicDelta(cameraDelta.x, world); cameraDelta.z = Observation.PeriodicDelta(cameraDelta.z, world);
                 bool detail = closeView && (c.Id == selectedId || (cameraDelta.sqrMagnitude < 120 && detailedCount < 64));
                 if (detail) { detailedCount++; detailedIds.Add(c.Id); }
-                var cellPose = MembranePose.From(a, time, phase); Color color = Tint(c, mode);
+                var cellPose = MembranePose.From(a, time, phase).WithGenome(c.Genes); Color color = Tint(c, mode);
                 float streaming = .008f * a.Activity * (1 - a.Stress * .6f);
                 var drift = new Vector3(Mathf.Sin(phase * .3f), .3f * Mathf.Sin(phase * .2f), Mathf.Cos(phase * .3f)) * streaming;
                 Add(p + r * Interior(cellPose, drift, s), r, new Vector3(.24f, .25f, .24f) * s, Color.Lerp(color, new Color(.35f, .2f, .55f), .65f));
@@ -215,7 +216,8 @@ namespace Evolution.Runtime
                 float s = c.Genes.Size*Mathf.Lerp(.55f,1,animations[c.Id].Growth);
                 for (int j = 0; j < 12; j++) {
                     float angle = j*Mathf.PI/6;
-                    Add(Position(c)+new Vector3(Mathf.Cos(angle)*.5f,.02f,Mathf.Sin(angle)*.47f)*s,Quaternion.identity,Vector3.one*.035f*s,new Color(.55f,1,1));
+                    var outline = MembranePose.From(animations[c.Id],time,Phase(c,animations[c.Id])).WithGenome(c.Genes);
+                    Add(Position(c)+Rotation(c)*Surface(outline,Mathf.Cos(angle)*.64f,.03f,Mathf.Sin(angle)*.64f,s),Quaternion.identity,Vector3.one*.025f*s,new Color(.55f,1,1));
                 }
             }
             Flush(); current = membrane; highMembrane = false;
@@ -235,7 +237,7 @@ namespace Evolution.Runtime
                     var c = simulation.GetCell(i); if (!Visible(c) || detailedIds.Contains(c.Id) != highMembrane) continue;
                     var a = animations[c.Id]; var p = Position(c); var r = Rotation(c);
                     float s = c.Genes.Size*Mathf.Lerp(.55f,1,a.Growth);
-                    pose = MembranePose.From(a,time,Phase(c,a));
+                    pose = MembranePose.From(a,time,Phase(c,a)).WithGenome(c.Genes);
                     Color color = Tint(c,mode);
                     color = Color.Lerp(color,new Color(.65f,.25f,.8f),a.Stress*.2f);
                     color = Color.Lerp(color,new Color(1,.85f,.4f),a.Defense*.4f);
@@ -301,7 +303,8 @@ namespace Evolution.Runtime
             motors[used] = new Vector4(pose.Drive,pose.Turn,pose.Acceleration,pose.Amoeba);
             responses[used] = new Vector4(pose.Feed,pose.Damage,pose.Defense,pose.Stress);
             contacts[used] = new Vector4(pose.ContactX,pose.ContactZ,pose.InjuryX,pose.InjuryZ);
-            vitals[used] = new Vector4(pose.Repair,0,decay,0);
+            vitals[used] = new Vector4(pose.Repair,0,decay,pose.Taper);
+            anatomies[used] = new Vector4(pose.Axial,pose.Flatness,pose.Breadth,pose.Lobes);
             if (++used == matrices.Length) Flush();
         }
         void Flush()
@@ -309,6 +312,7 @@ namespace Evolution.Runtime
             if (used == 0) return;
             properties.SetVectorArray("_Shape",shapes); properties.SetVectorArray("_Motor",motors);
             properties.SetVectorArray("_Response",responses); properties.SetVectorArray("_Contact",contacts); properties.SetVectorArray("_Vital",vitals);
+            properties.SetVectorArray("_Anatomy",anatomies);
             properties.SetVectorArray("_InstanceColor",colors); properties.SetFloat("_WorldSize",world);
             Graphics.DrawMeshInstanced(current == membrane && highMembrane ? membraneMesh : mesh,0,current,matrices,used,properties,ShadowCastingMode.Off,false);
             used = 0;

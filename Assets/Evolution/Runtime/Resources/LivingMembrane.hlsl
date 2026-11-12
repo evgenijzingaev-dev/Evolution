@@ -2,7 +2,7 @@
 #define EVOLUTION_LIVING_MEMBRANE
 // Keep the point map aligned with Presentation/MembranePose.Deform.
 // Shape: radial amplitude, integrated phase, axial stretch, cytokinetic neck.
-float3 LivingPoint(float3 p, float4 shape, float4 motor, float4 response, float4 contact)
+float3 LivingPoint(float3 p, float4 shape, float4 motor, float4 response, float4 contact, float4 anatomy, float taper)
 {
     float len = length(p);
     float3 n = len > .00001 ? p / len : float3(1,0,0);
@@ -18,6 +18,8 @@ float3 LivingPoint(float3 p, float4 shape, float4 motor, float4 response, float4
     p *= radial * float3(1+shape.z,1,rsqrt(1+shape.z));
     p.yz *= 1-.32*shape.w*exp(-originalX*originalX*65);
     p.z += motor.y*.09*originalX*originalX + motor.z*.025*originalX;
+    float outline = 1 + anatomy.w*cos(3*angle)*equator;
+    p *= float3(1+anatomy.x,1-anatomy.y,(1+anatomy.z)*(1-taper*n.x))*outline;
     return p;
 }
 #endif
