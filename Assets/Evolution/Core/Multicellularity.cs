@@ -157,13 +157,18 @@ namespace Evolution.Core
                 if (c.Specialization == 0) c.Role = CellRole.Generalist;
             }
         }
-        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng)
+        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng, float time = 0)
         {
             for (int i = 0; i < count; i++) if (parent[i] < 0) {
                 cells[i].Heading += rng.Range(-1, 1) * cfg.StepSeconds * 2 / (1 + .15f * (size[i] - 1));
                 float speed = motors[i] / size[i] / (1 + .09f * (size[i] - 1));
                 cells[i].X = Wrap(cells[i].X + (float)Math.Cos(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
                 cells[i].Z = Wrap(cells[i].Z + (float)Math.Sin(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
+                if (cfg.OceanZones) {
+                    var flow = OceanEnvironment.Sample(cells[i].X, cells[i].Z, cfg.WorldSize, time, cfg.Temperature, true);
+                    cells[i].X = Wrap(cells[i].X + flow.CurrentX * cfg.StepSeconds, cfg.WorldSize);
+                    cells[i].Z = Wrap(cells[i].Z + flow.CurrentZ * cfg.StepSeconds, cfg.WorldSize);
+                }
             }
             Layout(cells, count, cfg.WorldSize);
         }

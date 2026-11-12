@@ -12,6 +12,7 @@ Shader "Evolution/InstancedCells"
             #pragma fragment Frag
             #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "OceanWater.hlsl"
             UNITY_INSTANCING_BUFFER_START(Props)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _InstanceColor)
             UNITY_INSTANCING_BUFFER_END(Props)
@@ -36,7 +37,7 @@ Shader "Evolution/InstancedCells"
                 half3 eye = normalize(GetCameraPositionWS() - input.positionWS);
                 half rim = pow(1 - saturate(dot(n, eye)), 3) * .22;
                 half shine = pow(saturate(dot(n, normalize(eye + normalize(float3(.3,1,-.4))))), 28) * .25;
-                return half4(UNITY_ACCESS_INSTANCED_PROP(Props, _InstanceColor).rgb * (lighting + rim) + shine, 1);
+                return half4(OceanFog(UNITY_ACCESS_INSTANCED_PROP(Props, _InstanceColor).rgb * (lighting + rim) + shine, input.positionWS), 1);
             }
             ENDHLSL
         }
