@@ -129,6 +129,8 @@ jobs:
           versioning: None
           allowDirtyBuild: true # PrototypeSetup generates URP assets in this disposable checkout.
           dockerShmSize: 1025m
+          dockerCpuLimit: 2
+          customParameters: -job-worker-count 2
 
       - name: Explain unavailable build image
         if: ${{ success() && steps.images.outputs.build_supported == 'false' }}
@@ -154,3 +156,10 @@ jobs:
           path: build/StandaloneLinux64/
           if-no-files-found: error
           retention-days: 7
+
+      - name: Runner resource diagnostics
+        if: ${{ always() }}
+        run: |
+          df -h
+          free -h
+          sudo dmesg | grep -Ei 'out of memory|oom-kill|killed process' | tail -n 20 || true

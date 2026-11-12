@@ -47,3 +47,25 @@ if (( available_after < minimum_bytes )); then
   echo '::error::Less than 30 GiB available for Unity image extraction, Library and IL2CPP build.'
   exit 1
 fi
+
+# The standard runner has 8 GiB RAM. Give Editor/IL2CPP memory spikes room to swap
+# while keeping at least 30 GiB available for the image and build. Keep existing swap.
+echo 'Memory before adding Unity swap:'
+free -h
+swap_bytes=$((8 * gib))
+if (( available_after < minimum_bytes + swap_bytes )); then
+  echo '::error::Need 38 GiB after SDK cleanup to reserve 8 GiB swap and 30 GiB for Unity.'
+  exit 1
+fi
+if [[ -e /mnt/evolution-unity-ci.swap ]]; then
+  echo '::error::Refusing to overwrite an existing Unity swap file.'
+  exit 1
+fi
+sudo fallocate -l "$swap_bytes" /mnt/evolution-unity-ci.swap
+sudo chmod 600 /mnt/evolution-unity-ci.swap
+sudo mkswap /mnt/evolution-unity-ci.swap
+sudo swapon /mnt/evolution-unity-ci.swap
+echo 'Memory and disk space after adding Unity swap:'
+free -h
+df -h / "$GITHUB_WORKSPACE" "$docker_root"
+echo 'Added 8 GiB swap for Unity; existing swap preserved.' >> "$GITHUB_STEP_SUMMARY"

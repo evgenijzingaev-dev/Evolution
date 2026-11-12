@@ -59,6 +59,14 @@ Test Runner использует виртуальный дисплей обра�
 и объём освобождённого пространства в summary. Если осталось менее 30 GiB,
 job завершается понятной ошибкой до загрузки Unity.
 
+Для пиков памяти Editor/IL2CPP на runner с 8 GiB RAM добавляется 8 GiB swap
+в новый `/mnt/evolution-unity-ci.swap`; существующий swap сохраняется.
+После очистки требуется не менее 38 GiB: 8 для swap и 30 для Unity.
+Существующий файл по этому пути не перезаписывается. `free -h` и дополнительный
+`df -h` фиксируют ресурсы после добавления swap. Сборка ограничена двумя CPU
+и `-job-worker-count 2`, чтобы уменьшить пики памяти. При завершении job
+выводятся disk/RAM и только сообщения kernel OOM, без окружения и Secrets.
+
 Очистка разрешена только при `GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`
 и `RUNNER_OS=Linux`. Удаляется фиксированный список предустановленных SDK:
 Android, .NET, Swift, GHC/ghcup, CodeQL и PowerShell; очищаются APT cache,
