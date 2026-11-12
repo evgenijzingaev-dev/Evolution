@@ -33,10 +33,10 @@ Shader "Evolution/InstancedCells"
             half4 Frag(Varyings i) : SV_Target {
                 UNITY_SETUP_INSTANCE_ID(i);
                 if (_WorldSize > 0) { clip(i.positionWS.x); clip(i.positionWS.z); clip(_WorldSize - i.positionWS.x); clip(_WorldSize - i.positionWS.z); }
-                half3 texture = SAMPLE_TEXTURE2D(_MicroTex,sampler_MicroTex,i.uv * float2(3,2)).rgb;
+                half3 structure = SAMPLE_TEXTURE2D(_MicroTex,sampler_MicroTex,i.uv * float2(3,2)).rgb;
                 half3 n = CellNormal(i.uv,i.normalWS,i.tangentWS);
-                half3 albedo = UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor).rgb * (.7 + texture.r * .55);
-                half4 lit = CellLighting(i.positionWS,n,albedo,.55 + texture.g * .25,.04);
+                half3 albedo = UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor).rgb * (.7 + structure.r * .55);
+                half4 lit = CellLighting(i.positionWS,n,albedo,.55 + structure.g * .25,.04);
                 return half4(OceanFog(lit.rgb,i.positionWS),1);
             }
             ENDHLSL
