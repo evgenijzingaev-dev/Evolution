@@ -47,7 +47,7 @@ mkdir -p "$destination"
 # Private player logs are deliberately excluded from upload (as are Editor/license logs).
 private_log=$(mktemp)
 trap 'rm -f "$private_log"' EXIT
-if ! timeout --signal=TERM --kill-after=15s 240s "$player" \
+if ! timeout --signal=TERM --kill-after=15s 360s "$player" \
     -force-glcore -popupwindow -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 \
     -evolution-visual-preview "$destination" -logFile "$private_log"; then
   echo '::error::Real Unity render failed or timed out. No substitute images were produced. See docs/VISUAL_PREVIEW.md for GPU setup.'
@@ -60,6 +60,8 @@ text = Path(sys.argv[1]).read_text(errors="replace")
 # Print those without exposing arbitrary player logs or any activation output.
 for message in sorted(set(re.findall(r"Visual Preview: ([^\r\n]{1,200})", text))):
     print("Capture validation: " + message)
+for phase in re.findall(r"Visual Preview phase: ([a-z0-9 -]{1,80})", text):
+    print("Capture phase: " + phase)
 for category in ("Visual Preview:", "Shader error", "Failed to initialize graphics", "Exception", "Out of memory"):
     if category.lower() in text.lower():
         print("Detected diagnostic category: " + category)

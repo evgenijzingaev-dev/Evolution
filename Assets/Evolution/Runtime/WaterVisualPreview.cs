@@ -47,7 +47,12 @@ namespace Evolution.Runtime
             if (at + 1 >= args.Length || args[at + 1].StartsWith("-", StringComparison.Ordinal)) {
                 Application.Quit(1); return;
             }
+            // Xvfb and service-owned GPU displays need no keyboard focus to advance the game loop.
+            Application.runInBackground = true;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = 30;
             destination = Path.GetFullPath(args[at + 1]);
+            Debug.Log("Visual Preview phase: bootstrap");
             SceneManager.sceneLoaded += PrepareScene;
         }
         static void PrepareScene(Scene scene, LoadSceneMode mode)
@@ -61,6 +66,7 @@ namespace Evolution.Runtime
             prototype.SoundVolume = 0;
             var runner = new GameObject("Opt-in visual preview").AddComponent<WaterVisualPreview>();
             runner.water = prototype;
+            Debug.Log("Visual Preview phase: scene ready");
         }
         void OnEnable() { Application.logMessageReceived += CheckLog; }
         void OnDisable() { Application.logMessageReceived -= CheckLog; }
@@ -77,6 +83,7 @@ namespace Evolution.Runtime
         IEnumerator Start()
         {
             yield return null;
+            Debug.Log("Visual Preview phase: game loop running");
             Require(Application.unityVersion == "6000.6.9f1", "wrong Unity version");
             Require(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset, "URP is not active");
             Require(SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && SystemInfo.graphicsShaderLevel >= 45,
@@ -88,6 +95,7 @@ namespace Evolution.Runtime
             Directory.CreateDirectory(destination);
             // Let the real simulation and procedural presentation initialize, then freeze its actual state.
             while (water.World == null || water.World.Tick < 20) yield return null;
+            Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
             int selected = -1; float nearest = float.PositiveInfinity;
             for (int i = 0; i < water.World.Count; i++) {
@@ -174,7 +182,8 @@ namespace Evolution.Runtime
         {
             // Ordinary player frames, including URP post effects and the existing Russian overlay.
             // WaitForEndOfFrame is deliberately used in a windowed player, never a batch-mode Editor.
-            for (int frame = 0; frame < 16; frame++) yield return new WaitForEndOfFrame();
+            Debug.Log("Visual Preview phase: rendering " + name);
+            for (int frame = 0; frame < 4; frame++) yield return new WaitForEndOfFrame();
             Require(Screen.width == Width && Screen.height == Height, "unexpected render resolution");
             var image = ScreenCapture.CaptureScreenshotAsTexture();
             Require(image && image.width == Width && image.height == Height, "missing game framebuffer");
@@ -195,6 +204,7 @@ namespace Evolution.Runtime
                 "ensemble must contain three organisms at different real depths");
             File.WriteAllBytes(Path.Combine(destination, shot.file), image.EncodeToPNG());
             Destroy(image); shots.Add(shot);
+            Debug.Log("Visual Preview phase: saved " + name);
         }
     }
 }

@@ -18,6 +18,10 @@ namespace Evolution.Editor
             if (index < 0 || index + 1 >= arguments.Length)
                 throw new BuildFailedException("Missing -customBuildPath.");
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.runInBackground = true;
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneLinux64, false);
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64,
+                new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLCore });
             var result = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
                 scenes = new[] { "Assets/Evolution/Scenes/WaterPrototype3D.unity" },
                 locationPathName = arguments[index + 1],
