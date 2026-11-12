@@ -16,6 +16,8 @@ namespace Evolution.Runtime
         struct Remnant { public Vector3 Position; public Color Color; public float Time, Size; }
         readonly Remnant[] remnants = new Remnant[128];
         int remnantCursor;
+        readonly Dictionary<int, Cell> previousTick = new Dictionary<int, Cell>();
+        readonly Dictionary<int, float> headings = new Dictionary<int, float>();
         readonly Dictionary<int, Cell> lastCells = new Dictionary<int, Cell>();
         readonly Dictionary<int, float> divisions = new Dictionary<int, float>();
         readonly Vector4[] colors = new Vector4[1023];
@@ -26,6 +28,16 @@ namespace Evolution.Runtime
         int used;
         float world, visualTime;
         bool closeView;
+        Vector3 cameraFocus;
+        float visibleRadius;
+        bool Visible(Cell c) => new Vector2(Observation.PeriodicDelta(c.X-cameraFocus.x,world), Observation.PeriodicDelta(c.Z-cameraFocus.z,world)).sqrMagnitude < visibleRadius * visibleRadius;
+        public void Capture(Simulation simulation)
+        {
+            previousTick.Clear();
+            for (int i = 0; i < simulation.Count; i++) { var c = simulation.GetCell(i); previousTick.Add(c.Id, c); }
+        }
+        Quaternion Rotation(Cell c) => Quaternion.Euler(Mathf.Sin(visualTime * (2 + c.SwimSpeed) + c.Id) * c.SwimSpeed * 3,
+            -(headings.TryGetValue(c.Id, out float h) ? h : c.Heading) * Mathf.Rad2Deg, -c.AngularVelocity * 5);
         public OrganismRenderer(Mesh mesh, Material body, Material membrane, int capacity, Mesh membraneMesh)
         {
             this.mesh = mesh; this.membraneMesh = membraneMesh; this.body = body; this.membrane = membrane;
@@ -53,9 +65,9 @@ namespace Evolution.Runtime
         Color Tint(Cell c, int mode) => mode == 3 ? Color.Lerp(StrategyColor(c), RoleColor(c.Role), c.Specialization * .55f) : mode == 1 ? Color.Lerp(new Color(.18f, .9f, .55f), new Color(1, .52f, .24f), c.Genes.OrganicSpecialization)
             : mode == 2 ? Color.Lerp(RoleColor(CellRole.Generalist), RoleColor(c.Role), c.Specialization)
             : Color.Lerp(new Color(.2f, .5f, 1), new Color(1, .3f, .22f), c.Genes.PreferredTemperature / 50);
-        public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float frameSeconds, float cameraDistance)
+        public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float interpolation, float cameraDistance, Vector3 focus, bool detailed)
         {
-            closeView = cameraDistance < 18; membrane.SetFloat("_OceanTime", time);
+            cameraFocus = focus; visibleRadius = cameraDistance * 2.5f + 5; closeView = detailed && cameraDistance < 18; membrane.SetFloat("_OceanTime", time);
             world = worldSize; visualTime = time; used = 0; byId.Clear();
             for (int i = 0; i < simulation.Count; i++) { var c = simulation.GetCell(i); byId.Add(c.Id, c); }
             foreach (var entry in lastCells) {
@@ -68,30 +80,33 @@ namespace Evolution.Runtime
                 if (!lastCells.ContainsKey(c.Id) && c.ParentId > 0 && c.Age < .7f) divisions[c.ParentId] = time;
 
                 Vector3 point = Center(c);
-                if (positions.TryGetValue(c.Id, out var previous)) {
-                    Vector3 delta = point - previous;
+                float heading = c.Heading;
+                if (previousTick.TryGetValue(c.Id, out var previous)) {
+                    Vector3 origin = Center(previous), delta = point - origin;
                     delta.x = Observation.PeriodicDelta(delta.x, world); delta.z = Observation.PeriodicDelta(delta.z, world);
-                    point = previous + delta * (1 - Mathf.Exp(-18 * frameSeconds));
+                    point = origin + delta * interpolation;
                     point.x = Mathf.Repeat(point.x, world); point.z = Mathf.Repeat(point.z, world);
+                    heading = previous.Heading + CellMotion.AngleDelta(c.Heading - previous.Heading) * interpolation;
                 }
+                headings[c.Id] = heading;
                 positions[c.Id] = point;
             }
             expired.Clear(); foreach (int id in positions.Keys) if (!byId.ContainsKey(id)) expired.Add(id);
-            foreach (int id in expired) { positions.Remove(id); divisions.Remove(id); }
+            foreach (int id in expired) { positions.Remove(id); divisions.Remove(id); headings.Remove(id); }
             lastCells.Clear(); foreach (var pair in byId) lastCells.Add(pair.Key, pair.Value);
             byId.TryGetValue(selectedId, out var selected);
             // Opaque organelles first, translucent membranes last; transparent depth writes are disabled.
             current = body; shape = Vector4.zero;
             for (int i = 0; i < simulation.Count; i++) {
-                var c = simulation.GetCell(i); Vector3 p = Position(c);
-                var r = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
-                float growth = c.Generation == 0 ? 1 : Mathf.Lerp(.55f, 1, Mathf.Clamp01(c.Age / .7f));
+                var c = simulation.GetCell(i); if (!Visible(c)) continue; Vector3 p = Position(c);
+                var r = Rotation(c);
+                float growth = Mathf.Lerp(.55f, 1, c.Growth);
                 float s = c.Genes.Size * growth;
                 Color color = Tint(c, mode);
                 Add(p, r, new Vector3(.26f, .29f, .27f) * s, Color.Lerp(color, new Color(.35f, .2f, .55f), .65f));
                 Add(p + r * new Vector3(.03f, .08f, .04f) * s, r, Vector3.one * .09f * s, new Color(.8f, .8f, 1));
                 for (int j = 0; j < (closeView ? 3 + (int)(c.Genes.Uptake * 1.4f) : 2); j++) {
-                    float angle = j * Mathf.PI * .5f + c.Id;
+                    float angle = j * Mathf.PI * .5f + c.Id + Mathf.Sin(visualTime * .8f + j) * .12f;
                     Vector3 offset = new Vector3(Mathf.Cos(angle) * .22f, .02f, Mathf.Sin(angle) * .2f) * s;
                     Add(p + r * offset, r * Quaternion.Euler(0, j * 45, 20), new Vector3(.12f, .08f, .065f) * s, Color.Lerp(color, Color.white, .35f));
                 }
@@ -100,11 +115,11 @@ namespace Evolution.Runtime
                     for (int j = 0; j < (closeView ? 4 : 2); j++) {
                         float angle = j * 1.5708f + c.Id;
                         Add(p + r * new Vector3(Mathf.Cos(angle) * .24f, .14f, Mathf.Sin(angle) * .22f) * s,
-                            r * Quaternion.Euler(0, j * 45, 0), new Vector3(.15f, .04f, .1f) * s * (.6f + c.Genes.Photosynthesis), new Color(.15f, .75f, .23f));
+                            r * Quaternion.Euler(0, j * 45, 0), new Vector3(.15f, .04f, .1f) * s * (.6f + c.Genes.Photosynthesis), Color.Lerp(new Color(.08f, .3f, .16f), new Color(.4f, 1, .3f), Mathf.Clamp01(c.Budget.Light * 30)));
                     }
                 }
                 if (c.Genes.Predation > .25f) {
-                    float opening = c.AttackLastStep > 0 ? .2f : .1f;
+                    float opening = c.AttackLastStep > 0 ? .15f + .1f * Mathf.Sin(visualTime * 18) : .1f;
                     for (int side = -1; side <= 1; side += 2)
                         Add(p + r * new Vector3(.4f, .01f, side * opening) * s,
                             r * Quaternion.Euler(0, side * 28, 0), new Vector3(.28f, .065f, .055f) * s * c.Genes.Predation,
@@ -139,7 +154,7 @@ namespace Evolution.Runtime
                 // Motility structures are inherited; tissue development adds further specialization.
                 if (closeView && c.Genes.Speed > .8f) {
                     for (int j = 0; j < 5; j++) {
-                        float wave = Mathf.Sin(visualTime * (3 + c.Genes.Speed) - j * .9f + c.Id) * .08f * j;
+                        float wave = Mathf.Sin(visualTime * (2 + c.SwimSpeed * 5) - j * .9f + c.Id) * .08f * j;
                         Add(p + r * new Vector3(-.38f - j * .11f, wave * .25f, wave) * s,
                             r * Quaternion.Euler(0, -wave * 100, 0), new Vector3(.18f, .025f, .027f) * s, color);
                     }
@@ -199,14 +214,21 @@ namespace Evolution.Runtime
             }
             Flush();
             for (int i = 0; i < simulation.Count; i++) {
-                var c = simulation.GetCell(i); var p = Position(c);
-                var r = Quaternion.Euler(0, -c.Heading * Mathf.Rad2Deg, 0);
-                float growth = c.Generation == 0 ? 1 : Mathf.Lerp(.55f, 1, Mathf.Clamp01(c.Age / .7f));
+                var c = simulation.GetCell(i); if (!Visible(c)) continue; var p = Position(c);
+                var r = Rotation(c);
+                float growth = Mathf.Lerp(.55f, 1, c.Growth);
                 float s = c.Genes.Size * growth * (1 + .025f * Mathf.Sin(visualTime * 2 + c.Id));
-                float stretch = 1 + (c.Genes.Speed - .6f) * .10f + c.Specialization * (c.Role == CellRole.Movement ? .2f : -.08f);
+                float stretch = 1 + (c.Genes.Speed - .6f) * .10f + c.SwimSpeed * .06f - (c.Defending ? .12f : 0) + c.Specialization * (c.Role == CellRole.Movement ? .2f : -.08f);
                 float pinch = divisions.TryGetValue(c.Id, out float dividedAt) ? Mathf.Clamp01(1 - (time - dividedAt) / .8f) : 0;
-                shape = new Vector4(c.Genes.Branching * .14f, 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
+                shape = new Vector4((c.Genes.Branching * .14f + c.Digestion * .07f + Mathf.Abs(c.AngularVelocity) * .01f), 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
                 Color color = Tint(c, mode);
+                var environment = simulation.EnvironmentAt(c.X, c.Z);
+                color = Color.Lerp(color, new Color(.65f, .25f, .8f), environment.Toxicity * (1 - c.Genes.ToxinResistance) * .3f);
+                color = Color.Lerp(color, environment.Temperature > c.Genes.PreferredTemperature ? new Color(1, .4f, .18f) : new Color(.3f, .6f, 1),
+                    Mathf.Clamp01(Mathf.Abs(environment.Temperature - c.Genes.PreferredTemperature) / 25) * .3f);
+                if (c.Energy < Biology.Capacity(c.Genes) * .2f) color *= .65f + .15f * Mathf.Sin(visualTime * 3);
+                if (c.Defending) color = Color.Lerp(color, new Color(1, .85f, .4f), .4f);
+                if (c.RepairLastStep > 0) color = Color.Lerp(color, new Color(.4f, 1, .8f), .2f);
                 if (c.DamageLastStep > 0) color = Color.Lerp(color, new Color(1, .18f, .1f), .65f);
                 color.a = .22f + .16f * c.Genes.Membrane;
                 Add(p, r, new Vector3(.82f * stretch, .65f, .76f) * s, color);
@@ -225,14 +247,13 @@ namespace Evolution.Runtime
         }
         void Add(Vector3 p, Quaternion rotation, Vector3 scale, Color color)
         {
-            float radius = Mathf.Max(scale.x, Mathf.Max(scale.y, scale.z)) * .5f;
-            int minX = p.x + radius > world ? -1 : 0, maxX = p.x - radius < 0 ? 1 : 0;
-            int minZ = p.z + radius > world ? -1 : 0, maxZ = p.z - radius < 0 ? 1 : 0;
-            for (int x = minX; x <= maxX; x++) for (int z = minZ; z <= maxZ; z++) {
-                matrices[used] = Matrix4x4.TRS(p + new Vector3(x * world, 0, z * world), rotation, scale);
-                shapes[used] = shape; colors[used++] = color; if (used == matrices.Length) Flush();
-            }
+            // One periodic image per object: camera travel never creates biological duplicates.
+            p.x = cameraFocus.x + Observation.PeriodicDelta(p.x - cameraFocus.x, world);
+            p.z = cameraFocus.z + Observation.PeriodicDelta(p.z - cameraFocus.z, world);
+            matrices[used] = Matrix4x4.TRS(p, rotation, scale);
+            shapes[used] = shape; colors[used++] = color; if (used == matrices.Length) Flush();
         }
+
         void Flush()
         {
             if (used == 0) return;

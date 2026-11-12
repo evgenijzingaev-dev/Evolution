@@ -43,7 +43,6 @@ Shader "Evolution/CellMembrane"
             }
             half4 Frag(Varyings i) : SV_Target {
                 UNITY_SETUP_INSTANCE_ID(i);
-                clip(i.positionWS.x); clip(i.positionWS.z); clip(_WorldSize - i.positionWS.x); clip(_WorldSize - i.positionWS.z);
                 half4 color = UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor);
                 half3 n = CellNormal(i.uv,i.normalWS,i.tangentWS);
                 half3 eye = GetWorldSpaceNormalizeViewDir(i.positionWS);

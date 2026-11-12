@@ -15,13 +15,13 @@ namespace Evolution.Runtime
         float UiWidth => Screen.width / UiScale;
         float UiHeight => Screen.height / UiScale;
         Rect TopPanel => new Rect(20, 16, UiWidth - 40, 82);
-        Rect LeftPanel => new Rect(20, 106, 300, Mathf.Min(showEnvironment || showGoals || showJournal ? 760 : 440, UiHeight - 250));
-        Rect RightPanel => new Rect(UiWidth - 370, 106, 350, selectedId == 0 ? 180 : UiHeight - 250);
+        Rect LeftPanel => new Rect(20, 106, 300, Mathf.Min(showEnvironment || showGoals || showJournal ? 760 : 310, UiHeight - 250));
+        Rect RightPanel => new Rect(UiWidth - 370, 106, 350, selectedId == 0 ? 180 : Mathf.Min(690, UiHeight - 250));
         Rect BottomPanel => new Rect(20, UiHeight - 112, UiWidth - 40, 92);
         bool PointerOverUI(Vector3 pointer)
         {
             Vector2 point = new Vector2(pointer.x / UiScale, (Screen.height - pointer.y) / UiScale);
-            return TopPanel.Contains(point) || LeftPanel.Contains(point) || RightPanel.Contains(point) || BottomPanel.Contains(point);
+            return HudVisible && (TopPanel.Contains(point) || LeftPanel.Contains(point) || RightPanel.Contains(point) || BottomPanel.Contains(point));
         }
         void PrepareHud()
         {
@@ -59,7 +59,7 @@ namespace Evolution.Runtime
         }
         void OnGUI()
         {
-            if (simulation == null) return;
+            if (simulation == null || !HudVisible) return;
             PrepareHud(); var oldMatrix = GUI.matrix; var oldSkin = GUI.skin;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * UiScale); GUI.skin = hudSkin;
             GUILayout.BeginArea(TopPanel, panelStyle);
@@ -83,13 +83,19 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Format(TextKey.PopulationShort, simulation.Count, simulation.ColonyCount), titleStyle);
             GUILayout.Label(GameText.Format(TextKey.Population, simulation.Count, activeSettings.Capacity, simulation.Births, simulation.Deaths));
             GUILayout.Label(GameText.Format(TextKey.Colonies, simulation.ColonyCount, simulation.ColonialCells, simulation.LargestColony));
-            GUILayout.Label(GameText.Format(TextKey.EcosystemSummary, simulation.LivingLineages, simulation.PredatorCount, simulation.PredationDeaths));
+
             if (simulation.ActiveEvent == NaturalEvent.None) GUILayout.Label(GameText.Get(TextKey.ClimateQuiet), hintStyle);
             else GUILayout.Label(GameText.Format(TextKey.ClimateStatus, GameText.Get(EventKeys[(int)simulation.ActiveEvent]), simulation.EventSecondsRemaining));
             if (GUILayout.Button(GameText.Get(colorMode == 0 ? TextKey.TemperatureColors : colorMode == 1 ? TextKey.DietColors : colorMode == 2 ? TextKey.RoleColors : TextKey.StrategyColors))) colorMode = (colorMode + 1) % 4;
             GUILayout.Label(GameText.Get(colorMode == 3 ? TextKey.StrategyLegend : colorMode == 2 ? TextKey.LegendCompact : colorMode == 1 ? TextKey.DietLegend : TextKey.TemperatureLegend), hintStyle);
             if (GUILayout.Button(GameText.Get(showEnvironment ? TextKey.CloseEnvironment : TextKey.Environment))) showEnvironment = !showEnvironment;
-            if (showEnvironment) DrawEnvironment();
+            if (showEnvironment) {
+                DrawEnvironment();
+                GUILayout.Label(GameText.Format(TextKey.EcosystemSummary, simulation.LivingLineages, simulation.PredatorCount, simulation.PredationDeaths));
+                DrawOceanMap();
+                if (GUILayout.Button(GameText.Get(DetailedOrganisms ? TextKey.DetailOn : TextKey.DetailOff))) DetailedOrganisms = !DetailedOrganisms;
+                GUILayout.Label(GameText.Get(TextKey.SoundSetting)); SoundVolume = GUILayout.HorizontalSlider(SoundVolume, 0, 1);
+            }
             if (GUILayout.Button(GameText.Get(showGoals ? TextKey.HideGoals : TextKey.ShowGoals))) showGoals = !showGoals;
             if (showGoals) DrawJourney();
             if (GUILayout.Button(GameText.Get(showJournal ? TextKey.HideJournal : TextKey.ShowJournal))) showJournal = !showJournal;
@@ -105,7 +111,7 @@ namespace Evolution.Runtime
             }
             EndPanelScroll(); GUILayout.EndArea();
             GUILayout.BeginArea(BottomPanel, panelStyle);
-            GUILayout.Label(GameText.Get(IsControlling ? TextKey.PlayHelp : TextKey.ControlHelp), hintStyle);
+            GUILayout.Label(GameText.Get(IsControlling ? TextKey.GameHelp : TextKey.ObserverHelp), hintStyle);
             if (!IsControlling) GUILayout.Label(GameText.Get(TextKey.ShortcutHelp), hintStyle);
             GUILayout.EndArea(); GUI.matrix = oldMatrix; GUI.skin = oldSkin;
         }
@@ -222,6 +228,9 @@ namespace Evolution.Runtime
             if (simulation.LastDivisionParentId == c.Id && Observation.TryFind(simulation, simulation.LastOffspringId, out _)) {
                 if (GUILayout.Button(GameText.Get(TextKey.PlayChild))) PlayOffspring();
             }
+            DrawCellGameplay(c);
+            if (GUILayout.Button(GameText.Get(showGenes ? TextKey.HideGenes : TextKey.Genes))) showGenes = !showGenes;
+            if (!showGenes) return;
             GUILayout.Label(GameText.Format(TextKey.ColonyEnergy, energy, capacity));
             GUILayout.Label(GameText.Format(TextKey.RolesSummary, feeding, moving, defense, reproduction));
             GUILayout.Label(GameText.Format(TextKey.Generalists, generalists));
@@ -243,7 +252,6 @@ namespace Evolution.Runtime
             else if (Biology.CanDivide(c)) GUILayout.Label(GameText.Get(TextKey.ReproductionReady));
             else if (c.Age < Multicellularity.MaturityAge(c)) GUILayout.Label(GameText.Format(TextKey.ReproductionYoung, Multicellularity.MaturityAge(c) - c.Age));
             else GUILayout.Label(GameText.Format(TextKey.ReproductionEnergy, Mathf.Clamp01(c.Energy / (Biology.Capacity(c.Genes) * Multicellularity.DivisionThreshold(c)))));
-            if (GUILayout.Button(GameText.Get(showGenes ? TextKey.HideGenes : TextKey.Genes))) showGenes = !showGenes;
             if (showGenes) {
                 var g = c.Genes;
                 GUILayout.Label(GameText.Format(TextKey.GeneMotion, g.Speed, g.Size));

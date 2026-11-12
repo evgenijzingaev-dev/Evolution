@@ -8,6 +8,10 @@ namespace Evolution.Runtime
         public int Seed = 42;
         public bool LivingOcean = true;
         public bool DynamicEcosystem = true;
+        public float OceanSpan = 120;
+        public bool DetailedOrganisms = true;
+        public bool HudVisible = true;
+        public float SoundVolume = .3f;
         public SimulationConfig Settings = new SimulationConfig();
         Simulation simulation;
         OrganismRenderer organismRenderer;
@@ -16,9 +20,11 @@ namespace Evolution.Runtime
         Material cellsMaterial, membraneMaterial;
         OceanRenderer ocean;
         OceanLook oceanLook;
+        OceanAudio sound;
         Camera view;
         MicroscopeCamera rig;
         GameObject ownedCamera;
+        AudioListener ownedListener;
         double accumulator, visualTime;
         bool paused;
         int colorMode = 3, selectedId;
@@ -49,8 +55,10 @@ namespace Evolution.Runtime
             cellsMaterial = MakeMaterial("InstancedCells"); membraneMaterial = MakeMaterial("CellMembrane");
             view = Camera.main;
             if (!view) { ownedCamera = new GameObject("Microscope Camera", typeof(Camera)); view = ownedCamera.GetComponent<Camera>(); view.tag = "MainCamera"; }
+            if (!FindFirstObjectByType<AudioListener>()) ownedListener = view.gameObject.AddComponent<AudioListener>();
             view.backgroundColor = new Color(.035f, .19f, .23f); view.clearFlags = CameraClearFlags.SolidColor;
             oceanLook = new OceanLook(transform, view); oceanLook.Apply(cellsMaterial); oceanLook.Apply(membraneMaterial);
+            sound = new OceanAudio(transform);
             rig = gameObject.AddComponent<MicroscopeCamera>();
             ResetWorld();
         }
@@ -58,10 +66,17 @@ namespace Evolution.Runtime
         public void ResetWorld()
         {
             activeSettings = Settings.Copy(); activeSettings.OceanZones = LivingOcean;
+            if (LivingOcean && OceanSpan > activeSettings.WorldSize) {
+                float ratio = OceanSpan / activeSettings.WorldSize;
+                activeSettings.WorldSize = OceanSpan;
+                activeSettings.GridSize = Mathf.Clamp(Mathf.RoundToInt(activeSettings.GridSize * ratio), 2, 128);
+                activeSettings.InitialPopulation = Mathf.Min(activeSettings.Capacity / 2,
+                    Mathf.RoundToInt(activeSettings.InitialPopulation * ratio * ratio));
+            }
             activeSettings.Ecosystem = DynamicEcosystem; activeSettings.NaturalEvents = DynamicEcosystem;
             simulation = new Simulation(activeSettings, unchecked((uint)Seed)); Journey = new EvolutionJourney(); accumulator = visualTime = 0;
             organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
-            ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh);
+            ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh, activeSettings.NutrientCapacity);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
             pendingTemperature = activeSettings.Temperature; pendingFood = activeSettings.NutrientRegeneration; environmentPending = false;
         }
@@ -101,15 +116,9 @@ namespace Evolution.Runtime
             float world = activeSettings.WorldSize;
             for (int i = 0; i < simulation.Count; i++) {
                 var c = simulation.GetCell(i); Vector3 point = organismRenderer.Position(c);
-                // Match clipped periodic copies of the membranes at the dish boundary.
-                for (int x = -1; x <= 1; x++) for (int z = -1; z <= 1; z++) {
-                    Vector3 center = point + new Vector3(x * world, 0, z * world), offset = ray.origin - center;
-                    float hit = Observation.RaySphere(offset.x, offset.y, offset.z, ray.direction.x, ray.direction.y, ray.direction.z, c.Genes.Size * .6f);
-                    if (hit >= nearest) continue;
-                    Vector3 intersection = ray.GetPoint(hit);
-                    if (intersection.x < 0 || intersection.z < 0 || intersection.x > world || intersection.z > world) continue;
-                    nearest = hit; id = c.Id;
-                }
+                Vector3 center = rig.NearestImage(point), offset = ray.origin - center;
+                float hit = Observation.RaySphere(offset.x, offset.y, offset.z, ray.direction.x, ray.direction.y, ray.direction.z, c.Genes.Size * .6f);
+                if (hit < nearest) { nearest = hit; id = c.Id; }
             }
             return id;
         }
@@ -117,6 +126,12 @@ namespace Evolution.Runtime
         {
             if (simulation == null) return;
             bool overUI = PointerOverUI(Input.mousePosition);
+            if (Input.GetKeyDown(KeyCode.H)) HudVisible = !HudVisible;
+            if (Input.GetKeyDown(KeyCode.Tab) && simulation.Count > 0) {
+                int next = 0;
+                for (int i = 0; i < simulation.Count; i++) if (simulation.GetCell(i).Id == selectedId) { next = (i + 1) % simulation.Count; break; }
+                SelectCell(simulation.GetCell(next).Id); FocusSelected(false);
+            }
             if (Input.GetKeyDown(KeyCode.Space)) paused = !paused;
             if (Input.GetKeyDown(KeyCode.F)) FocusSelected(IsControlling);
             if (Input.GetKeyDown(KeyCode.G)) FocusSelected(true);
@@ -132,22 +147,30 @@ namespace Evolution.Runtime
                     if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) z--;
                 }
                 Vector3 direction = rig.ControlDirection(new Vector2(x,z)); simulation.SetControlInput(direction.x,direction.z);
+                bool input = !overUI && Application.isFocused && !paused;
+                simulation.SetControlActions(input && Input.GetKey(KeyCode.E), input && Input.GetKey(KeyCode.LeftShift), input && Input.GetKey(KeyCode.Q));
+                if (input && Input.GetKeyDown(KeyCode.R)) simulation.RequestDivision();
+                if (input && Input.GetKeyDown(KeyCode.T)) PlayOffspring();
             }
             if (!paused) { accumulator += Time.unscaledDeltaTime * speed; visualTime += Time.unscaledDeltaTime * speed; }
             int budget = 0;
             while (!paused && accumulator >= activeSettings.StepSeconds && budget++ < 256) {
                 if (environmentPending) { simulation.SetEnvironment(pendingTemperature, pendingFood); environmentPending = false; }
+                organismRenderer.Capture(simulation);
                 int controlled = simulation.ControlledId; simulation.Step(); Journey.RecordStep(simulation, controlled); accumulator -= activeSettings.StepSeconds;
             }
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
-            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 0 : Time.unscaledDeltaTime, rig.Distance);
+            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 1 : Mathf.Clamp01((float)(accumulator / activeSettings.StepSeconds)), rig.Distance, rig.FocusPoint, DetailedOrganisms);
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
-            rig.Tick(overUI, IsControlling); ocean.Draw(simulation, view, (float)visualTime);
+            rig.Tick(overUI, IsControlling); ocean.Draw(simulation, view, (float)visualTime, rig.FocusPoint);
+            if (LivingOcean) ocean.DrawVents(simulation, rig.FocusPoint, (float)visualTime);
+            sound.Tick(simulation, selectedId, SoundVolume, paused);
         }
         void OnDestroy()
         {
-            Destroy(mesh); Destroy(membraneMesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); ocean?.Dispose(); oceanLook?.Dispose();
+            Destroy(mesh); Destroy(membraneMesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); ocean?.Dispose(); oceanLook?.Dispose(); sound?.Dispose();
+            if (ownedListener) Destroy(ownedListener);
             Destroy(panelTexture); Destroy(hudSkin); if (ownedCamera) Destroy(ownedCamera);
         }
     }

@@ -17,7 +17,7 @@ namespace Evolution.Tests
                 // Keep the EVOLUTION brand, standard temperature unit and format placeholders.
                 string visible = Regex.Replace(text, @"\{\d+(?::[^}]+)?\}", "").Replace("EVOLUTION", "").Replace("°C", "");
                 // Standard keycap labels are shared across keyboard layouts.
-                visible = Regex.Replace(visible, @"\b(?:WASD|F|G|Home|Esc)\b", "");
+                visible = Regex.Replace(visible, @"\b(?:WASD|F|G|H|Q|R|T|Home|Esc)\b", "");
                 Assert.IsFalse(Regex.IsMatch(visible, "[A-Za-z]"), $"Untranslated UI string: {key}");
             }
         }

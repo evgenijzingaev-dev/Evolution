@@ -30,7 +30,7 @@ namespace Evolution.Core
         public bool Consumed;
         public CellActivity Activity;
         public int BirthMutationMask; // Actual changed traits relative to the parent at birth.
-        public Genome Genes;
+        public Genome Genes, ParentGenes;
         public float X, Z, Heading, Energy, Age;
         public float AssimilatedEnergy, FoodLastStep;
         public float TargetHeading, AngularVelocity, VelocityX, VelocityZ, SwimSpeed;
@@ -171,7 +171,7 @@ namespace Evolution.Core
                     if (!c.Consumed) pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
                 }
                 if ((c.Id != ControlledId || divide) && Biology.CanDivide(c) && originalCount + births < cells.Length) {
-                    Cell child = new Cell { ParentId = c.Id, Generation = c.Generation + 1, LineageId = c.LineageId, Integrity = 1,
+                    Cell child = new Cell { ParentId = c.Id, ParentGenes = c.Genes, Generation = c.Generation + 1, LineageId = c.LineageId, Integrity = 1,
                         Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength, config.Ecosystem),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
                     if (Biology.TryDivide(ref c, ref child)) {
