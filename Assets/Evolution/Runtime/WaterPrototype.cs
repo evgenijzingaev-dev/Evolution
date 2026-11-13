@@ -125,7 +125,7 @@ namespace Evolution.Runtime
         {
             if(skin)return;skin=Instantiate(GUI.skin);skin.label.fontSize=14;skin.label.fontStyle=FontStyle.Normal;skin.label.wordWrap=true;
             skin.label.normal.textColor=new Color(.85f,.94f,.95f);
-            var font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");skin.font=font;skin.label.font=font;skin.button.font=font;
+            var font=Resources.Load<Font>("WaterUI/OpenSans-Regular");skin.font=font;skin.label.font=font;skin.button.font=font;
             panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.012f,.04f,.07f,.63f));panel.Apply();
             button=new Texture2D(1,1);button.SetPixel(0,0,new Color(1,1,1,.11f));button.Apply();
             skin.button.fontSize=13;skin.button.fontStyle=FontStyle.Normal;skin.button.padding=new RectOffset(6,6,5,5);skin.button.wordWrap=true;

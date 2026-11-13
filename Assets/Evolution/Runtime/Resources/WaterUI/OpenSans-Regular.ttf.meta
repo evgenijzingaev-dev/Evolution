@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 0f68c0a06e0040c2bc579594e7c59bf0
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  includeFontData: 1
+  fontName: Open Sans
+  fontNames:
+  - Open Sans
+  fallbackFontReferences: []
+  userData:
+  assetBundleName:
+  assetBundleVariant:

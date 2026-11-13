@@ -56,9 +56,9 @@ namespace Evolution.Runtime
             for(int i=0;i<suspension.Count;i++) {
                 Vector3 p=V(suspension.Get(i,t)),d=p-eye;float half=i<suspension.Count/3?12:32;
                 float edge=d.magnitude/half;
-                float alpha=(1-WaterOptics.SmoothRange(.75f,1,edge))*(i%9==0?.68f:.40f);
+                float alpha=(1-WaterOptics.SmoothRange(.75f,1,edge))*(i%9==0?.55f:.28f);
                 if(alpha<=.001f)continue;
-                bool flake=i%29==0;float size=(.07f+i%7*.018f)*(flake?2.2f:1);
+                bool flake=i%29==0;float size=(.045f+i%7*.014f)*(flake?2.2f:1);
                 Color color=i%9==0?new Color(1.1f,1.45f,1.6f,alpha):new Color(.72f,1.05f,1.18f,alpha);
                 particles.Add(p,Quaternion.identity,Vector3.one*size,color,new Vector4(flake?1:0,0,0,0));
             }
@@ -143,10 +143,10 @@ namespace Evolution.Runtime
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
                 // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
-                var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.28f));
+                var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.10f));
                 for(int j=0;j<12;j++) {
                     Vector3 n=Fibonacci(j,12);var knot=center+n*(.65f+.12f*Mathf.Sin(j*2.4f));
-                    bodies.Add(knot,Quaternion.Euler(j*17,j*31,0),new Vector3(.28f,.18f,.23f),new Color(.32f,.49f,.52f));
+                    bodies.Add(knot,Quaternion.Euler(j*17,j*31,0),new Vector3(.28f,.18f,.23f),new Color(.52f,.68f,.67f));
                     Segment(knot,center+n*1.22f,.035f,new Color(.6f,.79f,.8f));
                     if(j>0)Segment(knot,center+Fibonacci(j-1,12)*.68f,.028f,new Color(.42f,.61f,.65f));
                 }
@@ -156,9 +156,8 @@ namespace Evolution.Runtime
                 var p=new V3(x+Mathf.Floor(eye.x/6)*6,y+Mathf.Floor(eye.y/6)*6,z+Mathf.Floor(eye.z/6)*6);
                 p+=new V3(Mathf.Sin(p.Y*.31f+p.Z)*1.1f,Mathf.Sin(p.Z*.27f+p.X)*1.1f,Mathf.Sin(p.X*.37f+p.Y)*1.1f);
                 float fade=1-WaterOptics.SmoothRange(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
-                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.15f),new Color(1,.38f,.16f,.15f),Mathf.InverseLerp(9,35,temp));
-                    c.a*=fade;vesicles.Add(V(p),Quaternion.identity,Vector3.one*3.8f,c,new Vector4(0,0,0,-1));
-                    c.a=fade*.22f;particles.Add(V(p),Quaternion.identity,Vector3.one*2.3f,c,new Vector4(4,0,0,0));}
+                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.17f),new Color(1,.38f,.16f,.17f),Mathf.InverseLerp(9,35,temp));
+                    c.a*=fade;particles.Add(V(p),Quaternion.identity,Vector3.one*7.2f,c,new Vector4(4,0,0,0));}
                 if(lightHints) {float light=world.Sample(p).Light;
                     particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}
                 if(flow) {var current=world.Current(p);Vector3 d=V(current);float phase=Mathf.Repeat((float)time*current.Length*.45f+p.X*.13f+p.Y*.17f,1);

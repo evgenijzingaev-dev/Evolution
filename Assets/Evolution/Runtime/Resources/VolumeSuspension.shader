@@ -26,7 +26,7 @@ Shader "Evolution/VolumeSuspension"
                 float3 center=TransformObjectToWorld(float3(0,0,0));float d=distance(center,GetCameraPositionWS());
                 float3 axis=TransformObjectToWorldDir(float3(1,0,0),false);
                 float size=length(axis);float kind=UNITY_ACCESS_INSTANCED_PROP(Props,_Phenotype).x;
-                o.blur=1+4*(1-smoothstep(.3,2.8,d));
+                o.blur=kind>3.5?1:1+4*(1-smoothstep(.3,2.8,d));
                 float3 right=UNITY_MATRIX_I_V._m00_m10_m20,up=UNITY_MATRIX_I_V._m01_m11_m21;
                 if(kind>2.5&&kind<3.5) {
                     float width=length(TransformObjectToWorldDir(float3(0,1,0),false));
