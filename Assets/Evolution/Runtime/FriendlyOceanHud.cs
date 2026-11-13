@@ -366,9 +366,9 @@ namespace Evolution.Runtime
         {
             if(journal){DrawJournal();return;}
             var r=ToastBox;int n=0;
-            foreach(var notice in notices){if(n==2)break;var b=new Rect(r.x,r.y+n*74,r.width,68);Box(b);
+            foreach(var notice in notices){if(n==2)break;var b=new Rect(r.x,r.y+n*78,r.width,72);Box(b);
                 Fill(new Rect(b.x+3,b.y+14,3,40),notice.Danger?new Color(1,.42f,.4f):new Color(.5f,.9f,.65f));
-                GUI.Label(new Rect(b.x+14,b.y+6,b.width-24,26),notice.Text,text);GUI.Label(new Rect(b.x+14,b.y+33,b.width-24,32),notice.Sub,micro);n++;}
+                GUI.Label(new Rect(b.x+14,b.y+6,b.width-24,26),notice.Text,text);GUI.Label(new Rect(b.x+14,b.y+33,b.width-24,36),notice.Sub,micro);n++;}
         }
         void DrawJournal()
         {
