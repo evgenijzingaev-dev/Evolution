@@ -15,6 +15,7 @@ namespace Evolution.Runtime
     public sealed class FriendlyOceanHud : MonoBehaviour
     {
         WaterPrototype water;
+        VolumeWorld readWorld;int readIndex=-2;
         public HudDetail Detail;
         public bool HelpVisible, AttackRequested;
         public HudPage Page => development ? HudPage.Development : water.Overview.Active ? HudPage.Overview : HudPage.Cell;
@@ -82,7 +83,8 @@ namespace Evolution.Runtime
             if(water==null||water.World==null)return;
             transition=Mathf.MoveTowards(transition,1,Time.unscaledDeltaTime*4);
             shownEnergy=Mathf.MoveTowards(shownEnergy,readout.Energy,Time.unscaledDeltaTime*.8f);
-            if(Time.unscaledTime<nextRead)return;nextRead=Time.unscaledTime+.5f;
+            if(readWorld==water.World&&readIndex==water.SelectedIndex&&Time.unscaledTime<nextRead)return;
+            nextRead=Time.unscaledTime+.5f;readWorld=water.World;readIndex=water.SelectedIndex;
             readout=PlayerReadout.Read(water.World,water.SelectedIndex);
             water.Overview.Refresh();living=0;lines.Clear();busiest=foodRegion=dangerRegion=null;
             foreach(var a in water.Overview.Survey.Agents)if(InLayer(a.Position)){living++;lines.Add(a.Lineage);}
@@ -198,6 +200,7 @@ namespace Evolution.Runtime
         }
         public void Draw()
         {
+            if(readWorld!=water.World||readIndex!=water.SelectedIndex)RefreshNow();
             Prepare();occupied.Clear();hoverTip=null;
             var matrix=GUI.matrix;var oldSkin=GUI.skin;var oldColor=GUI.color;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);GUI.skin=skin;
