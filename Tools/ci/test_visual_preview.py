@@ -20,7 +20,7 @@ class EvidenceTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         shot = dict(tick=20, cameraFrames=4, luminanceRange=.8, luminanceDeviation=.2,
                     visibleOrganisms=5, nearestDepth=4, farthestDepth=20,
-                    currents=True, currentSpeed=.2, temperature=True, food=True,
+                    currents=True, currentSpeed=.2, temperature=True, food=True, hudVisible=True,
                     foodSubstrate=12, foodOrganic=4)
         self.report = dict(passed=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
                            graphicsApi="OpenGLCore", graphicsDevice="test-device",
@@ -79,6 +79,10 @@ class EvidenceTests(unittest.TestCase):
 
     def test_disabled_current_layer(self):
         self.report["screenshots"][3]["currents"] = False
+        with self.assertRaises(ValueError): self.check()
+
+    def test_diagnostic_view_must_show_hud(self):
+        self.report["screenshots"][3]["hudVisible"] = False
         with self.assertRaises(ValueError): self.check()
 
     def test_no_real_food(self):

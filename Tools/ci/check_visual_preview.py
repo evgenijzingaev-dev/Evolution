@@ -39,6 +39,8 @@ def validate(directory, revision=None):
     if len(hashes) != 5:
         raise ValueError("Duplicate views")
     ensemble, flow, food = data["screenshots"][2:]
+    if not flow["hudVisible"] or not food["hudVisible"]:
+        raise ValueError("Diagnostic views must include the existing Russian HUD")
     if ensemble["visibleOrganisms"] < 3 or ensemble["farthestDepth"] - ensemble["nearestDepth"] < 3:
         raise ValueError("Missing real depth ensemble")
     if not flow["currents"] or flow["currentSpeed"] <= 0:

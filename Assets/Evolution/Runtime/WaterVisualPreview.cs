@@ -29,7 +29,7 @@ namespace Evolution.Runtime
             public long tick;
             public int visibleOrganisms, cameraFrames;
             public float nearestDepth, farthestDepth, luminanceRange, luminanceDeviation;
-            public bool currents, temperature, food;
+            public bool currents, temperature, food, hudVisible;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
         [Serializable] sealed class Report
@@ -181,7 +181,8 @@ namespace Evolution.Runtime
         {
             var shot = new Shot { file = file, tick = water.World.Tick, cameraPosition = water.Lens.transform.position,
                 cameraEuler = water.Lens.transform.eulerAngles, nearestDepth = float.PositiveInfinity,
-                currents = water.ShowCurrents, temperature = water.ShowTemperature, food = water.FindFood };
+                currents = water.ShowCurrents, temperature = water.ShowTemperature, food = water.FindFood,
+                hudVisible = water.HudVisible };
             for (int i = 0; i < water.World.Count; i++) {
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
@@ -204,16 +205,27 @@ namespace Evolution.Runtime
             // Ordinary URP camera frames, including post effects and 3D diagnostic layers.
             // WaitForEndOfFrame is deliberately used in a windowed player, never a batch-mode Editor.
             Debug.Log("Visual Preview phase: rendering " + name);
+            // Diagnostic views include the existing Russian IMGUI panel from the real game framebuffer.
+            // Natural views read the camera target directly, without UI or any image compositing.
+            bool includeHud = water.HudVisible;
+            water.Lens.targetTexture = includeHud ? null : target;
             int before = renderedFrames;
             for (int frame = 0; frame < 4; frame++) yield return new WaitForEndOfFrame();
             Require(renderedFrames - before >= 2, "URP camera did not render");
-            var image = new Texture2D(Width, Height, TextureFormat.RGB24, false);
-            var previous = RenderTexture.active;
-            try {
-                RenderTexture.active = target;
-                image.ReadPixels(new Rect(0, 0, Width, Height), 0, 0, false);
-                image.Apply(false, false);
-            } finally { RenderTexture.active = previous; }
+            Texture2D image;
+            if (includeHud) {
+                Require(Screen.width == Width && Screen.height == Height, "unexpected game framebuffer resolution");
+                image = ScreenCapture.CaptureScreenshotAsTexture();
+                Require(image && image.width == Width && image.height == Height, "missing game framebuffer");
+            } else {
+                image = new Texture2D(Width, Height, TextureFormat.RGB24, false);
+                var previous = RenderTexture.active;
+                try {
+                    RenderTexture.active = target;
+                    image.ReadPixels(new Rect(0, 0, Width, Height), 0, 0, false);
+                    image.Apply(false, false);
+                } finally { RenderTexture.active = previous; }
+            }
             var shot = Measure(name + ".png");
             shot.cameraFrames = renderedFrames - before;
             var pixels = image.GetPixels32(); double sum = 0, squares = 0; float low = 1, high = 0; int magenta = 0;
