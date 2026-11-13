@@ -62,6 +62,7 @@ jobs:
       EVOLUTION_PREVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     outputs:
       artifact: ${{ steps.upload.outputs.artifact-url }}
+      diagnostic: ${{ steps.diagnostic.outputs.artifact-url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -134,6 +135,7 @@ jobs:
           customParameters: -job-worker-count 2
 
       - name: Render and validate five actual URP game frames
+        id: capture
         run: bash Tools/ci/visual_preview.sh
 
       # Whitelist only verified images and sanitized metadata. Never upload Editor/player logs,
@@ -153,10 +155,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload real diagnostic frames after capture failure
+        id: diagnostic
+        if: ${{ failure() && steps.capture.outcome == 'failure' && hashFiles('artifacts/visual-preview/**/*.png') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: water-visual-diagnostics-NOT-VALIDATED-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/visual-preview/*.png
+            artifacts/visual-preview/manifest.json
+            artifacts/visual-preview/diagnostics/*.png
+            artifacts/visual-preview/diagnostics/*.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Link result in run summary
         if: always()
         env:
           ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          DIAGNOSTIC_URL: ${{ steps.diagnostic.outputs.artifact-url }}
           JOB_STATUS: ${{ job.status }}
         run: |
           python3 - <<'PY'
@@ -165,6 +182,9 @@ jobs:
               f.write('\nVisual Preview: ' + os.environ['JOB_STATUS'] + '\n')
               url = os.environ.get('ARTIFACT_URL')
               f.write('\n[Five rendered screenshots and device manifest](' + url + ')\n' if url else '\nNo verified screenshots. Check the failed step and docs/VISUAL_PREVIEW.md for license/GPU configuration.\n')
+              diagnostic = os.environ.get('DIAGNOSTIC_URL')
+              if diagnostic:
+                  f.write('\n[Real diagnostic frames — validation FAILED](' + diagnostic + ')\n')
           PY
 
   pr-report:
@@ -185,6 +205,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RESULT: ${{ needs.render.result }}
           ARTIFACT_URL: ${{ needs.render.outputs.artifact }}
+          DIAGNOSTIC_URL: ${{ needs.render.outputs.diagnostic }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - <<'PY'
@@ -194,7 +215,9 @@ jobs:
               body += '[Пять настоящих кадров Unity / URP и данные рендера](' + os.environ['ARTIFACT_URL'] + ').\n'
               body += 'Общий океан, клетка крупно, разные глубины, течения, температура и пища. Художественную оценку нужно выполнить по изображениям.\n'
           else:
-              body += 'Проверка не завершилась успешно. Подтверждённых скриншотов нет; заглушки не создаются. Проверьте лицензию Unity и графический контекст runner по docs/VISUAL_PREVIEW.md.\n'
+              body += 'Проверка не завершилась успешно. Полного подтверждённого набора нет; заглушки не создаются. Причина указана в отчёте запуска; настройка лицензии/runner описана в docs/VISUAL_PREVIEW.md.\n'
+              if os.environ.get('DIAGNOSTIC_URL'):
+                  body += '\n[Настоящие диагностические кадры — проверка НЕ пройдена](' + os.environ['DIAGNOSTIC_URL'] + ').\n'
           body += '\n[Отчёт запуска](' + os.environ['RUN_URL'] + ')'
           url = os.environ['GH_API'] + '/repos/' + os.environ['REPOSITORY'] + '/issues/' + os.environ['PR_NUMBER'] + '/comments'
           request = urllib.request.Request(url, data=json.dumps({'body': body}).encode(), headers={

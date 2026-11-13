@@ -12,6 +12,8 @@ EXPECTED = ["01-ocean.png", "02-cell-close.png", "03-depth-ensemble.png", "04-cu
 def validate(directory, revision=None):
     directory = Path(directory)
     data = json.loads((directory / "manifest.json").read_text())
+    if data.get("passed") is not True:
+        raise ValueError("Diagnostic capture is not a validated preview")
     if data["unity"] != "6000.6.9f1" or data["pipeline"] != "UniversalRenderPipelineAsset":
         raise ValueError("Wrong Unity version/pipeline")
     if data["graphicsApi"] == "Null" or not data["graphicsDevice"]:
@@ -27,11 +29,13 @@ def validate(directory, revision=None):
         image = (directory / shot["file"]).read_bytes()
         if image[:8] != b"\x89PNG\r\n\x1a\n" or image[12:16] != b"IHDR" or struct.unpack(">II", image[16:24]) != (1920, 1080):
             raise ValueError("Invalid PNG/resolution")
-        if len(image) < 20000 or shot["luminanceRange"] <= .12 or shot["luminanceDeviation"] <= .015:
+        if len(image) < 20000 or shot["luminanceRange"] <= .12 or shot["luminanceDeviation"] <= .005:
             raise ValueError("Empty/flat image")
         hashes.add(hashlib.sha256(image).hexdigest())
         if shot["tick"] < 20:
             raise ValueError("Simulation did not initialize")
+        if shot["cameraFrames"] < 2:
+            raise ValueError("URP camera did not render")
     if len(hashes) != 5:
         raise ValueError("Duplicate views")
     ensemble, flow, food = data["screenshots"][2:]

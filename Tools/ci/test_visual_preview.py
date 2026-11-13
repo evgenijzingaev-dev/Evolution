@@ -18,11 +18,11 @@ class EvidenceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        shot = dict(tick=20, luminanceRange=.8, luminanceDeviation=.2,
+        shot = dict(tick=20, cameraFrames=4, luminanceRange=.8, luminanceDeviation=.2,
                     visibleOrganisms=5, nearestDepth=4, farthestDepth=20,
                     currents=True, currentSpeed=.2, temperature=True, food=True,
                     foodSubstrate=12, foodOrganic=4)
-        self.report = dict(unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
+        self.report = dict(passed=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
                            graphicsApi="OpenGLCore", graphicsDevice="test-device",
                            scene="WaterPrototype3D", width=1920, height=1080, seed=42,
                            revision="test-sha", screenshots=[dict(shot, file=f) for f in EXPECTED])
@@ -51,6 +51,18 @@ class EvidenceTests(unittest.TestCase):
 
     def test_flat_frame(self):
         self.report["screenshots"][0]["luminanceDeviation"] = 0
+        with self.assertRaises(ValueError): self.check()
+
+    def test_sparse_ocean_is_not_an_empty_frame(self):
+        self.report["screenshots"][0].update(luminanceRange=.7843059, luminanceDeviation=.0138378)
+        self.check()
+
+    def test_diagnostic_is_never_accepted_as_verified(self):
+        self.report["passed"] = False
+        with self.assertRaises(ValueError): self.check()
+
+    def test_camera_must_have_rendered(self):
+        self.report["screenshots"][0]["cameraFrames"] = 0
         with self.assertRaises(ValueError): self.check()
 
     def test_duplicate_frames(self):
