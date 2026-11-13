@@ -18,9 +18,10 @@ from PIL import Image
 from check_visual_preview import validate
 
 REPOSITORY = "evgenijzingaev-dev/Evolution"
-REMOTE = "https://github.com/" + REPOSITORY + ".git"
+PUBLIC_REPOSITORY = "evgenijzingaev-dev/Evolution-visual-previews"
+REMOTE = "https://github.com/" + PUBLIC_REPOSITORY + ".git"
 REF = "refs/heads/visual-previews"
-RAW = "https://raw.githubusercontent.com/" + REPOSITORY + "/visual-previews/"
+RAW = "https://raw.githubusercontent.com/" + PUBLIC_REPOSITORY + "/visual-previews/"
 FRAMES = (
     "01-ocean", "02-cell-close", "03-depth-ensemble", "04-currents",
     "05-temperature-food", "06-water-only", "07-cinematic-overview",
@@ -287,6 +288,19 @@ def fetch_public(url):
     return data
 
 
+def check_destination(get=None):
+    if get is None:
+        # No source or destination token: the destination must really be public.
+        request = urllib.request.Request("https://api.github.com/repos/" + PUBLIC_REPOSITORY,
+                                         headers={"User-Agent": "Evolution-Preview-Check"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            repository = json.load(response)
+    else:
+        repository = get()
+    if repository["full_name"] != PUBLIC_REPOSITORY or repository["private"]:
+        raise ValueError("The configured image-only destination must be PUBLIC")
+
+
 def verify_public(meta, deadline=300, fetch=fetch_public):
     pending = dict(zip(urls(meta), meta["images"]))
     end = time.monotonic() + deadline
@@ -295,19 +309,27 @@ def verify_public(meta, deadline=300, fetch=fetch_public):
             url, item = pair
             try:
                 data = fetch(url)
-                if digest(data) == item["sha256"]:
-                    with Image.open(io.BytesIO(data)) as image:
-                        image.load()
-                        return url if image.format == "JPEG" and image.size == (item["width"], item["height"]) else None
-            except Exception:
-                return None
+                if digest(data) != item["sha256"]:
+                    return url, "SHA-256 mismatch"
+                with Image.open(io.BytesIO(data)) as image:
+                    image.load()
+                    if image.format != "JPEG" or image.size != (item["width"], item["height"]):
+                        return url, "Wrong JPEG dimensions/format"
+                return url, None
+            except Exception as error:
+                # Never log response bodies, request headers or credential values.
+                return url, ("HTTP " + str(error.code) if hasattr(error, "code") else type(error).__name__)
+        failures = {}
         with ThreadPoolExecutor(max_workers=4) as pool:
-            for url in pool.map(check, list(pending.items())):
-                if url:
+            for url, reason in pool.map(check, list(pending.items())):
+                if reason is None:
                     pending.pop(url)
+                else:
+                    failures[url.rsplit("/", 1)[1]] = reason
         if pending:
             if time.monotonic() >= end:
-                raise RuntimeError("Public URL verification failed; no success report may be posted")
+                raise RuntimeError("Public URL verification failed; no success report may be posted: " +
+                                   json.dumps(failures, sort_keys=True))
             time.sleep(10)
     return urls(meta)
 
@@ -329,6 +351,7 @@ def main():
     plan = json.loads(Path(args.plan).read_text())
     if plan["repository"] != REPOSITORY or not trusted_branch(plan["head_branch"]):
         raise ValueError("Untrusted source repository/branch")
+    check_destination()
     meta, files = prepare(args.originals, plan)
     meta, status = publish_snapshot(meta, files)
     verify_public(meta)

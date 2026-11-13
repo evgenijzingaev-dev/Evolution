@@ -85,6 +85,15 @@ class ImageTests(unittest.TestCase):
         self.assertEqual(set(seen), set(pub.urls(meta)))
         self.assertEqual(len(seen), 12)
 
+    def test_destination_must_be_the_public_image_repository(self):
+        pub.check_destination(lambda: {'full_name':pub.PUBLIC_REPOSITORY, 'private':False})
+        for repo in [{'full_name':pub.PUBLIC_REPOSITORY, 'private':True},
+                     {'full_name':pub.REPOSITORY, 'private':False}]:
+            with self.assertRaises(ValueError):
+                pub.check_destination(lambda: repo)
+        meta, _ = fixture()
+        self.assertTrue(all('/Evolution-visual-previews/visual-previews/' in url for url in pub.urls(meta)))
+
     def test_wrong_content_or_unavailable_url_fails(self):
         meta, _ = fixture()
         for fetch in [lambda url: b'placeholder', lambda url: (_ for _ in ()).throw(OSError('404'))]:

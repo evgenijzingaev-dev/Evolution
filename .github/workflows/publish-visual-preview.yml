@@ -12,6 +12,9 @@ on:
       tooling_ref:
         type: string
         required: true
+    secrets:
+      VISUAL_PREVIEW_PUBLISH_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -49,7 +52,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
-      contents: write
+      contents: read
       actions: read
       pull-requests: read
     outputs:
@@ -65,6 +68,16 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check Pillow==13.0.0
       - name: Test publication policy and bounded Git snapshots
         run: python3 -B Tools/ci/test_public_previews.py
+      - name: Check image-only destination credential
+        env:
+          PUBLISH_TOKEN: ${{ secrets.VISUAL_PREVIEW_PUBLISH_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          if not os.getenv('PUBLISH_TOKEN', '').strip():
+              sys.exit('Set VISUAL_PREVIEW_PUBLISH_TOKEN to a fine-grained token with Contents read/write ONLY on evgenijzingaev-dev/Evolution-visual-previews. See docs/VISUAL_PREVIEW.md. Never paste the token into chat or commit it.')
+          print('Destination credential is configured; no credential value is printed.')
+          PY
       - name: Resolve trusted Unity evidence
         id: source
         env:
@@ -86,7 +99,7 @@ jobs:
       - name: Publish JPEG snapshot and verify every anonymous URL
         id: publish
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.VISUAL_PREVIEW_PUBLISH_TOKEN }}
         run: >-
           python3 -B Tools/ci/public_visual_previews.py
           --originals "$RUNNER_TEMP/public-preview-originals"

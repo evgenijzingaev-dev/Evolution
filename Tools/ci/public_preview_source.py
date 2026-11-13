@@ -14,11 +14,6 @@ def resolve(get, run_id, pr_number=0):
     repo = get("")
     if repo["full_name"] != REPOSITORY:
         raise ValueError("Unexpected source repository")
-    if repo["private"]:
-        # Do not change visibility. Publication stays unconfirmed until every raw
-        # image passes the separate anonymous HTTP/content verification on runner.
-        print("Repository is PRIVATE; anonymous raw image access is not assumed. "
-              "All 12 URLs must pass verification before any success comment.")
     run = get(f"/actions/runs/{run_id}")
     if (run["path"] != ".github/workflows/visual-preview.yml" or
             run["head_repository"]["full_name"] != REPOSITORY or
