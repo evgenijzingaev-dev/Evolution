@@ -156,7 +156,7 @@ namespace Evolution.Runtime
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             if(GUILayout.Button(GameText.Get(Paused?TextKey.WaterRun:TextKey.Pause)))Paused=!Paused;
-            if(GUILayout.Button(GameText.Get(TextKey.WaterOverview))) {Observe();Rig.FocusOn(Rig.Focus,14);}
+            if(GUILayout.Button(GameText.Get(TextKey.WaterOverview))) {Observe();Rig.FocusOn(Rig.Focus,10);}
             if(GUILayout.Button(GameText.Get(details?TextKey.WaterCollapse:TextKey.WaterDetails)))details=!details;
             GUILayout.EndHorizontal();
             if(OrganismsVisible&&selected>=0) {

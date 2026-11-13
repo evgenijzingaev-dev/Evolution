@@ -75,7 +75,7 @@ namespace Evolution.Runtime
                 for(int j=0;j<grains;j++) {
                     float a=j*2.39996f+food.Pattern%997,vertical;
                     // Stable sample IDs, not an arrangement rebuilt from remaining grain count.
-                    vertical=Mathf.Sin(j*1.713f+(food.Pattern%997)*.7f);
+                    vertical=2*Mathf.Repeat(j*.7548777f+(food.Pattern%997)*.131f,1)-1;
                     Vector3 local=new Vector3(Mathf.Cos(a)*Mathf.Sqrt(1-vertical*vertical),vertical,Mathf.Sin(a)*Mathf.Sqrt(1-vertical*vertical));
                     local*=food.Radius*Mathf.Pow(Mathf.Repeat(j*.618034f+.13f,1),1f/3);
                     var tint=Color.Lerp(new Color(.5f,.93f,.68f,.65f),new Color(.98f,.72f,.3f,.7f),food.Organic/Mathf.Max(.001f,mass));
