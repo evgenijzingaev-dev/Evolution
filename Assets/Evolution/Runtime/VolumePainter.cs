@@ -59,7 +59,7 @@ namespace Evolution.Runtime
                 float alpha=(1-Mathf.SmoothStep(.75f,1,edge))*(i%9==0?.68f:.40f);
                 if(alpha<=.001f)continue;
                 bool flake=i%29==0;float size=(.07f+i%7*.018f)*(flake?2.2f:1);
-                Color color=i%5==0?new Color(.66f,.84f,1.12f,alpha):new Color(.52f,.84f,.91f,alpha);
+                Color color=i%9==0?new Color(1.1f,1.45f,1.6f,alpha):new Color(.72f,1.05f,1.18f,alpha);
                 particles.Add(p,Quaternion.identity,Vector3.one*size,color,new Vector4(flake?1:0,0,0,0));
             }
             for(int k=0;k<world.FoodCount;k++) {
@@ -163,7 +163,7 @@ namespace Evolution.Runtime
                     particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}
                 if(flow) {var current=world.Current(p);Vector3 d=V(current);float phase=Mathf.Repeat((float)time*current.Length*.45f+p.X*.13f+p.Y*.17f,1);
                     float pulse=Mathf.SmoothStep(0,.15f,phase)*(1-Mathf.SmoothStep(.8f,1,phase));
-                    Color c=Color.Lerp(new Color(.35f,.80f,.91f),new Color(.75f,1,1.15f),current.Length/.35f);c.a=fade*(.3f+.5f*pulse);
+                    Color c=Color.Lerp(new Color(.35f,.80f,.91f),new Color(.75f,1,1.15f),current.Length/.35f);c.a=fade*.9f*pulse;
                     particles.Add(V(p)+d*(phase-.5f)*5,Quaternion.FromToRotation(Vector3.right,d),new Vector3(.6f+d.magnitude*5,.12f,.12f),c,new Vector4(3,0,0,0));}
             }
             bodies.Flush();threads.Flush();vesicles.Flush();particles.Flush();
@@ -176,12 +176,13 @@ namespace Evolution.Runtime
             var g=agent.Biology.Genes;
             Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f))*size;
             bodies.Add(p+rotation*(nucleus+Vector3.up*.04f*size),rotation,Vector3.one*.085f*size,new Color(.72f,.43f,.78f));
-            vesicles.Add(p+rotation*nucleus,rotation,new Vector3(.39f,.32f,.37f)*size,new Color(.73f,.63f,.91f,.16f));
+            Vector3 envelope=form==CrystalForm.Diatom?new Vector3(.44f,.16f,.27f):form==CrystalForm.Spindle?new Vector3(.41f,.23f,.27f):new Vector3(.39f,.32f,.37f);
+            vesicles.Add(p+rotation*nucleus,rotation,envelope*size,new Color(.73f,.63f,.91f,.16f));
             for(int band=0;band<3;band++)for(int j=0;j<9;j++) {
                 float a=j*.43f+band*.4f,b=(j+1)*.43f+band*.4f,r=.17f+band*.025f;
                 Vector3 aa=new Vector3(Mathf.Cos(a)*r,-.08f+band*.055f,Mathf.Sin(a)*r);
                 Vector3 bb=new Vector3(Mathf.Cos(b)*r,-.08f+band*.055f,Mathf.Sin(b)*r);
-                Segment(p+rotation*aa*size,p+rotation*bb*size,.012f*size,new Color(.43f,.64f,.72f));
+                Segment(p+rotation*CrystalMeshes.Point(form,aa)*size,p+rotation*CrystalMeshes.Point(form,bb)*size,.012f*size,new Color(.43f,.64f,.72f));
             }
             int count=5+(int)(g.Photosynthesis*5);
             for(int j=0;j<count;j++) {

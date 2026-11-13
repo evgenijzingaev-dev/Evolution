@@ -1,6 +1,7 @@
 #ifndef EVOLUTION_VOLUME_WATER
 #define EVOLUTION_VOLUME_WATER
 TEXTURE2D(_WaterCaustics);SAMPLER(sampler_WaterCaustics);
+TEXTURE2D(_WaterDensity);SAMPLER(sampler_WaterDensity);
 float _WaterTime;float4 _WaterFade;
 float WaterCookie(float3 world) {
     float2 p=(world.xz+world.y*float2(.28,-.16))*.027;
@@ -9,9 +10,9 @@ float WaterCookie(float3 world) {
 // Continuous world-space samples: no camera-facing fog planes or per-chunk light tiles.
 float WaterDensity(float3 p) {
     float2 drift=float2(_WaterTime*.0018,-_WaterTime*.0011);
-    float a=SAMPLE_TEXTURE2D(_WaterCaustics,sampler_WaterCaustics,(p.xz+p.y*float2(.31,-.19))*.012+drift).r;
-    float b=SAMPLE_TEXTURE2D(_WaterCaustics,sampler_WaterCaustics,(p.xy+p.z*float2(-.23,.37))*.019-drift*.7).r;
-    return .18+.82*smoothstep(.025,.5,a*.65+b*.55);
+    float a=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,(p.xz+p.y*float2(.31,-.19))*.016+drift).r;
+    float b=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,(p.xy+p.z*float2(-.23,.37))*.011-drift*.7).b;
+    return .12+.60*smoothstep(.28,.78,a*.6+b*.4);
 }
 float3 VolumeHaze(float3 direction) {
     float height=saturate(.5+GetCameraPositionWS().y*.018);
@@ -28,9 +29,12 @@ float3 VolumeEnvironment(float3 direction) {
         float travel=7+step*12;
         float3 p=eye+direction*travel;
         float density=WaterDensity(p);
-        float illumination=.3+.7*WaterCookie(p+float3(0,_WaterTime*.04,0));
-        float weight=exp(-travel*.026)*.55;
-        scatter+=lerp(float3(.025,.105,.16),float3(.22,.62,.68),illumination)*density*weight;
+        // Project along the actual sun direction. Irregular light wells, not enlarged caustic stripes.
+        float2 column=float2(p.x+p.y*.318,p.z-p.y*.409)*.021;
+        float mask=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,column+float2(_WaterTime*.0008,0)).g;
+        float illumination=smoothstep(.36,.70,mask);
+        float weight=exp(-travel*.026)*.5;
+        scatter+=(float3(.025,.095,.14)+illumination*illumination*float3(.24,.60,.68))*density*weight;
     }
     return VolumeHaze(direction)+scatter;
 }

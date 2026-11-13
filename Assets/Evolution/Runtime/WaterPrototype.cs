@@ -35,6 +35,7 @@ namespace Evolution.Runtime
         {
             IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
             Ocean=new ChunkOcean(unchecked((uint)Seed),archive);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
+            selected=ScenicSelection();
             Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
             cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
             Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.012f,.07f,.15f);
@@ -50,6 +51,24 @@ namespace Evolution.Runtime
             Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
         }
         public void Observe() {World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
+        // Choose a real nearby resident in a naturally populated neighbourhood. No spawning,
+        // repositioning, resource injection or mutation is performed for the opening view.
+        public int ScenicSelection()
+        {
+            int result=World.Count>0?Ocean.Nearest(default):-1;float best=float.NegativeInfinity;
+            for(int i=0;i<World.Count;i++) {
+                var a=World.Get(i);if(!a.Alive||a.Position.Sqr>38*38)continue;
+                float score=a.Biology.Genes.Size*.15f;
+                var form=CrystalForms.From(a.Biology.Genes);
+                if(form==CrystalForm.Ciliate)score+=.6f;
+                for(int j=0;j<World.Count;j++)if(j!=i&&World.Get(j).Alive) {
+                    float d=(a.Position-World.Get(j).Position).Sqr;
+                    if(d<15*15)score+=1/(1+d*.07f);
+                }
+                if(score>best){best=score;result=i;}
+            }
+            return result;
+        }
         public bool PlaySelected() {if(!Selection.Alive)return false;World.Controlled=selected;following=true;return true;}
         public void Select(int index) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=true;Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         void Update()
@@ -106,9 +125,11 @@ namespace Evolution.Runtime
         {
             if(skin)return;skin=Instantiate(GUI.skin);skin.label.fontSize=14;skin.label.fontStyle=FontStyle.Normal;skin.label.wordWrap=true;
             skin.label.normal.textColor=new Color(.85f,.94f,.95f);
+            var font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");skin.font=font;skin.label.font=font;skin.button.font=font;
             panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.012f,.04f,.07f,.63f));panel.Apply();
             button=new Texture2D(1,1);button.SetPixel(0,0,new Color(1,1,1,.11f));button.Apply();
             skin.button.fontSize=13;skin.button.fontStyle=FontStyle.Normal;skin.button.padding=new RectOffset(6,6,5,5);skin.button.wordWrap=true;
+            skin.button.border=new RectOffset();
             skin.button.normal.background=skin.button.hover.background=skin.button.active.background=button;
             skin.button.normal.textColor=new Color(.82f,.93f,.96f);skin.button.hover.textColor=Color.white;
             panelStyle=new GUIStyle(skin.box) {padding=new RectOffset(12,12,10,10)};panelStyle.normal.background=panel;
@@ -134,8 +155,8 @@ namespace Evolution.Runtime
             if(LayerButton(TextKey.WaterFood,FindFood))FindFood=!FindFood;
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            if(GUILayout.Button(GameText.Get(Paused?TextKey.Resume:TextKey.Pause)))Paused=!Paused;
-            if(GUILayout.Button(GameText.Get(TextKey.Overview))) {Observe();Rig.FocusOn(Rig.Focus,30);}
+            if(GUILayout.Button(GameText.Get(Paused?TextKey.WaterRun:TextKey.Pause)))Paused=!Paused;
+            if(GUILayout.Button(GameText.Get(TextKey.WaterOverview))) {Observe();Rig.FocusOn(Rig.Focus,14);}
             if(GUILayout.Button(GameText.Get(details?TextKey.WaterCollapse:TextKey.WaterDetails)))details=!details;
             GUILayout.EndHorizontal();
             if(OrganismsVisible&&selected>=0) {

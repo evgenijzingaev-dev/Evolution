@@ -114,20 +114,26 @@ namespace Evolution.Runtime
             while (water.World == null || water.World.Tick < 20) yield return null;
             Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
-            int selected = -1; float nearest = float.PositiveInfinity;
-            for (int i = 0; i < water.World.Count; i++) {
-                var a = water.World.Get(i);
-                if (a.Alive && a.Position.Sqr < nearest) { selected = i; nearest = a.Position.Sqr; }
-            }
+            int selected = water.ScenicSelection(); float nearest;
             Require(selected >= 0, "no living organism");
             water.Select(selected);
             string identity = water.World.Get(selected).Identity;
             var focus = ToVector(water.World.Get(selected).Position);
 
-            SetView(focus, 23, 25, 22, false, false, false);
+            float openingYaw = 25, openingScore = -1;
+            for(int angle=0;angle<360;angle+=45) {
+                SetView(focus,14,angle,14,false,false,false);
+                var view=Measure("opening-probe");
+                float side=Mathf.Abs(Vector3.Dot(water.Lens.transform.forward,ToVector(water.World.Get(selected).Direction).normalized));
+                float score=view.visibleOrganisms*2+(view.nearestDepth<9?2:0)+(view.farthestDepth>20?2:0)+(side<.6f?2:0);
+                if(score>openingScore){openingScore=score;openingYaw=angle;}
+            }
+            SetView(focus, 14, openingYaw, 14, false, false, false);
             yield return Capture("01-ocean");
             water.Select(water.Ocean.Find(identity));
-            SetView(focus, 3.6f, 55, 10, false, false, false, true);
+            var direction=ToVector(water.World.Get(water.Ocean.Find(identity)).Direction);
+            float profileHeading=Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg+90;
+            SetView(focus, 3.6f, profileHeading, 10, false, false, false, true);
             yield return Capture("02-cell-close");
 
             // Find a view of existing organisms with actual camera-space depth separation.
