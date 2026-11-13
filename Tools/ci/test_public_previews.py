@@ -128,6 +128,15 @@ class RetentionTests(unittest.TestCase):
                 _, snapshot = pub.read_snapshot(reader, remote)
                 self.assertEqual(set(pub.groups_from(snapshot)), {'pr-19', 'pr-20'})
 
+    def test_concurrent_fetch_is_retried(self):
+        meta, files = fixture()
+        snapshot, _, _ = pub.combine({}, meta, files)
+        with patch.object(pub, 'read_snapshot', side_effect=[pub.SnapshotChanged(), ('a'*40, snapshot)]) as read:
+            selected, status = pub.publish_snapshot(meta, files, remote='not-used')
+        self.assertEqual(read.call_count, 2)
+        self.assertEqual(status, 'unchanged')
+        self.assertEqual(selected['source_run'], meta['source_run'])
+
     def test_corrupt_existing_image_not_republished(self):
         meta, files = fixture()
         existing, _, _ = pub.combine({}, meta, files)
@@ -173,11 +182,11 @@ class SourceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 resolve(data.__getitem__, 100, 19)
 
-    def test_private_repo_fork_pr_expired_artifact_rejected(self):
+    def test_wrong_repo_fork_pr_expired_artifact_rejected(self):
         for case in range(3):
             data = copy.deepcopy(self.data)
             if case == 0:
-                data['']['private'] = True
+                data['']['full_name'] = 'wrong/repository'
             elif case == 1:
                 data['/pulls/19']['head']['repo']['full_name'] = 'fork/repo'
             else:

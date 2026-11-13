@@ -154,6 +154,10 @@ def git(directory, *args, data=None, check=True):
     return result
 
 
+class SnapshotChanged(RuntimeError):
+    """The remote advanced while the bounded snapshot was being fetched."""
+
+
 def read_snapshot(directory, remote):
     listing = git(directory, "ls-remote", "--heads", remote, REF).stdout.decode().split()
     if not listing:
@@ -163,7 +167,7 @@ def read_snapshot(directory, remote):
     # A concurrent update between ls-remote/fetch must not be silently overwritten.
     fetched = git(directory, "rev-parse", "FETCH_HEAD").stdout.decode().strip()
     if fetched != old:
-        raise RuntimeError("Preview ref changed during fetch; retry publication")
+        raise SnapshotChanged("Preview ref changed during fetch; retry publication")
     files = {}
     allowed = set(n + ".jpg" for n in FRAMES) | {"publication.json", "index.md"}
     for record in git(directory, "ls-tree", "-r", "-z", fetched).stdout.split(b"\0"):
@@ -251,7 +255,10 @@ def publish_snapshot(meta, prepared, remote=REMOTE):
     with tempfile.TemporaryDirectory(prefix="evolution-public-preview-") as directory:
         git(directory, "init", "--bare", "--quiet")
         for attempt in range(5):
-            old, existing = read_snapshot(directory, remote)
+            try:
+                old, existing = read_snapshot(directory, remote)
+            except SnapshotChanged:
+                continue
             files, selected, status = combine(existing, meta, prepared)
             if status in ("unchanged", "superseded"):
                 return selected, status

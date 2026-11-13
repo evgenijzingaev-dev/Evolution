@@ -12,8 +12,13 @@ from public_visual_previews import REPOSITORY, number, trusted_branch
 def resolve(get, run_id, pr_number=0):
     run_id = number(run_id)
     repo = get("")
-    if repo["full_name"] != REPOSITORY or repo["private"]:
-        raise ValueError("Publication requires this public repository")
+    if repo["full_name"] != REPOSITORY:
+        raise ValueError("Unexpected source repository")
+    if repo["private"]:
+        # Do not change visibility. Publication stays unconfirmed until every raw
+        # image passes the separate anonymous HTTP/content verification on runner.
+        print("Repository is PRIVATE; anonymous raw image access is not assumed. "
+              "All 12 URLs must pass verification before any success comment.")
     run = get(f"/actions/runs/{run_id}")
     if (run["path"] != ".github/workflows/visual-preview.yml" or
             run["head_repository"]["full_name"] != REPOSITORY or
@@ -83,7 +88,14 @@ def main():
     if not args.run:
         request = json.loads(Path(args.request).read_text())
         args.run, args.pr = number(request["source_run"]), number(request["pr"])
-    plan = resolve(get_api, args.run, args.pr)
+    try:
+        plan = resolve(get_api, args.run, args.pr)
+    except ValueError as error:
+        if os.getenv("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+                summary.write("## Public preview publication blocked\n\n" + str(error) +
+                              "\n\nOriginal Unity PNG artifacts are unchanged. No public URLs were announced.\n")
+        raise
     Path(args.output).write_text(json.dumps(plan, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
         output.write(f"artifact_name={plan['artifact_name']}\nrun_id={plan['source_run']}\n")

@@ -170,10 +170,23 @@ Public files live only on the `visual-previews` branch:
 - root `index.md`: navigation to retained PRs.
 
 The publication job verifies **every** raw URL anonymously: HTTP 200, JPEG content
- type, SHA-256, decoded dimensions. It retries CDN propagation for up to five
+type, SHA-256, decoded dimensions. It retries CDN propagation for up to five
 minutes. Only then does the separate report job update its own marked PR comment
 with the 12 direct URLs. A failed conversion/push/URL check fails the job and does
 not announce a successful publication. Original PNG artifacts remain available.
+
+### Current repository visibility blocker
+
+The repository API currently marks `Evolution` **private**. On normal GitHub,
+raw URLs inherit repository visibility and will require a separate public
+image-only repository or public hosting. An anonymous raw source-file probe in
+the execution environment returned HTTP 200, so the publisher tests the actual
+image URLs rather than relying on metadata alone. It never changes repository
+visibility. If raw images are inaccessible, publication fails before reporting
+success. Cross-repository publication would need a narrowly scoped destination
+credential because `GITHUB_TOKEN` is repository-scoped. No such credential is
+stored by this change. Even if environment probes succeed, visibility outside
+the tested environments must not be inferred solely from that result.
 
 ### Security and owner configuration
 
