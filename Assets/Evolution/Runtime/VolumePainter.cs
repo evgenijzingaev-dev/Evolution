@@ -56,7 +56,7 @@ namespace Evolution.Runtime
             for(int i=0;i<suspension.Count;i++) {
                 Vector3 p=V(suspension.Get(i,t)),d=p-eye;float half=i<suspension.Count/3?12:32;
                 float edge=d.magnitude/half;
-                float alpha=(1-Mathf.SmoothStep(.75f,1,edge))*(i%9==0?.68f:.40f);
+                float alpha=(1-WaterOptics.SmoothRange(.75f,1,edge))*(i%9==0?.68f:.40f);
                 if(alpha<=.001f)continue;
                 bool flake=i%29==0;float size=(.07f+i%7*.018f)*(flake?2.2f:1);
                 Color color=i%9==0?new Color(1.1f,1.45f,1.6f,alpha):new Color(.72f,1.05f,1.18f,alpha);
@@ -155,14 +155,14 @@ namespace Evolution.Runtime
             if(flow||heat||lightHints)for(int y=-24;y<=24;y+=6)for(int z=-24;z<=24;z+=6)for(int x=-24;x<=24;x+=6) {
                 var p=new V3(x+Mathf.Floor(eye.x/6)*6,y+Mathf.Floor(eye.y/6)*6,z+Mathf.Floor(eye.z/6)*6);
                 p+=new V3(Mathf.Sin(p.Y*.31f+p.Z)*1.1f,Mathf.Sin(p.Z*.27f+p.X)*1.1f,Mathf.Sin(p.X*.37f+p.Y)*1.1f);
-                float fade=1-Mathf.SmoothStep(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
+                float fade=1-WaterOptics.SmoothRange(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
                 if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.15f),new Color(1,.38f,.16f,.15f),Mathf.InverseLerp(9,35,temp));
                     c.a*=fade;vesicles.Add(V(p),Quaternion.identity,Vector3.one*3.8f,c,new Vector4(0,0,0,-1));
                     c.a=fade*.22f;particles.Add(V(p),Quaternion.identity,Vector3.one*2.3f,c,new Vector4(4,0,0,0));}
                 if(lightHints) {float light=world.Sample(p).Light;
                     particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}
                 if(flow) {var current=world.Current(p);Vector3 d=V(current);float phase=Mathf.Repeat((float)time*current.Length*.45f+p.X*.13f+p.Y*.17f,1);
-                    float pulse=Mathf.SmoothStep(0,.15f,phase)*(1-Mathf.SmoothStep(.8f,1,phase));
+                    float pulse=WaterOptics.SmoothRange(0,.15f,phase)*(1-WaterOptics.SmoothRange(.8f,1,phase));
                     Color c=Color.Lerp(new Color(.35f,.80f,.91f),new Color(.75f,1,1.15f),current.Length/.35f);c.a=fade*.9f*pulse;
                     particles.Add(V(p)+d*(phase-.5f)*5,Quaternion.FromToRotation(Vector3.right,d),new Vector3(.6f+d.magnitude*5,.12f,.12f),c,new Vector4(3,0,0,0));}
             }
@@ -200,9 +200,9 @@ namespace Evolution.Runtime
         }
         void DrawCilia(CrystalForm form,Vector3 p,Quaternion rotation,float size,float phase,float drive,Color color)
         {
-            int rings=form==CrystalForm.Ciliate?6:3;
-            for(int ring=0;ring<rings;ring++)for(int j=0;j<10;j++) {
-                float x=-.75f+1.5f*(ring+.5f)/rings,radial=Mathf.Sqrt(1-x*x),angle=j*Mathf.PI*.2f;
+            int rings=form==CrystalForm.Ciliate?8:3,around=form==CrystalForm.Ciliate?14:10;
+            for(int ring=0;ring<rings;ring++)for(int j=0;j<around;j++) {
+                float x=-.75f+1.5f*(ring+.5f)/rings,radial=Mathf.Sqrt(1-x*x),angle=j*Mathf.PI*2/around;
                 Vector3 n=new Vector3(x,Mathf.Cos(angle)*radial,Mathf.Sin(angle)*radial);
                 Vector3 root=CrystalMeshes.Point(form,n*.5f),tip=root+n*(.11f+drive*.07f);
                 Vector3 bend=Vector3.Cross(n,Vector3.right)*Mathf.Sin(phase-ring*.7f-j*.35f)*(.02f+drive*.025f);

@@ -51,6 +51,14 @@ half4 Frag(Varyings i):SV_Target {
         float grains=.5+.5*sin(u*7+sin(v*6))*sin(v*12+genes.w*5);
         float backlight=pow(saturate(dot(-n,normalize(float3(-.28,.88,.36)))) ,2);
         float3 lit=pigment*(.6+diffuse*.65)*light.color*(.86+grains*.22);
+        if(pigment.b>pigment.g*1.25&&pigment.r>pigment.g) {
+            float chromatin=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,i.uv*2+genes.w*.37).b;
+            lit*=.66+.58*smoothstep(.28,.72,chromatin);
+        }
+        if(pigment.g>pigment.r*1.15&&pigment.g>pigment.b*1.1) {
+            float lamella=.5+.5*cos(v*38+sin(u*3)*.7);
+            lit*=.78+.22*lamella;
+        }
         lit+=highlight*float3(.75,.9,1)*.55+cookie*pigment*.15+pigment*backlight*.18;
         return half4(VolumeFog(lit,i.world),color.a);
     #endif
