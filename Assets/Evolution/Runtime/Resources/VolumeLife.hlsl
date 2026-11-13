@@ -28,16 +28,16 @@ half4 Frag(Varyings i):SV_Target {
     #ifdef VOLUME_SHELL
         // Diagnostic probes retain their real blue/red values; the beauty material is not a data remap.
         if(genes.w < -1.5) {
-            float grain=.5+.5*sin(u*9+sin(v*7))*sin(v*11+u*2);
-            float3 gel=color.rgb*(.65+diffuse*.35)+float3(.12,.28,.32)*(rim*.6+grain*.08);
+            float grain=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,i.uv*3).r;
+            float3 gel=color.rgb*(.65+diffuse*.35)+float3(.12,.28,.32)*(rim*.65+grain*.18);
             return half4(VolumeFog(gel,i.world),color.a*(.55+rim*.45)*VolumeGuard(length(i.world-GetCameraPositionWS())));
         }
         if(genes.w<0)return half4(VolumeFog(color.rgb*1.3,i.world),color.a*(.25+.75*rim));
         float lattice=abs(sin(u*8+sin(v*10+genes.w*5))*sin(v*14+sin(u*6)));
         float pores=smoothstep(.91,.98,lattice)*sin(v);
         float veins=pow(1-abs(sin(u*4+sin(v*6)*2)),14)*sin(v);
-        float3 reflection=VolumeHaze(reflect(-eye,n))*1.8+float3(.42,.68,.95)*(rim*.8+pores*.15+veins*.1);
-        reflection+=highlight*light.color*1.8+cookie*rim*float3(.25,.6,.75);
+        float3 reflection=VolumeHaze(reflect(-eye,n))*1.8+float3(.72,1.05,1.25)*(rim*1.65+pores*.35+veins*.16);
+        reflection+=highlight*light.color*2.4+cookie*rim*float3(.25,.6,.75);
         float2 screen=GetNormalizedScreenSpaceUV(i.positionCS);
         float2 bend=TransformWorldToViewDir(n).xy*(.003+.002*cookie)*(1-rim);
         float3 through=SampleSceneColor(clamp(screen+bend,.001,.999))*lerp(float3(1,1,1),pigment,.07);

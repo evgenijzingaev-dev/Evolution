@@ -23,18 +23,18 @@ float3 VolumeHaze(float3 direction) {
 }
 float3 VolumeEnvironment(float3 direction) {
     float3 eye=GetCameraPositionWS();float3 scatter=0;
-    // Three broad scattering depths, also used by object fog so silhouettes dissolve
+    // Eight broad scattering depths, also used by object fog so silhouettes dissolve
     // into exactly the same environment at the existing streaming visibility guard.
-    [unroll]for(int step=0;step<3;step++) {
-        float travel=7+step*12;
+    [unroll]for(int step=0;step<8;step++) {
+        float travel=3+step*5;
         float3 p=eye+direction*travel;
         float density=WaterDensity(p);
         // Project along the actual sun direction. Irregular light wells, not enlarged caustic stripes.
-        float2 column=float2(p.x+p.y*.318,p.z-p.y*.409)*.021;
+        float2 column=float2(p.x+p.y*.318,p.z-p.y*.409)*.038;
         float mask=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,column+float2(_WaterTime*.0008,0)).g;
-        float illumination=smoothstep(.36,.70,mask);
-        float weight=exp(-travel*.026)*.5;
-        scatter+=(float3(.025,.095,.14)+illumination*illumination*float3(.24,.60,.68))*density*weight;
+        float illumination=smoothstep(.40,.60,mask);
+        float weight=exp(-travel*.026)*.24;
+        scatter+=(float3(.02,.065,.10)+pow(illumination,3)*float3(.48,1.10,1.18))*density*weight;
     }
     return VolumeHaze(direction)+scatter;
 }

@@ -33,7 +33,7 @@ namespace Evolution.Runtime
         double lastDrawTime=-1;
         public VolumePainter(CrystalWaterLook look)
         {
-            sphere=MicroMeshes.Cell();thread=MicroMeshes.Cell(2,6);quad=MicroMeshes.LightSheet();
+            sphere=MicroMeshes.Cell(12,20);thread=MicroMeshes.Cell(2,6);quad=MicroMeshes.LightSheet();
             solid=Material("VolumeBody");shell=Material("VolumeMembrane");dust=Material("VolumeSuspension");backdrop=Material("VolumeBackdrop");
             foreach(var material in new[] {solid,shell,dust,backdrop})look.Apply(material);
             bodies=new Batch(sphere,solid,128);threads=new Batch(thread,solid,128);vesicles=new Batch(sphere,shell,128);particles=new Batch(quad,dust,256);
@@ -184,12 +184,21 @@ namespace Evolution.Runtime
                 Vector3 bb=new Vector3(Mathf.Cos(b)*r,-.08f+band*.055f,Mathf.Sin(b)*r);
                 Segment(p+rotation*CrystalMeshes.Point(form,aa)*size,p+rotation*CrystalMeshes.Point(form,bb)*size,.012f*size,new Color(.43f,.64f,.72f));
             }
-            int count=5+(int)(g.Photosynthesis*5);
+            // Intracellular granules are anatomy only: never counted or presented as edible resources.
+            // A stable, bounded distribution creates internal depth without changing the organism's genes.
+            for(int granule=0;granule<36;granule++) {
+                float radius=.22f+.17f*Mathf.Repeat(granule*.381966f,1);
+                Vector3 point=CrystalMeshes.Point(form,Fibonacci(granule,36)*radius)*size;
+                float grainSize=(.025f+.018f*Mathf.Repeat(granule*.618034f,1))*size;
+                Color tint=granule%4==0?new Color(.86f,.70f,.39f):new Color(.40f,.65f,.70f);
+                bodies.Add(p+rotation*point,rotation,Vector3.one*grainSize,tint,traits);
+            }
+            int count=8+(int)(g.Photosynthesis*7);
             for(int j=0;j<count;j++) {
-                Vector3 v=Fibonacci(j,count)*.23f+new Vector3(.03f,.012f*Mathf.Sin(phase*.12f+j),0);
+                Vector3 v=Fibonacci(j,count)*.30f+new Vector3(.03f,.012f*Mathf.Sin(phase*.12f+j),0);
                 Vector3 local=CrystalMeshes.Point(form,v)*size;
                 bool plastid=g.Photosynthesis>.35f&&j%3!=0;
-                Color color=plastid?Color.Lerp(new Color(.28f,.56f,.31f),new Color(.52f,.78f,.34f),Mathf.Clamp01(agent.Biology.Budget.Light*20)):new Color(.87f,.60f,.30f);
+                Color color=plastid?Color.Lerp(new Color(.28f,.56f,.31f),new Color(.52f,.78f,.34f),Mathf.Clamp01(agent.Biology.Budget.Light*20)):new Color(.94f,.65f,.32f);
                 Vector3 scale=(plastid?new Vector3(.15f,.095f,.12f):new Vector3(.09f,.1f,.09f))*size;
                 if(form==CrystalForm.Diatom)scale.y*=.65f;
                 bodies.Add(p+rotation*local,rotation*Quaternion.Euler(j*27,j*41,15),scale,color,traits);

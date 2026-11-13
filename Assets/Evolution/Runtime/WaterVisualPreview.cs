@@ -122,13 +122,13 @@ namespace Evolution.Runtime
 
             float openingYaw = 25, openingScore = -1;
             for(int angle=0;angle<360;angle+=45) {
-                SetView(focus,14,angle,14,false,false,false);
+                SetView(focus,10,angle,8,false,false,false);
                 var view=Measure("opening-probe");
                 float side=Mathf.Abs(Vector3.Dot(water.Lens.transform.forward,ToVector(water.World.Get(selected).Direction).normalized));
                 float score=view.visibleOrganisms*2+(view.nearestDepth<9?2:0)+(view.farthestDepth>20?2:0)+(side<.6f?2:0);
                 if(score>openingScore){openingScore=score;openingYaw=angle;}
             }
-            SetView(focus, 14, openingYaw, 14, false, false, false);
+            SetView(focus, 10, openingYaw, 8, false, false, false);
             yield return Capture("01-ocean");
             water.Select(water.Ocean.Find(identity));
             var direction=ToVector(water.World.Get(water.Ocean.Find(identity)).Direction);
