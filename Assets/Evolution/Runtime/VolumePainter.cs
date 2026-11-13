@@ -214,9 +214,11 @@ namespace Evolution.Runtime
                 Vector3 n=new Vector3(x,Mathf.Cos(angle)*radial,Mathf.Sin(angle)*radial);
                 Vector3 root=CrystalMeshes.Point(form,n*.5f),tip=root+n*(.11f+drive*.07f);
                 Vector3 bend=Vector3.Cross(n,Vector3.right)*Mathf.Sin(phase-ring*.7f-j*.35f)*(.02f+drive*.025f);
-                Vector3 mid=Vector3.Lerp(root,tip,.55f)+bend*.35f;tip+=bend;
-                Segment(p+rotation*root*size,p+rotation*mid*size,.007f*size,color);
-                Segment(p+rotation*mid*size,p+rotation*tip*size,.0035f*size,color);
+                Vector3 first=Vector3.Lerp(root,tip,.34f)+bend*.25f;
+                Vector3 second=Vector3.Lerp(root,tip,.72f)+bend*.75f;tip+=bend;
+                Segment(p+rotation*root*size,p+rotation*first*size,.004f*size,color);
+                Segment(p+rotation*first*size,p+rotation*second*size,.0026f*size,color);
+                Segment(p+rotation*second*size,p+rotation*tip*size,.0014f*size,color);
             }
         }
         void DrawDiatomRibs(Vector3 p,Quaternion rotation,float size)
