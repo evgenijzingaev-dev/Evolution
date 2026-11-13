@@ -151,3 +151,80 @@ EVOLUTION_PREVIEW_SHA=local bash Tools/ci/visual_preview.sh
 снимков одними статическими проверками. Первый успешный Actions run и его manifest
 нужно использовать как подтверждение выбранного runner; при отсутствии такого
 запуска поддержка рендера остаётся непроверенной.
+
+## Public JPEG previews
+
+`Publish Visual Preview` runs after a successful trusted `Visual Preview/render` job.
+The Unity build, PNG upload allowlist and original artifact retention are unchanged.
+The publisher downloads that exact unexpired artifact, verifies its native capture
+manifest against the render SHA, and converts all **12** PNGs to progressive JPEG
+(1440×810, with a 1280×720 fallback). It does not generate or repair images.
+The original manifest currently describes 11 frames; the water-only frame is also
+required, decoded and converted from the native artifact.
+
+Public files live only on the `visual-previews` branch:
+
+- `pr-<number>/*.jpg`: the 12 frames, at most 350 KiB each;
+- `pr-<number>/publication.json`: safe provenance, dimensions and SHA-256 hashes;
+- `pr-<number>/index.md`: direct anonymous HTTPS links and original artifact link;
+- root `index.md`: navigation to retained PRs.
+
+The publication job verifies **every** raw URL anonymously: HTTP 200, JPEG content
+ type, SHA-256, decoded dimensions. It retries CDN propagation for up to five
+minutes. Only then does the separate report job update its own marked PR comment
+with the 12 direct URLs. A failed conversion/push/URL check fails the job and does
+not announce a successful publication. Original PNG artifacts remain available.
+
+### Security and owner configuration
+
+No new repository secrets or Unity license configuration are needed. Only source
+runs of `.github/workflows/visual-preview.yml` from this repository's `main` or
+`codex/*` branches are accepted; fork PRs are excluded. There is no
+`pull_request_target`, inherited Unity secrets or uploaded logs/builds. The
+publisher uses its job's ephemeral `GITHUB_TOKEN` (`actions:read`, `contents:write`).
+The comment job has only `pull-requests:write` and never checks out PR code.
+Repository collaborators who can push these trusted branches can modify workflow
+code; these are the explicit publication trust boundary. Narrow the branch
+allowlist if collaboration permissions change.
+
+Allow GitHub Actions to write repository contents/comments. If a branch ruleset
+covers `visual-previews`, permit the Actions bot to create and force-update this
+publication branch. Protect game branches normally. No force pushes target game
+branches. A protected publication ref will fail visibly rather than fall back to
+publishing elsewhere.
+
+### Storage and concurrent updates
+
+At most **8 PR folders / 32 MiB** are retained; each folder contains only its most
+recent successful run. Other retained PR folders remain byte-identical. Old runs
+cannot overwrite newer ones. Each update writes a parentless snapshot and uses
+an explicit `--force-with-lease` on `refs/heads/visual-previews`; concurrent changes
+are re-read before retrying. This keeps obsolete binaries out of reachable branch
+history. GitHub controls garbage collection of unreachable Git objects, so disk
+reclamation is not immediate. Evicted PR links eventually return 404; their PNG
+artifacts follow the unchanged Actions retention policy. Public branch URLs point
+to the latest successful run, not immutable archives; use `publication.json` hashes
+and the original artifact when exact provenance matters.
+
+### Backfill / manual use
+
+The initial publication PR's trusted branch `codex/public-visual-previews` has a
+small PR-triggered backfill using `Tools/ci/public_preview_request.json`: PR #19,
+run `43409807998`. This exercises real publication without rerendering Unity.
+Other branches cannot use this bootstrap trigger. Once the workflow is on the
+default branch, run **Publish Visual Preview → Run workflow** with the successful
+source run ID and destination PR number (0 auto-detects a unique associated PR).
+For normal future renders the reusable workflow is called automatically; no
+manual backfill is needed. Manual runs must select a trusted main/codex branch
+that contains these scripts. The source artifact must still be unexpired.
+
+Local checks (Pillow 13.0.0):
+
+```sh
+python3 -B Tools/ci/test_public_previews.py
+python3 -B Tools/ci/test_visual_preview.py
+```
+
+The publication tests use synthetic pixels only inside temporary unit-test
+fixtures. They never publish them. Production requires a successful Unity render,
+validated upload, native manifest and all twelve original game frames.
