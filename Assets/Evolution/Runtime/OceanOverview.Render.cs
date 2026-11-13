@@ -54,11 +54,11 @@ namespace Evolution.Runtime
             VisibleMarkers=VisibleClusters=0;if(!Active||!water.HudVisible||!water.OrganismsVisible)return;
             var eye=water.Lens.transform.position;
             bool fields=Analytical&&DataLayer;
-            int agentIndex=0;float interpolation=Mathf.Clamp01((Time.unscaledTime-observedAt)/.5f);
+            int agentIndex=0;
             foreach(var a in Survey.Agents) {
                 float first=agentIndex<appearanceTimes.Count?appearanceTimes[agentIndex]:Time.unscaledTime;agentIndex++;
                 bool selected=SelectionKind==OverviewSelection.Organism&&a.Identity==trackedIdentity;
-                var position=FullDepth&&!selected?V3.Lerp(a.Previous,a.Position,interpolation):selected&&water.SelectedIndex>=0?water.World.Get(water.SelectedIndex).Position:a.Position;
+                var position=DisplayPosition(a);
                 if(!InSlice(position))continue;Vector3 p=VolumePainter.V(position);var screen=water.Lens.WorldToViewportPoint(p);if(screen.z<=.2f||screen.x<-.03f||screen.x>1.03f||screen.y<-.03f||screen.y>1.03f||OverUi(new Vector2(screen.x*Screen.width,screen.y*Screen.height)))continue;
                 float distance=Vector3.Distance(eye,p),minimum=Mathf.Lerp(WaterOpticsValue(16,30,distance),1,Blend);
                 float grouped=WaterOpticsValue(Mathf.Lerp(65,100,Blend),Mathf.Lerp(110,160,Blend),distance);

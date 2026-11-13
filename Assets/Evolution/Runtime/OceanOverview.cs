@@ -125,11 +125,16 @@ namespace Evolution.Runtime
             SurveyRegion best=null;foreach(var r in Survey.Regions)if(r.Lineages.TryGetValue(id,out int n)&&(best==null||r.Tick>best.Tick))best=r;
             if(best!=null){Push();SelectedLineage=id;RegionKey=best.Key;if(!FullDepth)SliceIndex=RegionKey.Y;SelectionKind=OverviewSelection.Lineage;AutoFrame=false;Following=false;water.Rig.FocusOn(VolumePainter.V(best.Center),35);noResults=false;}
         }
+        V3 DisplayPosition(SurveyAgent agent)
+        {
+            if(HasSelectedOrganism&&agent.Identity==trackedIdentity)return water.World.Get(water.SelectedIndex).Position;
+            return FullDepth?V3.Lerp(agent.Previous,agent.Position,Mathf.Clamp01((Time.unscaledTime-observedAt)/.5f)):agent.Position;
+        }
         public void Click(Vector2 point)
         {
             bool twice=Time.unscaledTime-lastClick<.32f&&(point-lastPointer).sqrMagnitude<100;lastClick=Time.unscaledTime;lastPointer=point;
             int picked=-1;float best=18*18;
-            foreach(var a in Survey.Agents)if(InSlice(a.Position)) {var s=water.Lens.WorldToScreenPoint(VolumePainter.V(a.Position));if(s.z<=0)continue;float d=(new Vector2(s.x,s.y)-point).sqrMagnitude;
+            foreach(var a in Survey.Agents){var position=DisplayPosition(a);if(!InSlice(position))continue;var s=water.Lens.WorldToScreenPoint(VolumePainter.V(position));if(s.z<=0)continue;float d=(new Vector2(s.x,s.y)-point).sqrMagnitude;
                 if(d<best){best=d;picked=water.Ocean.Find(a.Identity);}}
             if(picked<0)picked=water.PickOrganism(point);
             if(picked>=0){ChooseOrganism(picked,twice);return;}
