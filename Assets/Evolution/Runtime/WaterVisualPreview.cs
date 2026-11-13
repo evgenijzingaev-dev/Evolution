@@ -199,14 +199,17 @@ namespace Evolution.Runtime
             water.Rig.Orbit(360,0);water.Rig.ApplyImmediate();Require(Vector3.Dot(facing,water.Lens.transform.forward)>.9999f,"360-degree orbit changed orientation");
             water.Rig.Restore(saved);water.Rig.ApplyImmediate();
             int index=water.Ocean.Find(identity);Require(index>=0,"navigation target missing");
-            water.Overview.ChooseOrganism(index,false);water.Overview.ZoomSelection();water.Rig.ApplyImmediate();
+            water.Overview.SetSlice(false,999);water.Overview.ChooseOrganism(index,false);
+            Require(water.Overview.SliceIndex==ChunkKey.At(water.World.Get(index).Position).Y,"selection did not switch to the target depth slice");
+            water.Overview.ZoomSelection();water.Rig.ApplyImmediate();
             Require(water.Rig.Distance<=8,"organism zoom did not approach");
             water.Overview.Back();water.Rig.ApplyImmediate();
             Require(Mathf.Abs(water.Rig.Distance-saved.Distance)<.001f&&Vector3.Distance(water.Rig.Focus,saved.Focus)<.001f,"previous camera view was not restored");
+            Require(!water.Overview.FullDepth&&water.Overview.SliceIndex==999,"previous depth slice was not restored");
             Require(water.PlaySelected()&&!water.Overview.Active&&water.World.Controlled==index,"cell play control was not preserved");
             water.Overview.Back();water.Rig.ApplyImmediate();
             Require(water.World.Controlled<0&&water.Overview.Active,"return from cell play failed");
-            navigationChecked=true;
+            water.Overview.FullDepth=true;navigationChecked=true;
         }
         static V3 ToV3(Vector3 p)=>new V3(p.x,p.y,p.z);
         Report Context(Shot[] frames, bool passed)

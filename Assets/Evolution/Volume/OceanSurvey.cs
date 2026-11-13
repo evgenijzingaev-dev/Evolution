@@ -123,12 +123,12 @@ namespace Evolution.Volume
             if(Events.Count==EventLimit)Events.RemoveAt(0);Events.Add(new SurveyEvent {Kind=kind,Tick=Tick,Position=p,Lineage=lineage,Count=count,Identity=identity});
         }
         public bool TryRegion(ChunkKey key,out SurveyRegion region)=>byRegion.TryGetValue(key,out region);
-        public bool Frame(V3 near,float radius,int lineage,out V3 center,out float extent,out int count)
+        public bool Frame(V3 near,float radius,int lineage,out V3 center,out float extent,out int count,int slice=int.MinValue)
         {
             center=default;extent=2;count=0;float rr=radius*radius;
-            foreach(var a in Agents)if((a.Position-near).Sqr<=rr&&(lineage==0||a.Lineage==lineage)){center+=a.Position;count++;}
+            foreach(var a in Agents)if((a.Position-near).Sqr<=rr&&(lineage==0||a.Lineage==lineage)&&(slice==int.MinValue||ChunkKey.At(a.Position).Y==slice)){center+=a.Position;count++;}
             if(count==0){center=near;return false;}center/=count;
-            foreach(var a in Agents)if((a.Position-near).Sqr<=rr&&(lineage==0||a.Lineage==lineage))extent=Math.Max(extent,(a.Position-center).Length+a.Size);
+            foreach(var a in Agents)if((a.Position-near).Sqr<=rr&&(lineage==0||a.Lineage==lineage)&&(slice==int.MinValue||ChunkKey.At(a.Position).Y==slice))extent=Math.Max(extent,(a.Position-center).Length+a.Size);
             return true;
         }
         public int KnownPopulation(int lineage)=>counts.TryGetValue(lineage,out int count)?count:0;

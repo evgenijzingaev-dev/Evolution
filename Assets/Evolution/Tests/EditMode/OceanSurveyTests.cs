@@ -98,6 +98,14 @@ namespace Evolution.Tests
             Assert.AreEqual(1,s.Agents[0].Previous.X);Assert.AreEqual(3,s.Agents[0].Position.X);
             Assert.AreEqual(1,s.KnownPopulation(7));
         }
+        [Test] public void FramingASliceDoesNotIncludeOtherHorizontalLayers()
+        {
+            var low=Agent(1,3);var high=Agent(2,9);high.Position.Y=25;
+            var s=new OceanSurvey();s.Observe(new[]{low,high},Array.Empty<FoodCloud>(),new[]{Keys[0],new ChunkKey(0,1,0)},1,default);
+            Assert.IsTrue(s.Frame(new V3(5,10,3),50,0,out var p,out float r,out int n,0));
+            Assert.AreEqual(1,n);Assert.AreEqual(2,p.Y);
+            Assert.IsTrue(s.Frame(new V3(5,30,3),50,0,out p,out r,out n,1));Assert.AreEqual(1,n);Assert.AreEqual(25,p.Y);
+        }
         [Test] public void MorphotypeProjectionMatchesExistingPresentation()
         {
             var rng=new RandomSource(42);for(int i=0;i<100;i++){var g=Genome.Founder(ref rng);Assert.AreEqual((int)CrystalForms.From(g),OceanSurvey.Form(g));}
