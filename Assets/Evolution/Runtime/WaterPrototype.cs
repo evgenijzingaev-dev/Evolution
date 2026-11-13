@@ -1,5 +1,4 @@
 using Evolution.Core;
-using Evolution.Localization;
 using Evolution.Presentation;
 using Evolution.Volume;
 using System.IO;
@@ -29,12 +28,6 @@ namespace Evolution.Runtime
         AudioSource ambient,effects;AudioClip ambience,feedSound;
         readonly FlowBody[] flowBodies=new FlowBody[12];readonly float[] flowDistances=new float[12];
         int selected;bool following=true;double accumulator,lastSound=double.NegativeInfinity;
-        GUISkin skin;GUIStyle panelStyle,heading,hint;Texture2D panel,button;
-        bool details;
-        Vector2 scroll;
-        readonly int[] foodCandidates=new int[4];readonly float[] foodScores=new float[4];readonly Rect[] foodBoxes=new Rect[4];
-        float Scale=>Mathf.Clamp(Mathf.Min(Screen.width/1920f,Screen.height/1080f),.7f,1.5f);
-        Rect Panel=>new Rect(18,18,282,details?Mathf.Min(700,Screen.height/Scale-74):(ShowCurrents&&ShowTemperature?292:258));
         void Start()
         {
             IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
@@ -73,13 +66,12 @@ namespace Evolution.Runtime
         void Update()
         {
             if(World==null)return;
-            Vector2 pointer=new Vector2(Input.mousePosition.x/Scale,(Screen.height-Input.mousePosition.y)/Scale);
             bool over=HudVisible&&Hud!=null&&Hud.OverUi(Input.mousePosition);
             if(Input.GetKeyDown(KeyCode.F1))Hud.HelpVisible=!Hud.HelpVisible;
             if(Input.GetKeyDown(KeyCode.F2))Hud.CycleDetail();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
-            if(Input.GetKeyDown(KeyCode.Escape)){if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
+            if(Input.GetKeyDown(KeyCode.Escape)){if(Hud.CloseOverlay()){}else if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Home))Overview.Home();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
             else if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
@@ -128,62 +120,15 @@ namespace Evolution.Runtime
             }
             return count;
         }
-        void PrepareUi()
-        {
-            if(skin)return;skin=Instantiate(GUI.skin);skin.label.fontSize=14;skin.label.fontStyle=FontStyle.Normal;skin.label.wordWrap=true;
-            skin.label.normal.textColor=new Color(.85f,.94f,.95f);
-            var font=Resources.Load<Font>("WaterUI/OpenSans-Regular");skin.font=font;skin.label.font=font;skin.button.font=font;
-            panel=new Texture2D(1,1);panel.SetPixel(0,0,new Color(.012f,.04f,.07f,.63f));panel.Apply();
-            button=new Texture2D(1,1);button.SetPixel(0,0,new Color(1,1,1,.11f));button.Apply();
-            skin.button.fontSize=13;skin.button.fontStyle=FontStyle.Normal;skin.button.padding=new RectOffset(6,6,5,5);skin.button.wordWrap=true;
-            skin.button.border=new RectOffset();
-            skin.button.normal.background=skin.button.hover.background=skin.button.active.background=button;
-            skin.button.normal.textColor=new Color(.82f,.93f,.96f);skin.button.hover.textColor=Color.white;
-            panelStyle=new GUIStyle(skin.box) {padding=new RectOffset(12,12,10,10)};panelStyle.normal.background=panel;
-            heading=new GUIStyle(skin.label) {fontStyle=FontStyle.Bold,fontSize=16};
-            hint=new GUIStyle(skin.label) {fontSize=12,alignment=TextAnchor.MiddleRight};hint.normal.textColor=new Color(.72f,.86f,.91f,.85f);
-        }
-        bool LayerButton(TextKey key,bool enabled)
-        {
-            Color before=GUI.backgroundColor;GUI.backgroundColor=enabled?new Color(.35f,.92f,1):new Color(.65f,.78f,.84f);
-            bool clicked=GUILayout.Button(GameText.Get(key));GUI.backgroundColor=before;return clicked;
-        }
         void OnGUI()
         {
             if(World!=null&&HudVisible&&Hud!=null)Hud.Draw();
-        }
-        void DrawFoodLabels(VolumeAgent observer)
-        {
-            int count=0;
-            for(int k=0;k<World.FoodCount;k++) {
-                var food=World.GetFood(k);if(food.Substrate+food.Organic<.01f)continue;
-                Vector3 s=Lens.WorldToScreenPoint(VolumePainter.V(food.Position));if(s.z<=0||s.z>30)continue;
-                Rect rect=new Rect(s.x/Scale-106,(Screen.height-s.y)/Scale-42,212,106);
-                if(rect.x<10||rect.xMax>Screen.width/Scale-10||rect.y<10||rect.yMax>Screen.height/Scale-44||rect.Overlaps(Panel))continue;
-                float potential=World.FoodPotential(k,observer.Biology);if(potential<=0)continue;
-                float score=potential/(1+(food.Position-observer.Position).Length*.1f);
-                if(count==4&&score<=foodScores[3])continue;
-                int at=Mathf.Min(count,3);while(at>0&&foodScores[at-1]<score){foodScores[at]=foodScores[at-1];foodCandidates[at]=foodCandidates[at-1];foodBoxes[at]=foodBoxes[at-1];at--;}
-                foodScores[at]=score;foodCandidates[at]=k;foodBoxes[at]=rect;count=Mathf.Min(4,count+1);
-            }
-            for(int i=0;i<count;i++) {
-                var food=World.GetFood(foodCandidates[i]);Rect rect=foodBoxes[i];
-                GUI.Box(rect,GUIContent.none,panelStyle);
-                GUI.Label(new Rect(rect.x+6,rect.y+4,rect.width-12,rect.height-8),GameText.Format(TextKey.VolumeFoodLabel,food.Substrate,food.Organic,food.Concentration,World.FoodPotential(foodCandidates[i],observer.Biology)));
-            }
-            int threat=-1;float nearest=Ecology.SenseRadius(observer.Biology.Genes);
-            for(int i=0;i<World.Count;i++){var a=World.Get(i);float distance=(a.Position-observer.Position).Length;
-                if(a.Alive&&distance<nearest&&Ecology.CanHunt(a.Biology,observer.Biology)&&
-                    Ecology.Attack(a.Biology)/(observer.Biology.Genes.Size*(1+Ecology.Defense(observer.Biology,0)))>.28f){nearest=distance;threat=i;}}
-            if(threat>=0){Vector3 p=Lens.WorldToScreenPoint(VolumePainter.V(World.Get(threat).Position));
-                Rect tag=new Rect(p.x/Scale-75,(Screen.height-p.y)/Scale-42,150,28);
-                if(p.z>0&&!tag.Overlaps(Panel)){Color previous=GUI.color;GUI.color=new Color(1,.58f,.5f);GUI.Box(tag,GameText.Format(TextKey.CrystalThreat,nearest));GUI.color=previous;}}
         }
         void OnDestroy()
         {
             painter?.Dispose();look?.Dispose();if(ambient)ambient.Stop();if(effects)effects.Stop();
             Ocean?.Save();
-            Destroy(ambience);Destroy(feedSound);Destroy(cameraObject);Destroy(panel);Destroy(button);Destroy(skin);
+            Destroy(ambience);Destroy(feedSound);Destroy(cameraObject);
         }
     }
 }

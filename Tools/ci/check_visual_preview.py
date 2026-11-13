@@ -79,6 +79,7 @@ def validate(directory, revision=None):
 if __name__ == "__main__":
     report = validate(sys.argv[1], os.getenv("EVOLUTION_PREVIEW_SHA"))
     print(f"Twenty real game-frame captures validated: Unity {report['unity']}, {report['graphicsApi']}, {report['graphicsDevice']}.")
+    print("Factual nearby-predator evidence:", report["dangerCaptureAvailable"])
     if os.getenv("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
             summary.write("\nTwenty Unity game-frame captures passed structural checks (not an artistic approval).\n")
