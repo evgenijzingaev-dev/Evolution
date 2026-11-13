@@ -72,11 +72,17 @@ namespace Evolution.Runtime
             else if(page==HudPage.Overview){water.Overview.Enter();water.Overview.SetMode(false);}
             else water.Observe();
         }
+        // Input hit areas must match visible overlays: otherwise invisible panels block
+        // picking organisms and issuing movement commands in the 3D ocean.
+        bool ShowObserverControls => !development &&
+            (Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical));
+        bool ShowToastArea => !(settings||HelpVisible) && (journal||notices.Count>0);
         public bool OverUi(Vector2 pixels)
         {
             var p=new Vector2(pixels.x/Scale,(Screen.height-pixels.y)/Scale);
             return Top.Contains(p)||Left.Contains(p)||Right.Contains(p)||MapBox.Contains(p)||Actions.Contains(p)||Footer.Contains(p)||
-                ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||ToastBox.Contains(p)||((Page==HudPage.Overview||Detail==HudDetail.Observer)&&ObserverBox.Contains(p));
+                ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||
+                (ShowToastArea&&ToastBox.Contains(p))||(ShowObserverControls&&ObserverBox.Contains(p));
         }
         void Update()
         {
@@ -209,7 +215,7 @@ namespace Evolution.Runtime
             DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
             if(development)DrawDevelopment();
             if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else DrawNotices();
-            if(!development&&(Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical)))DrawObserverLinks();
+            if(ShowObserverControls)DrawObserverLinks();
             if(water.FindFood&&!development)DrawWorldLabels();
             string tip=hoverTip??GUI.tooltip;
             if(!string.IsNullOrEmpty(tip)){
