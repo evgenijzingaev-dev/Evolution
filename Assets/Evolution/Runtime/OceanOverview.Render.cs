@@ -46,7 +46,8 @@ namespace Evolution.Runtime
                 default:return Color.Lerp(new Color(.21f,.57f,.69f),new Color(.55f,1,.77f),Mathf.Clamp01(r.Living/8f));
             }
         }
-        bool DataLayer=>Layer>=SurveyLayer.Density;
+        V3 RegionPoint(SurveyRegion r)=>Analytical&&DataLayer?r.Key.Origin+new V3(10,10,10):r.Center;
+        bool DataLayer=>Layer>=SurveyLayer.Threat;
         public void Render()
         {
             VisibleMarkers=VisibleClusters=0;if(!Active||!water.HudVisible||!water.OrganismsVisible)return;
@@ -62,7 +63,7 @@ namespace Evolution.Runtime
                 if(selected){c=Color.white;c.a=.8f;draw.Add(p,c,26,1);}
             }
             foreach(var r in nearby) {
-                if(!InSlice(r))continue;Vector3 p=VolumePainter.V(Analytical&&Layer>=SurveyLayer.Temperature?r.Key.Origin+new V3(10,10,10):r.Center);var screen=water.Lens.WorldToViewportPoint(p);
+                if(!InSlice(r))continue;Vector3 p=VolumePainter.V(RegionPoint(r));var screen=water.Lens.WorldToViewportPoint(p);
                 if(screen.z<=.2f||screen.x<-.05f||screen.x>1.05f||screen.y<-.05f||screen.y>1.05f)continue;
                 float d=Vector3.Distance(eye,p);float alpha=Mathf.Lerp(WaterOpticsValue(Mathf.Lerp(55,90,Blend),Mathf.Lerp(95,145,Blend),d)*.85f,.55f,DataLayer?Blend:0);
                 if(!r.Loaded)alpha=Mathf.Max(alpha,.4f);if(r.Living==0&&!fields)continue;

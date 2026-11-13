@@ -22,7 +22,7 @@ class EvidenceTests(unittest.TestCase):
                     visibleOrganisms=5, nearestDepth=4, farthestDepth=20,
                     currents=True, currentSpeed=.2, temperature=True, food=True, hudVisible=True,
                     foodSubstrate=12, foodOrganic=4, activePopulation=250, knownRegions=125, analytical=False, organismMarkers=20, regionClusters=15, surveyLayer=0, depthColours=False, markerMinY=-15, markerMaxY=15, selectedOrganism=7, fullDepth=True, sliceIndex=0)
-        self.report = dict(passed=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
+        self.report = dict(passed=True, navigationChecked=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
                            graphicsApi="OpenGLCore", graphicsDevice="test-device",
                            scene="WaterPrototype3D", width=1920, height=1080, seed=42,
                            revision="test-sha", screenshots=[dict(shot, file=f) for f in EXPECTED])
@@ -91,6 +91,10 @@ class EvidenceTests(unittest.TestCase):
 
     def test_no_real_food(self):
         self.report["screenshots"][4].update(foodSubstrate=0, foodOrganic=0)
+        with self.assertRaises(ValueError): self.check()
+
+    def test_navigation_must_have_run(self):
+        self.report["navigationChecked"] = False
         with self.assertRaises(ValueError): self.check()
 
     def test_no_analytical_markers(self):

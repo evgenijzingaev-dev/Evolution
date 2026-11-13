@@ -81,6 +81,15 @@ namespace Evolution.Tests
             var s=new OceanSurvey();s.Restore(regions);s.Observe(new[]{Agent(1,4)},Array.Empty<FoodCloud>(),Keys,2,default);
             Assert.LessOrEqual(s.Regions.Count,OceanSurvey.RegionLimit);Assert.IsTrue(s.CatalogueTruncated);Assert.IsFalse(s.Events.Exists(e=>e.Kind==SurveyEventKind.KnownLineageLost));
         }
+        [Test] public void FullAgentHistoryRetiresStaleEntriesAndContinuesObservingNewCells()
+        {
+            var s=new OceanSurvey();var old=new VolumeAgent[OceanSurvey.AgentHistoryLimit];for(int i=0;i<old.Length;i++)old[i]=Agent(i,4);
+            s.Observe(old,Array.Empty<FoodCloud>(),Keys,1,default);
+            s.Observe(new[]{Agent(99999,4)},Array.Empty<FoodCloud>(),Keys,500,default);
+            s.Observe(new[]{Agent(99999,4)},Array.Empty<FoodCloud>(),Keys,510,default);
+            s.Observe(new[]{Agent(99999,4,false)},Array.Empty<FoodCloud>(),Keys,520,default);
+            Assert.IsTrue(s.Events.Exists(e=>e.Kind==SurveyEventKind.Death&&e.Identity=="cell-99999"));
+        }
         [Test] public void MorphotypeProjectionMatchesExistingPresentation()
         {
             var rng=new RandomSource(42);for(int i=0;i<100;i++){var g=Genome.Founder(ref rng);Assert.AreEqual((int)CrystalForms.From(g),OceanSurvey.Form(g));}

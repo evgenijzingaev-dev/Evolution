@@ -113,8 +113,8 @@ namespace Evolution.Volume
         {
             while(Regions.Count>RegionLimit){int oldest=-1;long time=long.MaxValue;for(int i=0;i<Regions.Count;i++)if(!Regions[i].Loaded&&Regions[i].Tick<time){oldest=i;time=Regions[i].Tick;}
                 if(oldest<0)break;byRegion.Remove(Regions[oldest].Key);Regions.RemoveAt(oldest);CatalogueTruncated=true;}
-            if(history.Count>AgentHistoryLimit){expired.Clear();foreach(var p in history)if(Tick-p.Value.Tick>200)expired.Add(p.Key);foreach(var id in expired)history.Remove(id);
-                if(history.Count>AgentHistoryLimit){expired.Clear();foreach(var p in history){if(p.Value.Tick!=Tick)expired.Add(p.Key);if(history.Count-expired.Count<=AgentHistoryLimit)break;}foreach(var id in expired)history.Remove(id);}}
+            if(history.Count>=AgentHistoryLimit){expired.Clear();foreach(var p in history)if(Tick-p.Value.Tick>200)expired.Add(p.Key);foreach(var id in expired)history.Remove(id);
+                if(history.Count>=AgentHistoryLimit){expired.Clear();foreach(var p in history){if(p.Value.Tick!=Tick)expired.Add(p.Key);if(history.Count-expired.Count<=AgentHistoryLimit)break;}foreach(var id in expired)history.Remove(id);}}
             if(migrations.Count>RegionLimit)migrations.Clear();
         }
         void Add(SurveyEventKind kind,V3 p,int lineage,int count,string identity)

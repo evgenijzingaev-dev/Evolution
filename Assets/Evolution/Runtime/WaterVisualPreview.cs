@@ -16,7 +16,7 @@ namespace Evolution.Runtime
         const int Width = 1920, Height = 1080;
         static string destination;
         WaterPrototype water;
-        bool failed;
+        bool failed,navigationChecked;
         RenderTexture target;
         int renderedFrames;
         float yaw, pitch = 15;
@@ -40,7 +40,7 @@ namespace Evolution.Runtime
             public string unity, pipeline, graphicsApi, graphicsDevice, graphicsVendor, graphicsVersion, revision;
             public string scene = "WaterPrototype3D";
             public int width = Width, height = Height, seed = 42;
-            public bool passed;
+            public bool passed,navigationChecked;
             public Shot[] screenshots;
         }
 
@@ -172,6 +172,7 @@ namespace Evolution.Runtime
             water.OrganismsVisible=true;water.HudVisible=true;
             var overview=water.Overview;overview.Enter();overview.SetMode(false);overview.AutoFrame=false;overview.AutoOrbit=false;
             overview.Layer=SurveyLayer.Lineage;overview.FullDepth=true;water.Rig.ApplyImmediate();
+            CheckNavigation(identity);
             yield return Capture("07-cinematic-overview");
             var activeFocus=water.Rig.Focus;
             overview.SetMode(true);overview.AutoFrame=false;overview.AutoOrbit=false;
@@ -192,6 +193,21 @@ namespace Evolution.Runtime
             File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
             Application.Quit(0);
         }
+        void CheckNavigation(string identity)
+        {
+            var saved=water.Rig.View;var facing=water.Lens.transform.forward;
+            water.Rig.Orbit(360,0);water.Rig.ApplyImmediate();Require(Vector3.Dot(facing,water.Lens.transform.forward)>.9999f,"360-degree orbit changed orientation");
+            water.Rig.Restore(saved);water.Rig.ApplyImmediate();
+            int index=water.Ocean.Find(identity);Require(index>=0,"navigation target missing");
+            water.Overview.ChooseOrganism(index,false);water.Overview.ZoomSelection();water.Rig.ApplyImmediate();
+            Require(water.Rig.Distance<=8,"organism zoom did not approach");
+            water.Overview.Back();water.Rig.ApplyImmediate();
+            Require(Mathf.Abs(water.Rig.Distance-saved.Distance)<.001f&&Vector3.Distance(water.Rig.Focus,saved.Focus)<.001f,"previous camera view was not restored");
+            Require(water.PlaySelected()&&!water.Overview.Active&&water.World.Controlled==index,"cell play control was not preserved");
+            water.Overview.Back();water.Rig.ApplyImmediate();
+            Require(water.World.Controlled<0&&water.Overview.Active,"return from cell play failed");
+            navigationChecked=true;
+        }
         static V3 ToV3(Vector3 p)=>new V3(p.x,p.y,p.z);
         Report Context(Shot[] frames, bool passed)
         {
@@ -199,7 +215,7 @@ namespace Evolution.Runtime
                 unity = Application.unityVersion, pipeline = GraphicsSettings.currentRenderPipeline.GetType().Name,
                 graphicsApi = SystemInfo.graphicsDeviceType.ToString(), graphicsDevice = SystemInfo.graphicsDeviceName,
                 graphicsVendor = SystemInfo.graphicsDeviceVendor, graphicsVersion = SystemInfo.graphicsDeviceVersion,
-                revision = Environment.GetEnvironmentVariable("EVOLUTION_PREVIEW_SHA") ?? "local",
+                revision = Environment.GetEnvironmentVariable("EVOLUTION_PREVIEW_SHA") ?? "local",navigationChecked=navigationChecked,
                 screenshots = frames, passed = passed
             };
         }

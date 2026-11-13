@@ -23,7 +23,9 @@ namespace Evolution.Runtime
         readonly List<SurveyRegion> navigation=new List<SurveyRegion>(256);
         readonly List<SurveyRegion> nearby=new List<SurveyRegion>(256);
         readonly WaterView[] views=new WaterView[8];readonly bool[] viewModes=new bool[8];int viewCount;
-        string query="";bool noResults;
+        string query="";bool noResults,searchFocused,clearSearchFocus;
+        public bool Typing=>Active&&searchFocused;
+        public void ClearSearchFocus(){clearSearchFocus=true;searchFocused=false;}
         public void Initialize(WaterPrototype prototype){water=prototype;draw=new SurveyDraw();water.Rig.SetStrategic(true);Refresh();}
         public void SetMode(bool analytical){if(!Active)Enter();Analytical=analytical;AutoOrbit=!analytical;}
         public void Enter()
@@ -48,6 +50,8 @@ namespace Evolution.Runtime
         public void BeforeCamera(bool overUi)
         {
             if(!Active)return;
+            if(Typing&&Input.GetKeyDown(KeyCode.Return)){Search(query);ClearSearchFocus();}
+            if(!overUi&&Input.GetMouseButtonDown(0))ClearSearchFocus();
             Blend=Mathf.MoveTowards(Blend,Analytical?1:0,Time.unscaledDeltaTime*2.5f);
             if(Application.isFocused&&!overUi&&water.Rig.Navigating){AutoFrame=false;Following=false;}
             if(Application.isFocused&&!overUi&&Input.GetMouseButton(1))AutoOrbit=false;
@@ -63,7 +67,7 @@ namespace Evolution.Runtime
             nearby.Clear();navigation.Clear();Vector3 center=water.Rig.Focus;float range=Mathf.Max(100,water.Rig.Distance*4);
             foreach(var r in Survey.Regions){if(!r.Loaded&&r.Living>0)navigation.Add(r);if((VolumePainter.V(r.Center)-center).sqrMagnitude<range*range)nearby.Add(r);}
             regionSort.Center=VolumePainter.V(center);nearby.Sort(regionSort);navigation.Sort(regionSort);if(nearby.Count>256)nearby.RemoveRange(256,nearby.Count-256);
-            if(!ready){ready=true;RegionKey=ChunkKey.At(center);SliceIndex=RegionKey.Y;}
+            if(!ready){ready=true;RegionKey=ChunkKey.At(VolumePainter.V(center));SliceIndex=RegionKey.Y;}
             if(AutoFrame)FrameActive();
             if(Following&&SelectionKind==OverviewSelection.Region&&Survey.TryRegion(RegionKey,out var group)&&group.Living>0)water.Rig.Follow(VolumePainter.V(group.Center));
             if(Following&&SelectionKind==OverviewSelection.Lineage&&Survey.Frame(VolumePainter.V(center),80,SelectedLineage,out var p,out float extent,out int n))water.Rig.Follow(VolumePainter.V(p));
@@ -116,7 +120,7 @@ namespace Evolution.Runtime
             if(picked<0)picked=water.PickOrganism(point);
             if(picked>=0){ChooseOrganism(picked,twice);return;}
             SurveyRegion region=null;best=28*28;
-            foreach(var r in nearby)if(InSlice(r)){var s=water.Lens.WorldToScreenPoint(VolumePainter.V(r.Center));if(s.z<=0)continue;float d=(new Vector2(s.x,s.y)-point).sqrMagnitude;
+            foreach(var r in nearby)if(InSlice(r)){var s=water.Lens.WorldToScreenPoint(VolumePainter.V(RegionPoint(r)));if(s.z<=0)continue;float d=(new Vector2(s.x,s.y)-point).sqrMagnitude;
                 if(d<best){best=d;region=r;}}
             if(region!=null)ChooseRegion(region.Key,twice);
         }

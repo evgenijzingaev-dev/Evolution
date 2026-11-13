@@ -5,6 +5,7 @@ namespace Evolution.Localization
 {
     public enum TextKey
     {
+        SurveyAllDepth,SurveyResourceValues,SurveyPhoto,SurveyPredator,SurveyOrganic,SurveySubstrate,SurveyLegendLineage,SurveyLegendForm,SurveyLegendDiet,SurveyLegendThreat,SurveyLegendDensity,SurveyLegendFood,SurveyLegendHeat,SurveyLegendFlow,SurveyLegendLight,
         SurveyTitle,SurveyCinematic,SurveyAnalytical,SurveyCounts,SurveyNoColonies,SurveyLineage,SurveyForm,SurveyDiet,SurveyThreat,SurveyDensity,SurveyFood,SurveyTemperature,SurveyCurrent,SurveyLight,SurveyFilterPrev,SurveyFilterNext,SurveyFullDepth,SurveySlice,SurveyDown,SurveyUp,SurveyHeight,SurveyDepthOn,SurveyDepthOff,SurveyRegion,SurveySelection,SurveyFollow,SurveyStopFollow,SurveyZoom,SurveyHome,SurveyTrackLineage,SurveySearch,SurveySearchHint,SurveyNotFound,SurveyRegions,SurveyEvents,SurveyAutoOn,SurveyAutoOff,SurveyOrbitOn,SurveyOrbitOff,SurveyControls,SurveyKnownRegions,SurveyRegionLink,SurveyNoRemote,SurveySnapshots,SurveyNoEvents,SurveyUnsupported,SurveyDeath,SurveyPredation,SurveyMigration,SurveyPopulation,SurveyLost,SurveyBirth,SurveyCluster,SurveyOldCluster,SurveyPage,SurveyLimit,SurveyDepthLegend,SurveyLegend,
         WaterCompactTitle,WaterBrief,WaterCellBrief,WaterFlow,WaterHeat,WaterFood,WaterDetails,WaterCollapse,WaterHint,WaterRun,WaterOverview,
         CrystalFocusOn,CrystalFocusOff,CrystalThreat,
@@ -43,6 +44,21 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.SurveyAllDepth]="Показана вся толща воды",
+                [TextKey.SurveyResourceValues]="Субстрат: {0:F1} · органика: {1:F1}",
+                [TextKey.SurveyPhoto]="Фотосинтез",
+                [TextKey.SurveyPredator]="Хищничество",
+                [TextKey.SurveyOrganic]="Органика",
+                [TextKey.SurveySubstrate]="Субстрат",
+                [TextKey.SurveyLegendLineage]="Одинаковый цвет — одна генетическая линия.",
+                [TextKey.SurveyLegendForm]="Цвет различает морфотипы организмов.",
+                [TextKey.SurveyLegendDiet]="Цвет — преимущественная стратегия питания.",
+                [TextKey.SurveyLegendThreat]="Красный — недавние атаки; лиловый — погибшие клетки.",
+                [TextKey.SurveyLegendDensity]="Кольца и числа показывают население регионов.",
+                [TextKey.SurveyLegendFood]="Более золотистый цвет — больше запасов пищи.",
+                [TextKey.SurveyLegendHeat]="Синий — холоднее, оранжевый — теплее: 9…35 °C.",
+                [TextKey.SurveyLegendFlow]="Стрелка — направление; яркость — скорость потока.",
+                [TextKey.SurveyLegendLight]="От тёмного к светлому — доступность света.",
                 [TextKey.SurveyTitle]="Живой океан · обзор",
                 [TextKey.SurveyCinematic]="Кинематографический · Tab",
                 [TextKey.SurveyAnalytical]="Аналитический · Tab",

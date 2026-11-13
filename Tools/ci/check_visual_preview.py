@@ -47,6 +47,8 @@ def validate(directory, revision=None):
         raise ValueError("Missing current layer/data")
     if not food["temperature"] or not food["food"] or food["foodSubstrate"] + food["foodOrganic"] <= 0:
         raise ValueError("Missing heat/food layer/data")
+    if not data.get("navigationChecked"):
+        raise ValueError("Camera return/orbit/cell play checks did not run")
     cinematic, analytical, density, depth, chosen, sliced = data["screenshots"][5:]
     for frame in data["screenshots"][5:]:
         if not frame["hudVisible"] or frame["activePopulation"] < 1 or frame["knownRegions"] < 1:

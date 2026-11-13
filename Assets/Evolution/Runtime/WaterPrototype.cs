@@ -63,7 +63,7 @@ namespace Evolution.Runtime
             int result=World.Count>0?Ocean.Nearest(best==null?default:best.Center):-1;
             return result;
         }
-        public bool PlaySelected() {if(!Selection.Alive)return false;Overview?.EnterCellPlay();World.Controlled=selected;following=true;return true;}
+        public bool PlaySelected() {if(!Selection.Alive)return false;bool overview=Overview!=null&&Overview.Active;Overview?.EnterCellPlay();World.Controlled=selected;following=true;if(overview)Rig.FocusOn(VolumePainter.V(Selection.Position),Mathf.Clamp(Selection.Biology.Genes.Size*3,2.8f,8));return true;}
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
@@ -72,12 +72,12 @@ namespace Evolution.Runtime
             if(World==null)return;
             Vector2 pointer=new Vector2(Input.mousePosition.x/Scale,(Screen.height-Input.mousePosition.y)/Scale);
             bool over=HudVisible&&((Overview.Active?Overview.OverUi(Input.mousePosition):Panel.Contains(pointer)));
-            if(Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
-            if(Input.GetKeyDown(KeyCode.P))Paused=!Paused;
-            if(Input.GetKeyDown(KeyCode.Escape)){if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
-            if(Input.GetKeyDown(KeyCode.Home))Overview.Home();
-            if(Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
-            else if(Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
+            if(Input.GetKeyDown(KeyCode.Escape)){if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Home))Overview.Home();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
+            else if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
             if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
                 if(Overview.Active)Overview.Click(Input.mousePosition);
                 else {int picked=PickOrganism(Input.mousePosition);if(picked>=0)Select(picked);}
@@ -91,7 +91,7 @@ namespace Evolution.Runtime
             Overview.BeforeCamera(over);
             if(!Selection.Alive)following=false;
             if(following&&OrganismsVisible&&Selection.Alive)Rig.Follow(VolumePainter.V(Selection.Position));
-            Rig.Tick(over,following);
+            Rig.Tick(over||Overview.Typing,following);
             string identity=Selection.Identity;
             if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0){selected=World.Count>0?Ocean.Nearest(VolumePainter.V(Lens.transform.position)):-1;following=false;}}
             if(!Paused)accumulator+=Time.unscaledDeltaTime;
