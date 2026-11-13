@@ -14,11 +14,11 @@ namespace Evolution.Runtime
         sealed class Batch
         {
             readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits;
-            readonly MaterialPropertyBlock block=new MaterialPropertyBlock();int used;
-            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];}
+            readonly MaterialPropertyBlock block=new MaterialPropertyBlock();readonly float[] visibility;int used;public float Opacity=1;
+            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];visibility=new float[count];}
             public void Add(Vector3 p,Quaternion r,Vector3 s,Color c,Vector4 phenotype=default)
-            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;if(++used==matrices.Length) Flush();}
-            public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);
+            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
+            public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);block.SetFloatArray("_Visibility",visibility);
                 Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
         }
         readonly Mesh sphere,thread,quad;readonly Material solid,shell,dust,backdrop;
@@ -45,12 +45,13 @@ namespace Evolution.Runtime
             }
         }
         static Material Material(string name)=>new Material(Resources.Load<Shader>(name)) {enableInstancing=true};
-        public void Draw(VolumeWorld world,Suspension suspension,Camera camera,float t,bool organisms,bool flow,bool heat,int selected=-1,bool foodHints=false)
+        public void Draw(VolumeWorld world,Suspension suspension,Camera camera,float t,bool organisms,bool flow,bool heat,int selected=-1,bool foodHints=false,bool strategic=false,int slice=int.MinValue)
         {
             Vector3 eye=camera.transform.position;
             double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+t*VolumeWorld.StepSeconds);
             float dt=lastDrawTime<0?0:(float)System.Math.Max(0,time-lastDrawTime);lastDrawTime=time;
             solid.SetFloat("_WaterTime",(float)time);shell.SetFloat("_WaterTime",(float)time);dust.SetFloat("_WaterTime",(float)time);backdrop.SetFloat("_WaterTime",(float)time);
+            var dataCenter=new Vector4(world.ActiveCenter.X,world.ActiveCenter.Y,world.ActiveCenter.Z,strategic?1:0);solid.SetVector("_OceanDataCenter",dataCenter);shell.SetVector("_OceanDataCenter",dataCenter);
             present.Clear();
             Graphics.DrawMesh(sphere,Matrix4x4.TRS(eye,Quaternion.identity,Vector3.one*240),backdrop,0,camera,0,null,ShadowCastingMode.Off,false);
             for(int i=0;i<suspension.Count;i++) {
@@ -63,14 +64,14 @@ namespace Evolution.Runtime
                 particles.Add(p,Quaternion.identity,Vector3.one*size,color,new Vector4(flake?1:0,0,0,0));
             }
             for(int k=0;k<world.FoodCount;k++) {
-                var food=world.GetFood(k);float mass=food.Substrate+food.Organic;
+                var food=world.GetFood(k);if(slice!=int.MinValue&&ChunkKey.At(food.Position).Y!=slice)continue;float dataFade=strategic?1-WaterOptics.SmoothRange(26,34,(food.Position-world.ActiveCenter).Length):1;if(dataFade<.001f)continue;float mass=food.Substrate+food.Organic;
                 float foodDistance=(V(food.Position)-eye).sqrMagnitude;if(foodDistance>38*38)continue;
                 int grains=Mathf.Min(128,Mathf.CeilToInt(mass*2));
                 if(foodDistance>18*18)grains=Mathf.Min(24,grains);
                 float size=.125f*Mathf.Pow(Mathf.Max(1,mass*2/Mathf.Max(1,grains)),1f/3);
                 if(foodHints&&selected>=0&&world.FoodPotential(k,world.Get(selected).Biology)>0) {
                     Color halo=food.Organic>food.Substrate?new Color(1,.68f,.25f,.18f):new Color(.45f,1,.65f,.18f);
-                    particles.Add(V(food.Position),Quaternion.identity,Vector3.one*food.Radius*2.2f,halo,new Vector4(4,0,0,0));
+                    halo.a*=dataFade;particles.Add(V(food.Position),Quaternion.identity,Vector3.one*food.Radius*2.2f,halo,new Vector4(4,0,0,0));
                 }
                 for(int j=0;j<grains;j++) {
                     float a=j*2.39996f+food.Pattern%997,vertical;
@@ -79,36 +80,42 @@ namespace Evolution.Runtime
                     Vector3 local=new Vector3(Mathf.Cos(a)*Mathf.Sqrt(1-vertical*vertical),vertical,Mathf.Sin(a)*Mathf.Sqrt(1-vertical*vertical));
                     local*=food.Radius*Mathf.Pow(Mathf.Repeat(j*.618034f+.13f,1),1f/3);
                     var tint=Color.Lerp(new Color(.5f,.93f,.68f,.65f),new Color(.98f,.72f,.3f,.7f),food.Organic/Mathf.Max(.001f,mass));
-                    particles.Add(V(food.Position)+local,Quaternion.identity,Vector3.one*size,tint,new Vector4(2,0,0,0));
+                    tint.a*=dataFade;particles.Add(V(food.Position)+local,Quaternion.identity,Vector3.one*size,tint,new Vector4(2,0,0,0));
                 }
             }
             if(organisms) {
                 int near=0;
                 for(int i=0;i<world.Count;i++) {
-                    var a=world.Get(i);if(!a.Alive&&world.Time-a.DiedAt>1.6)continue;
+                    var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive&&world.Time-a.DiedAt>1.6)continue;
                     Pose(world,a,t,out Vector3 p,out Quaternion rotation,out float size);
                     float distance=Vector3.Distance(eye,p);if(distance>36)continue;
-                    bool detailed=distance<13&&(i==selected||near<12);if(detailed&&i!=selected)near++;
+                    bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
+                    bool detailed=distance<14&&(i==selected||near<12);if(detailed&&i!=selected)near++;
+                    float detail=detailed?1-WaterOptics.SmoothRange(10,14,distance):0;
                     var c=a.Biology;var g=c.Genes;int phaseId=c.Id%997;var form=CrystalForms.From(g);
                     var traits=new Vector4(g.Photosynthesis,g.Predation,g.Membrane,Mathf.Repeat(phaseId*.618f,1));
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
-                    (detailed?membranes[(int)form]:farMembranes[(int)form]).Add(p,rotation,Vector3.one*size,membrane,traits);
+                    if(detail>0){membranes[(int)form].Opacity=detail;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
+                    if(detail<1){farMembranes[(int)form].Opacity=1-detail;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
+                    membranes[(int)form].Opacity=farMembranes[(int)form].Opacity=1;
                     cytoplasm[(int)form].Add(p,rotation,Vector3.one*size*.84f,
                         Color.Lerp(new Color(.16f,.26f,.39f,.20f),new Color(.13f,.34f,.32f,.20f),g.Photosynthesis),
                         new Vector4(g.Photosynthesis,g.Predation,g.Membrane,-2));
                     Vector3 nucleusScale=form==CrystalForm.Diatom?new Vector3(.35f,.13f,.2f):form==CrystalForm.Spindle?new Vector3(.32f,.17f,.2f):new Vector3(.29f,.24f,.27f);
                     Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f));
                     bodies.Add(p+rotation*nucleus*size,rotation,nucleusScale*size,new Color(.43f,.27f,.65f),traits);
-                    if(!detailed||!a.Alive) {
+                    if(detail<1||!a.Alive) {
+                        bodies.Opacity=1-detail;
                         // Real residents keep a small internal silhouette at medium distance.
                         if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
                             Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
                             Color pigment=g.Photosynthesis>.4f?new Color(.4f,.72f,.40f):new Color(.88f,.61f,.32f);
                             bodies.Add(p+rotation*local,rotation,Vector3.one*size*.14f,pigment,traits);
                         }
-                        continue;
+                        bodies.Opacity=1;if(!detailed||!a.Alive)continue;
                     }
+                    bodies.Opacity=threads.Opacity=vesicles.Opacity=detail;
                     present.Add(a.Identity);
                     float drive=(a.Velocity-world.Current(a.Position)).Length;
                     if(!states.TryGetValue(a.Identity,out var visual)){visual=new Visual {Phase=phaseId+time*3,Drive=drive};states.Add(a.Identity,visual);}
@@ -140,6 +147,7 @@ namespace Evolution.Runtime
                     }
                 }
             }
+            bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
                 // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
@@ -242,11 +250,11 @@ namespace Evolution.Runtime
             size=a.Biology.Genes.Size*(1+.008f*Mathf.Sin((float)time*1.8f+a.Biology.Id%997));
             if(!a.Alive)size*=Mathf.Max(.02f,1-(float)(world.Time-a.DiedAt)/1.6f);
         }
-        public int Pick(VolumeWorld world,Ray ray,float interpolation)
+        public int Pick(VolumeWorld world,Ray ray,float interpolation,int slice=int.MinValue)
         {
             int selected=-1;float closest=36;
             for(int i=0;i<world.Count;i++) {
-                var a=world.Get(i);if(!a.Alive)continue;Pose(world,a,interpolation,out var p,out var rotation,out float size);
+                var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive)continue;Pose(world,a,interpolation,out var p,out var rotation,out float size);
                 Vector3 offset=ray.origin-p;
                 if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size)))continue;
                 Quaternion inverse=Quaternion.Inverse(rotation);Vector3 origin=inverse*offset/size,direction=inverse*ray.direction;

@@ -7,7 +7,9 @@
 UNITY_INSTANCING_BUFFER_START(Props)
     UNITY_DEFINE_INSTANCED_PROP(float4,_InstanceColor)
     UNITY_DEFINE_INSTANCED_PROP(float4,_Phenotype)
+    UNITY_DEFINE_INSTANCED_PROP(float,_Visibility)
 UNITY_INSTANCING_BUFFER_END(Props)
+float4 _OceanDataCenter;
 struct Attributes {float4 positionOS:POSITION;float3 normalOS:NORMAL;float2 uv:TEXCOORD0;UNITY_VERTEX_INPUT_INSTANCE_ID};
 struct Varyings {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float2 uv:TEXCOORD2;UNITY_VERTEX_INPUT_INSTANCE_ID};
 Varyings Vert(Attributes i) {
@@ -18,6 +20,7 @@ Varyings Vert(Attributes i) {
 half4 Frag(Varyings i):SV_Target {
     UNITY_SETUP_INSTANCE_ID(i);half4 color=UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor);
     float4 genes=UNITY_ACCESS_INSTANCED_PROP(Props,_Phenotype);
+    float visibility=UNITY_ACCESS_INSTANCED_PROP(Props,_Visibility)*(1-_OceanDataCenter.w*smoothstep(28,36,length(i.world-_OceanDataCenter.xyz)));
     float3 n=normalize(i.normal),eye=normalize(GetCameraPositionWS()-i.world);
     Light light=GetMainLight();float diffuse=saturate(dot(n,light.direction))*.55+.45;
     float rim=pow(1-saturate(dot(n,eye)),2.4);
@@ -30,9 +33,9 @@ half4 Frag(Varyings i):SV_Target {
         if(genes.w < -1.5) {
             float grain=SAMPLE_TEXTURE2D(_WaterDensity,sampler_WaterDensity,i.uv*3).r;
             float3 gel=color.rgb*(.65+diffuse*.35)+float3(.12,.28,.32)*(rim*.65+grain*.18);
-            return half4(VolumeFog(gel,i.world),color.a*(.55+rim*.45)*VolumeGuard(length(i.world-GetCameraPositionWS())));
+            return half4(VolumeFog(gel,i.world),visibility*color.a*(.55+rim*.45)*VolumeGuard(length(i.world-GetCameraPositionWS())));
         }
-        if(genes.w<0)return half4(VolumeFog(color.rgb*1.3,i.world),color.a*(.25+.75*rim));
+        if(genes.w<0)return half4(VolumeFog(color.rgb*1.3,i.world),visibility*color.a*(.25+.75*rim));
         float lattice=abs(sin(u*8+sin(v*10+genes.w*5))*sin(v*14+sin(u*6)));
         float pores=smoothstep(.91,.98,lattice)*sin(v);
         float veins=pow(1-abs(sin(u*4+sin(v*6)*2)),14)*sin(v);
@@ -45,8 +48,10 @@ half4 Frag(Varyings i):SV_Target {
         float3 surface=reflection+pearlescence*(rim*.25+veins*.025);
         float distance=length(i.world-GetCameraPositionWS());
         float alpha=(color.a*(.65+rim*.5)+rim*.22+pores*.08+veins*.06)*VolumeGuard(distance);
-        return half4(lerp(through,VolumeFog(surface,i.world),.38+rim*.45),saturate(alpha));
+        return half4(lerp(through,VolumeFog(surface,i.world),.38+rim*.45),visibility*saturate(alpha));
     #else
+        float noise=frac(52.9829189*frac(dot(i.positionCS.xy,float2(.06711056,.00583715))));
+        clip(visibility-noise-.00001);
         // Bright hydrated internal tissue, rather than uniformly opaque olive cytoplasm.
         float grains=.5+.5*sin(u*7+sin(v*6))*sin(v*12+genes.w*5);
         float backlight=pow(saturate(dot(-n,normalize(float3(-.28,.88,.36)))) ,2);

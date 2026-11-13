@@ -6,7 +6,7 @@ import struct
 import sys
 from pathlib import Path
 
-EXPECTED = ["01-ocean.png", "02-cell-close.png", "03-depth-ensemble.png", "04-currents.png", "05-temperature-food.png"]
+EXPECTED = ["01-ocean.png", "02-cell-close.png", "03-depth-ensemble.png", "04-currents.png", "05-temperature-food.png", "07-cinematic-overview.png", "08-analytical-overview.png", "09-density-map.png", "10-depth-distribution.png", "11-selected-organism.png", "12-horizontal-slice.png"]
 
 
 def validate(directory, revision=None):
@@ -23,7 +23,7 @@ def validate(directory, revision=None):
     if revision and data["revision"] != revision:
         raise ValueError("Preview belongs to another revision")
     if [s["file"] for s in data["screenshots"]] != EXPECTED:
-        raise ValueError("Five ordered screenshots required")
+        raise ValueError("Eleven ordered screenshots required")
     hashes = set()
     for shot in data["screenshots"]:
         image = (directory / shot["file"]).read_bytes()
@@ -36,9 +36,9 @@ def validate(directory, revision=None):
             raise ValueError("Simulation did not initialize")
         if shot["cameraFrames"] < 2:
             raise ValueError("URP camera did not render")
-    if len(hashes) != 5:
+    if len(hashes) != len(EXPECTED):
         raise ValueError("Duplicate views")
-    ensemble, flow, food = data["screenshots"][2:]
+    ensemble, flow, food = data["screenshots"][2:5]
     if not flow["hudVisible"] or not food["hudVisible"]:
         raise ValueError("Diagnostic views must include the existing Russian HUD")
     if ensemble["visibleOrganisms"] < 3 or ensemble["farthestDepth"] - ensemble["nearestDepth"] < 3:
@@ -47,13 +47,27 @@ def validate(directory, revision=None):
         raise ValueError("Missing current layer/data")
     if not food["temperature"] or not food["food"] or food["foodSubstrate"] + food["foodOrganic"] <= 0:
         raise ValueError("Missing heat/food layer/data")
+    cinematic, analytical, density, depth, chosen, sliced = data["screenshots"][5:]
+    for frame in data["screenshots"][5:]:
+        if not frame["hudVisible"] or frame["activePopulation"] < 1 or frame["knownRegions"] < 1:
+            raise ValueError("Missing actual overview data/HUD")
+    if cinematic["analytical"] or not analytical["analytical"] or analytical["organismMarkers"] < 3:
+        raise ValueError("Missing cinematic/analytical switch or markers")
+    if not density["analytical"] or density["surveyLayer"] != 4 or density["regionClusters"] < 3:
+        raise ValueError("Missing real density map")
+    if not depth["depthColours"] or depth["markerMaxY"]-depth["markerMinY"] < 10:
+        raise ValueError("Missing vertical distribution")
+    if not chosen["selectedOrganism"] or chosen["analytical"]:
+        raise ValueError("Missing selected actual organism")
+    if sliced["fullDepth"] or sliced["organismMarkers"] < 1 or sliced["markerMinY"] < sliced["sliceIndex"]*20-.01 or sliced["markerMaxY"] > (sliced["sliceIndex"]+1)*20+.01:
+        raise ValueError("Wrong horizontal slice")
     return data
 
 
 if __name__ == "__main__":
     report = validate(sys.argv[1], os.getenv("EVOLUTION_PREVIEW_SHA"))
-    print(f"Five real game-frame captures validated: Unity {report['unity']}, {report['graphicsApi']}, {report['graphicsDevice']}.")
+    print(f"Eleven real game-frame captures validated: Unity {report['unity']}, {report['graphicsApi']}, {report['graphicsDevice']}.")
     if os.getenv("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-            summary.write("\nFive Unity game-frame captures passed structural checks (not an artistic approval).\n")
+            summary.write("\nEleven Unity game-frame captures passed structural checks (not an artistic approval).\n")
             summary.write(f"\nUnity {report['unity']}; API {report['graphicsApi']}; device {report['graphicsDevice']}.\n")

@@ -17,6 +17,8 @@ namespace Evolution.Runtime
         public VolumeWorld World {get;private set;}
         public Suspension Water {get;private set;}
         public WaterCamera Rig {get;private set;}
+        public OceanOverview Overview {get;private set;}
+        public int SelectedIndex=>selected;
         public bool Paused {get;set;}
         public Camera Lens {get;private set;}
         public ChunkOcean Ocean {get;private set;}
@@ -49,41 +51,36 @@ namespace Evolution.Runtime
             var pop=new float[4800];for(int i=0;i<pop.Length;i++)pop[i]=OceanSound.Interaction(i/(double)rate,.2,240,-80);
             feedSound=AudioClip.Create("Volume confirmed intake",pop.Length,1,rate,false);feedSound.SetData(pop,0);
             Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
+            Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
         }
         public void Observe() {World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
         // Choose a real nearby resident in a naturally populated neighbourhood. No spawning,
         // repositioning, resource injection or mutation is performed for the opening view.
         public int ScenicSelection()
         {
-            int result=World.Count>0?Ocean.Nearest(default):-1;float best=float.NegativeInfinity;
-            for(int i=0;i<World.Count;i++) {
-                var a=World.Get(i);if(!a.Alive||a.Position.Sqr>38*38)continue;
-                float score=a.Biology.Genes.Size*.15f;
-                var form=CrystalForms.From(a.Biology.Genes);
-                if(form==CrystalForm.Ciliate)score+=.6f;
-                for(int j=0;j<World.Count;j++)if(j!=i&&World.Get(j).Alive) {
-                    float d=(a.Position-World.Get(j).Position).Sqr;
-                    if(d<15*15)score+=1/(1+d*.07f);
-                }
-                if(score>best){best=score;result=i;}
-            }
+            // Linear scan over cached regional density, then a nearest lookup; no all-pairs search.
+            SurveyRegion best=null;foreach(var r in Ocean.Survey.Regions)if(r.Loaded&&r.Living>0&&r.Center.Sqr<38*38&&(best==null||r.Living>best.Living||(r.Living==best.Living&&r.Center.Sqr<best.Center.Sqr)))best=r;
+            int result=World.Count>0?Ocean.Nearest(best==null?default:best.Center):-1;
             return result;
         }
-        public bool PlaySelected() {if(!Selection.Alive)return false;World.Controlled=selected;following=true;return true;}
-        public void Select(int index) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=true;Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
+        public bool PlaySelected() {if(!Selection.Alive)return false;Overview?.EnterCellPlay();World.Controlled=selected;following=true;return true;}
+        public void Select(int index)=>Choose(index,true);
+        public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
+        public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
         void Update()
         {
             if(World==null)return;
             Vector2 pointer=new Vector2(Input.mousePosition.x/Scale,(Screen.height-Input.mousePosition.y)/Scale);
-            bool over=HudVisible&&Panel.Contains(pointer);
+            bool over=HudVisible&&((Overview.Active?Overview.OverUi(Input.mousePosition):Panel.Contains(pointer)));
             if(Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(Input.GetKeyDown(KeyCode.P))Paused=!Paused;
-            if(Input.GetKeyDown(KeyCode.Escape))Observe();
-            if(Input.GetKeyDown(KeyCode.Home)) {Observe();Rig.FocusOn(Rig.Focus,30);}
-            if(Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
+            if(Input.GetKeyDown(KeyCode.Escape)){if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
+            if(Input.GetKeyDown(KeyCode.Home))Overview.Home();
+            if(Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
+            else if(Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
             if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
-                int picked=painter.Pick(World,Lens.ScreenPointToRay(Input.mousePosition),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)));
-                if(picked>=0)Select(picked);
+                if(Overview.Active)Overview.Click(Input.mousePosition);
+                else {int picked=PickOrganism(Input.mousePosition);if(picked>=0)Select(picked);}
             }
             World.Input=default;World.Boost=World.Attack=false;
             if(World.Controlled>=0&&!Paused&&!over&&Application.isFocused) {
@@ -91,11 +88,12 @@ namespace Evolution.Runtime
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
                 World.Input=VolumePainter.V(Vector3.ClampMagnitude(command,1));World.Boost=Input.GetKey(KeyCode.LeftShift);World.Attack=Input.GetKey(KeyCode.Space);
             }
+            Overview.BeforeCamera(over);
             if(!Selection.Alive)following=false;
             if(following&&OrganismsVisible&&Selection.Alive)Rig.Follow(VolumePainter.V(Selection.Position));
             Rig.Tick(over,following);
             string identity=Selection.Identity;
-            if(Ocean.Stream(VolumePainter.V(Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0){selected=World.Count>0?Ocean.Nearest(VolumePainter.V(Lens.transform.position)):-1;following=false;}}
+            if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0){selected=World.Count>0?Ocean.Nearest(VolumePainter.V(Lens.transform.position)):-1;following=false;}}
             if(!Paused)accumulator+=Time.unscaledDeltaTime;
             int steps=0;
             while(!Paused&&accumulator>=VolumeWorld.StepSeconds&&steps++<8) {
@@ -104,7 +102,8 @@ namespace Evolution.Runtime
             }
             if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
             look.SetFocus(Vector3.Distance(Lens.transform.position,Rig.Focus),CinematicFocus&&following&&OrganismsVisible);
-            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible,ShowTemperature&&HudVisible,selected,FindFood&&HudVisible);
+            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible&&!Overview.Active,ShowTemperature&&HudVisible&&!Overview.Active,selected,FindFood&&HudVisible&&!Overview.Active,Overview.Active,Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
+            Overview.Render();
             ambient.volume=SoundVolume<=0?0:Mathf.MoveTowards(ambient.volume,Mathf.Clamp01(SoundVolume)*(Paused?.1f:.6f),Time.unscaledDeltaTime*.5f);
             effects.volume=Mathf.Clamp01(SoundVolume);
             var cell=Selection;
@@ -143,7 +142,7 @@ namespace Evolution.Runtime
         }
         void OnGUI()
         {
-            if(World==null||!HudVisible)return;PrepareUi();var matrix=GUI.matrix;var old=GUI.skin;GUI.skin=skin;GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);
+            if(World==null||!HudVisible)return;if(Overview.Active){Overview.DrawUi();return;}PrepareUi();var matrix=GUI.matrix;var old=GUI.skin;GUI.skin=skin;GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);
             GUILayout.BeginArea(Panel,panelStyle);
             GUILayout.Label(GameText.Get(TextKey.WaterCompactTitle),heading);
             var agent=Selection;V3 point=OrganismsVisible&&agent.Alive?agent.Position:VolumePainter.V(Lens.transform.position);
