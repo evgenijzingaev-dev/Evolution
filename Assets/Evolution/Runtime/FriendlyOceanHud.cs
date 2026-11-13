@@ -77,12 +77,25 @@ namespace Evolution.Runtime
         bool ShowObserverControls => !development &&
             (Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical));
         bool ShowToastArea => !(settings||HelpVisible) && (journal||notices.Count>0);
+        // The observer overlay has gaps between its actual buttons. Keep those gaps
+        // clickable so a player can still select organisms behind the overlay.
+        bool OverObserverButton(Vector2 p)
+        {
+            if(!ShowObserverControls)return false;
+            var r=ObserverBox;
+            float half=(r.width-8)/2;
+            return new Rect(r.x,r.y,half,34).Contains(p)||
+                (busiest!=null&&new Rect(r.x+half+8,r.y,half,34).Contains(p))||
+                (foodRegion!=null&&new Rect(r.x,r.y+40,half,32).Contains(p))||
+                (dangerRegion!=null&&new Rect(r.x+half+8,r.y+40,half,32).Contains(p))||
+                (water.Overview.Survey.Events.Count>0&&new Rect(r.x,r.y+80,r.width,32).Contains(p));
+        }
         public bool OverUi(Vector2 pixels)
         {
             var p=new Vector2(pixels.x/Scale,(Screen.height-pixels.y)/Scale);
             return Top.Contains(p)||Left.Contains(p)||Right.Contains(p)||MapBox.Contains(p)||Actions.Contains(p)||Footer.Contains(p)||
                 ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||
-                (ShowToastArea&&ToastBox.Contains(p))||(ShowObserverControls&&ObserverBox.Contains(p));
+                (ShowToastArea&&ToastBox.Contains(p))||OverObserverButton(p);
         }
         void Update()
         {
