@@ -19,6 +19,7 @@ namespace Evolution.Runtime
             RenderSettings.ambientMode=AmbientMode.Trilight;RenderSettings.ambientSkyColor=new Color(.23f,.4f,.6f);
             RenderSettings.ambientEquatorColor=new Color(.075f,.19f,.32f);RenderSettings.ambientGroundColor=new Color(.035f,.075f,.17f);
             camera.allowHDR=true;var data=camera.GetUniversalAdditionalCameraData();data.requiresColorTexture=true;data.requiresDepthTexture=true;data.renderPostProcessing=true;
+            data.antialiasing=AntialiasingMode.FastApproximateAntialiasing;
             profile=ScriptableObject.CreateInstance<VolumeProfile>();
             var bloom=profile.Add<Bloom>(true);bloom.threshold.value=.95f;bloom.intensity.value=.32f;bloom.scatter.value=.7f;
             profile.Add<Tonemapping>(true).mode.value=TonemappingMode.Neutral;

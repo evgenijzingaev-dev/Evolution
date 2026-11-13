@@ -115,12 +115,12 @@ namespace Evolution.Runtime
                     visual.Drive=Mathf.Lerp(visual.Drive,drive,1-Mathf.Exp(-6*dt));visual.Phase+=(3+visual.Drive*8)*dt;
                     float phase=(float)(visual.Phase%(Mathf.PI*40));
                     DrawInterior(world,a,form,p,rotation,size,traits,phase);
-                    Color fibre=new Color(.65f,.86f,1);
+                    Color fibre=new Color(.42f,.68f,.81f);
                     if(g.Speed>.8f) {
                         Vector3 root=CrystalMeshes.Point(form,new Vector3(-.5f,0,0)),last=p+rotation*root*size;
                         for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*.95f,
                             Mathf.Cos(phase-u*8)*u*.035f,Mathf.Sin(phase-u*8)*u*(.015f+visual.Drive*.08f)))*size;
-                            Segment(last,next,.016f*size*(1-u*.65f),fibre);last=next;}
+                            Segment(last,next,.010f*size*(1-u*.65f),fibre);last=next;}
                     }
                     if(g.Uptake>1.05f)DrawCilia(form,p,rotation,size,phase,visual.Drive,fibre);
                     if(form==CrystalForm.Diatom)DrawDiatomRibs(p,rotation,size);
@@ -207,8 +207,8 @@ namespace Evolution.Runtime
                 Vector3 root=CrystalMeshes.Point(form,n*.5f),tip=root+n*(.11f+drive*.07f);
                 Vector3 bend=Vector3.Cross(n,Vector3.right)*Mathf.Sin(phase-ring*.7f-j*.35f)*(.02f+drive*.025f);
                 Vector3 mid=Vector3.Lerp(root,tip,.55f)+bend*.35f;tip+=bend;
-                Segment(p+rotation*root*size,p+rotation*mid*size,.01f*size,color);
-                Segment(p+rotation*mid*size,p+rotation*tip*size,.006f*size,color);
+                Segment(p+rotation*root*size,p+rotation*mid*size,.007f*size,color);
+                Segment(p+rotation*mid*size,p+rotation*tip*size,.0035f*size,color);
             }
         }
         void DrawDiatomRibs(Vector3 p,Quaternion rotation,float size)
