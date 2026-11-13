@@ -76,18 +76,18 @@ namespace Evolution.Runtime
         // picking organisms and issuing movement commands in the 3D ocean.
         bool ShowObserverControls => !development &&
             (Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical));
-        // Only visible notice cards (at most two) intercept input; the rest of the
-        // toast column remains part of the playable ocean. The journal is a panel.
-        bool OverVisibleNotice(Vector2 p)
+        // Pure geometry is shared by the runtime and deterministic Edit Mode tests.
+        // The journal covers its whole panel; normal notices only cover drawn cards.
+        public static bool NoticeHit(Vector2 p,Rect area,int count,bool journal,bool coveredBySettings)
         {
-            if(settings||HelpVisible)return false;
-            var r=ToastBox;
-            if(journal)return r.Contains(p);
-            int count=Mathf.Min(notices.Count,2);
-            for(int i=0;i<count;i++)
-                if(new Rect(r.x,r.y+i*78,r.width,72).Contains(p))return true;
+            if(coveredBySettings)return false;
+            if(journal)return area.Contains(p);
+            for(int i=0;i<Mathf.Min(count,2);i++)
+                if(new Rect(area.x,area.y+i*78,area.width,72).Contains(p))return true;
             return false;
         }
+        bool OverVisibleNotice(Vector2 p) =>
+            NoticeHit(p,ToastBox,notices.Count,journal,settings||HelpVisible);
         // The observer overlay has gaps between its actual buttons. Keep those gaps
         // clickable so a player can still select organisms behind the overlay.
         bool OverObserverButton(Vector2 p)
