@@ -195,8 +195,9 @@ namespace Evolution.Runtime
         void Dot(Vector2 p,float radius,Color c){var old=GUI.color;GUI.color=c;GUI.DrawTexture(new Rect(p.x-radius,p.y-radius,radius*2,radius*2),dot);GUI.color=old;}
         void Line(Vector2 a,Vector2 b,Color color,float thickness=1)
         {
-            var matrix=GUI.matrix;var d=b-a;GUIUtility.RotateAroundPivot(Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg,a);
-            Fill(new Rect(a.x,a.y,d.magnitude,thickness),color);GUI.matrix=matrix;
+            var matrix=GUI.matrix;var d=b-a;
+            GUI.matrix=matrix*Matrix4x4.TRS(new Vector3(a.x,a.y,0),Quaternion.Euler(0,0,Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg),Vector3.one);
+            Fill(new Rect(0,0,d.magnitude,thickness),color);GUI.matrix=matrix;
         }
         public void Draw()
         {
@@ -236,7 +237,7 @@ namespace Evolution.Runtime
                 GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),water.World.Controlled>=0?"WASD — плыть · Q / E — глубина\nИли щёлкни по свободной воде":"Выбери клетку и нажми «Движение»",micro);
                 return;
             }
-            Label(r.x+16,r.y+58,r.width-32,"Живых организмов: "+living,title);
+            Label(r.x+16,r.y+58,r.width-32,"Организмов: "+living,title);
             Label(r.x+16,r.y+89,r.width-32,"Генетических линий: "+lines.Count);
             Label(r.x+16,r.y+119,r.width-32,"В загруженной области / слое",micro);
             if(Button(new Rect(r.x+12,r.y+155,r.width-24,36),water.Overview.Analytical?"Аналитический обзор · Tab":"Кинематографический · Tab","Переключает реальные маркеры и слои",water.Overview.Analytical))water.Overview.SetMode(!water.Overview.Analytical);
@@ -341,7 +342,7 @@ namespace Evolution.Runtime
         {
             var r=DevelopmentBox;Box(r,"Развитие твоего организма");
             if(water.SelectedIndex<0)return;var c=water.World.Get(water.SelectedIndex).Biology;var g=c.Genes;
-            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D можно изучать существующие наследуемые черты. Деление, новые мутации и редактор развития здесь пока недоступны.",text);
+            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nДеление, новые мутации и редактор пока недоступны.",text);
             Row(r,2,"Линия",c.LineageId.ToString(),"Генетическая линия выбранного организма");
             Row(r,3,"Питание",g.Photosynthesis>.5f?"Фотосинтез":g.Predation>.5f?"Хищничество":"Смешанное","Преобладающая стратегия существующего генома");
             Row(r,4,"Оболочка",g.Membrane>.7f?"Плотная":"Гибкая","Мембрана пассивно участвует в защите. Отдельная активная защита в 3D отсутствует.");
