@@ -2,7 +2,7 @@ name: Unity Editor CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   push:
     branches: [main, migration/godot-reference, codex/unity-cell-resource-cycle, codex/multicellular-life-stage2]
   workflow_dispatch:
@@ -20,11 +20,12 @@ jobs:
       group: evolution-unity-personal
       cancel-in-progress: false
     name: Compile, Edit Mode, Play Mode, Linux build
-    # Drafts run the fast core workflow; full Unity validation starts when marked ready.
+    # Drafts normally run the fast core workflow. A maintainer may explicitly opt in
+    # to Unity Editor validation with the unity-editor-ci label without marking a PR ready.
     # Fork PRs and Dependabot do not receive account secrets. Never use pull_request_target.
     if: >-
       github.actor != 'dependabot[bot]' &&
-      (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'unity-editor-ci')) &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
