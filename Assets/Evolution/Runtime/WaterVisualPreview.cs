@@ -255,7 +255,7 @@ namespace Evolution.Runtime
                 var overview=water.Overview;shot.analytical=overview.Analytical;shot.fullDepth=overview.FullDepth;shot.depthColours=overview.DepthColours;
                 shot.organismMarkers=overview.VisibleMarkers;shot.regionClusters=overview.VisibleClusters;shot.activePopulation=overview.Survey.ActiveLiving;
                 shot.knownRegions=overview.Survey.Regions.Count;shot.surveyLayer=(int)overview.Layer;shot.sliceIndex=overview.SliceIndex;
-                shot.selectedOrganism=water.SelectedIndex>=0?water.World.Get(water.SelectedIndex).Biology.Id:0;shot.selectedLineage=overview.SelectedLineage;
+                shot.selectedOrganism=overview.HasSelectedOrganism?water.World.Get(water.SelectedIndex).Biology.Id:0;shot.selectedLineage=overview.SelectedLineage;
                 shot.markerMinY=float.PositiveInfinity;shot.markerMaxY=float.NegativeInfinity;
                 foreach(var a in overview.Survey.Agents) {
                     if(!overview.FullDepth&&ChunkKey.At(a.Position).Y!=overview.SliceIndex)continue;

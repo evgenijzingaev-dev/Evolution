@@ -7,9 +7,9 @@ namespace Evolution.Runtime
     {
         GUISkin uiSkin;Texture2D panelTexture,buttonTexture;GUIStyle box,label,title,small;bool regionsOpen;int regionPage;
         float UiScale=>Mathf.Clamp(Mathf.Min(Screen.width/1920f,Screen.height/1080f),.7f,1.5f);
-        Rect Controls=>new Rect(18,18,310,448);
+        Rect Controls=>new Rect(18,18,310,490);
         Rect Journal=>new Rect(Screen.width/UiScale-342,18,324,224);
-        Rect RegionsBox=>new Rect(18,Survey.CatalogueTruncated?510:478,310,Mathf.Min(300,Screen.height/UiScale-520));
+        Rect RegionsBox=>new Rect(18,Controls.yMax+(Survey.CatalogueTruncated?42:12),310,Mathf.Min(300,Screen.height/UiScale-Controls.yMax-70));
         public bool OverUi(Vector2 pixel){if(!Active||!water.HudVisible)return false;var p=new Vector2(pixel.x/UiScale,(Screen.height-pixel.y)/UiScale);
             return Controls.Contains(p)||(EventsVisible&&Journal.Contains(p))||(regionsOpen&&RegionsBox.Contains(p));}
         void Skin()
@@ -17,11 +17,11 @@ namespace Evolution.Runtime
             if(uiSkin)return;uiSkin=Instantiate(GUI.skin);uiSkin.font=Resources.Load<Font>("WaterUI/OpenSans-Regular");uiSkin.label.font=uiSkin.button.font=uiSkin.textField.font=uiSkin.font;
             uiSkin.label.fontStyle=uiSkin.button.fontStyle=uiSkin.textField.fontStyle=FontStyle.Normal;uiSkin.textField.fontSize=13;
             uiSkin.label.fontSize=13;uiSkin.label.wordWrap=true;uiSkin.label.normal.textColor=new Color(.83f,.94f,.96f);
-            uiSkin.button.fontSize=12;uiSkin.button.padding=new RectOffset(5,5,5,5);uiSkin.button.wordWrap=false;
+            uiSkin.button.fontSize=12;uiSkin.button.padding=new RectOffset(5,5,3,3);uiSkin.button.wordWrap=false;
             panelTexture=new Texture2D(1,1);panelTexture.SetPixel(0,0,new Color(.014f,.045f,.07f,.72f));panelTexture.Apply();
             buttonTexture=new Texture2D(1,1);buttonTexture.SetPixel(0,0,new Color(.35f,.66f,.75f,.20f));buttonTexture.Apply();
             uiSkin.button.normal.background=uiSkin.button.hover.background=uiSkin.button.active.background=buttonTexture;uiSkin.button.border=new RectOffset();
-            box=new GUIStyle(uiSkin.box){padding=new RectOffset(12,12,10,10)};box.normal.background=panelTexture;
+            box=new GUIStyle(uiSkin.box){padding=new RectOffset(12,12,8,8)};box.normal.background=panelTexture;
             label=new GUIStyle(uiSkin.label);title=new GUIStyle(label){fontSize=16,fontStyle=FontStyle.Bold};small=new GUIStyle(label){fontSize=11};
         }
         static readonly TextKey[] layers={TextKey.SurveyLineage,TextKey.SurveyForm,TextKey.SurveyDiet,TextKey.SurveyThreat,TextKey.SurveyDensity,TextKey.SurveyFood,TextKey.SurveyTemperature,TextKey.SurveyCurrent,TextKey.SurveyLight};
@@ -49,15 +49,18 @@ namespace Evolution.Runtime
             if(Survey.TryRegion(RegionKey,out var region)){GUILayout.Label(GameText.Format(TextKey.SurveyRegion,RegionKey.X,RegionKey.Y,RegionKey.Z,region.Living,region.Temperature,region.Light),small);
                 if(Layer==SurveyLayer.Food)GUILayout.Label(GameText.Format(TextKey.SurveyResourceValues,region.Substrate,region.Organic),small);
                 if(Layer==SurveyLayer.Current)GUILayout.Label(GameText.Format(TextKey.VolumeVector,region.Current.X,region.Current.Y,region.Current.Z),small);}
-            if(SelectionKind!=OverviewSelection.Region)GUILayout.Label(GameText.Format(TextKey.SurveySelection,water.SelectedIndex>=0?water.World.Get(water.SelectedIndex).Biology.Id:0,SelectedLineage),small);
+            if(SelectionKind==OverviewSelection.Organism){if(HasSelectedOrganism)GUILayout.Label(GameText.Format(TextKey.SurveySelection,chosenId,SelectedLineage),small);
+                else GUILayout.Label(GameText.Format(TextKey.SurveyOutside,chosenId),small);}
+            else if(SelectionKind==OverviewSelection.Lineage)GUILayout.Label(GameText.Format(TextKey.SurveyLineageSelection,SelectedLineage,Survey.KnownPopulation(SelectedLineage)),small);
             GUILayout.BeginHorizontal();
             if(GUILayout.Button(GameText.Get(Following?TextKey.SurveyStopFollow:TextKey.SurveyFollow)))FollowSelection();
             if(GUILayout.Button(GameText.Get(TextKey.SurveyZoom)))ZoomSelection();
             if(GUILayout.Button(GameText.Get(TextKey.SurveyHome)))Home();
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            GUI.enabled=SelectionKind==OverviewSelection.Organism;
+            GUI.enabled=HasSelectedOrganism;
             if(GUILayout.Button(GameText.Get(TextKey.SurveyTrackLineage)))SelectLineage();
+            GUI.enabled=HasSelectedOrganism&&water.World.Get(water.SelectedIndex).Alive;
             if(GUILayout.Button(GameText.Get(TextKey.PlayOrganism)))water.PlaySelected();
             GUI.enabled=true;GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();GUI.SetNextControlName("OceanSearch");query=GUILayout.TextField(query,40);
@@ -110,12 +113,15 @@ namespace Evolution.Runtime
             GUI.Label(new Rect(340,18,430,40),DepthColours?GameText.Format(TextKey.SurveyDepthLegend,water.Rig.Focus.y-40,water.Rig.Focus.y+40):GameText.Get(legend[(int)Layer]),small);
             if(!DepthColours&&Layer==SurveyLayer.Diet)for(int i=0;i<4;i++){Color before=GUI.color;GUI.color=diets[i];GUI.Label(new Rect(340+(i%2)*150,52+(i/2)*18,146,18),GameText.Get(dietNames[i]),small);GUI.color=before;}
         }
+        readonly Rect[] labelBoxes=new Rect[8];
         void DrawLabels()
         {
             int count=0;foreach(var r in nearby){if(!InSlice(r))continue;var p=water.Lens.WorldToScreenPoint(VolumePainter.V(RegionPoint(r)));if(p.z<=0)continue;
+                if(!Analytical&&!r.Loaded)continue;
                 if(!(Analytical&&DataLayer)&&p.z<(Analytical?100:70)&&!r.Key.Equals(RegionKey))continue;
                 var rect=new Rect(p.x/UiScale+16,(Screen.height-p.y)/UiScale-10,170,40);if(rect.Overlaps(Controls)||(EventsVisible&&rect.Overlaps(Journal)))continue;
-                GUI.Label(rect,GameText.Format(r.Loaded?TextKey.SurveyCluster:TextKey.SurveyOldCluster,r.Living),small);if(++count==8)break;}
+                bool overlaps=false;for(int i=0;i<count;i++)if(rect.Overlaps(labelBoxes[i])){overlaps=true;break;}if(overlaps)continue;labelBoxes[count]=rect;
+                GUI.Label(rect,GameText.Format(r.Loaded?TextKey.SurveyCluster:TextKey.SurveyOldCluster,r.Living),small);if(++count==(Analytical?8:3))break;}
         }
     }
 }

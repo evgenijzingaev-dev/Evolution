@@ -49,7 +49,7 @@ namespace Evolution.Volume
         public int ActiveLiving {get;private set;} public int KnownLiving {get;private set;} public int KnownLineages=>knownLines.Count;
         public long Tick {get;private set;} public int Revision {get;private set;}
         public bool CatalogueTruncated {get;private set;}
-        struct Seen {public V3 Position;public long Tick;public bool Alive;public double Bite;public int Lineage;}
+        struct Seen {public V3 Position,Previous;public long Tick;public bool Alive;public double Bite;public int Lineage;}
         sealed class Movement {public readonly HashSet<string> Ids=new HashSet<string>();public long Since;}
         public void Restore(IEnumerable<SurveyRegion> saved) {foreach(var r in saved){if(Regions.Count>=RegionLimit){CatalogueTruncated=true;break;}
             var copy=r.Clone();copy.Loaded=false;byRegion[copy.Key]=copy;Regions.Add(copy);foreach(var pair in copy.Lineages)knownLines.Add(pair.Key);}Recount(false);}
@@ -69,7 +69,7 @@ namespace Evolution.Volume
                 if(a.Alive){r.Living++;ActiveLiving++;r.Forms[Form(c.Genes)]++;r.Diets[Diet(c.Genes)]++;r.Lineages.TryGetValue(c.LineageId,out int n);r.Lineages[c.LineageId]=n+1;}
                 else r.Dead++;
                 bool seen=history.TryGetValue(a.Identity??"",out var before);
-                if(a.Alive)Agents.Add(new SurveyAgent {Identity=a.Identity,Id=c.Id,Lineage=c.LineageId,Position=a.Position,Previous=seen?before.Position:a.Position,
+                if(a.Alive)Agents.Add(new SurveyAgent {Identity=a.Identity,Id=c.Id,Lineage=c.LineageId,Position=a.Position,Previous=seen?(before.Tick==tick?before.Previous:before.Position):a.Position,
                     Size=c.Genes.Size,Form=Form(c.Genes),Diet=Diet(c.Genes),Threat=IsRecent(a.BitAt,tick,8)});
                 if(IsRecent(a.BitAt,tick,8))r.Attacks++;
                 if(advanced&&seen) {
@@ -82,7 +82,7 @@ namespace Evolution.Volume
                     }
                 }
                 // The current VolumeWorld has no birth/colony transitions. Do not infer them from streamed records.
-                if(seen||history.Count<AgentHistoryLimit)history[a.Identity??""]=new Seen {Position=a.Position,Tick=tick,Alive=a.Alive,Bite=a.BitAt,Lineage=c.LineageId};
+                if(seen||history.Count<AgentHistoryLimit)history[a.Identity??""]=new Seen {Position=a.Position,Previous=seen?(before.Tick==tick?before.Previous:before.Position):a.Position,Tick=tick,Alive=a.Alive,Bite=a.BitAt,Lineage=c.LineageId};
             }
             for(int i=0;i<resources.Count;i++){var f=resources[i];var r=Touch(ChunkKey.At(f.Position),offset);r.Substrate+=f.Substrate;r.Organic+=f.Organic;}
             foreach(var key in touched) {var r=byRegion[key];if(r.Living==0)continue;
@@ -131,7 +131,7 @@ namespace Evolution.Volume
             foreach(var a in Agents)if((a.Position-near).Sqr<=rr&&(lineage==0||a.Lineage==lineage))extent=Math.Max(extent,(a.Position-center).Length+a.Size);
             return true;
         }
-        public static bool InSlice(float y,bool full,float height,float halfWidth)=>full||Math.Abs(y-height)<=halfWidth;
+        public int KnownPopulation(int lineage)=>counts.TryGetValue(lineage,out int count)?count:0;
         // Same phenotype thresholds as CrystalForms; no new species or biological abilities.
         public static int Form(Genome g)=>g.Membrane>.72f?3:g.Predation>.62f?4:g.Photosynthesis>.62f?5:g.Speed>1.18f?1:g.Uptake>1.06f?0:2;
         public static int Diet(Genome g)=>g.Photosynthesis>.5f?0:g.Predation>.5f?1:g.OrganicSpecialization>.5f?2:3;

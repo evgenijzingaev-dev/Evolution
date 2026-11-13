@@ -90,10 +90,18 @@ namespace Evolution.Tests
             s.Observe(new[]{Agent(99999,4,false)},Array.Empty<FoodCloud>(),Keys,520,default);
             Assert.IsTrue(s.Events.Exists(e=>e.Kind==SurveyEventKind.Death&&e.Identity=="cell-99999"));
         }
+        [Test] public void RepeatedObservationAtSameTickDoesNotEraseInterpolationHistory()
+        {
+            var s=new OceanSurvey();s.Observe(new[]{Agent(1,1)},Array.Empty<FoodCloud>(),Keys,1,default);
+            s.Observe(new[]{Agent(1,3)},Array.Empty<FoodCloud>(),Keys,11,default);
+            s.Observe(new[]{Agent(1,3)},Array.Empty<FoodCloud>(),Keys,11,default);
+            Assert.AreEqual(1,s.Agents[0].Previous.X);Assert.AreEqual(3,s.Agents[0].Position.X);
+            Assert.AreEqual(1,s.KnownPopulation(7));
+        }
         [Test] public void MorphotypeProjectionMatchesExistingPresentation()
         {
             var rng=new RandomSource(42);for(int i=0;i<100;i++){var g=Genome.Founder(ref rng);Assert.AreEqual((int)CrystalForms.From(g),OceanSurvey.Form(g));}
-            Assert.IsTrue(OceanSurvey.InSlice(40,true,0,10));Assert.IsFalse(OceanSurvey.InSlice(40,false,0,10));
+            Assert.AreEqual(2,ChunkKey.At(new V3(0,40,0)).Y);
             Assert.AreEqual(-1,ChunkKey.At(new V3(0,-.1f,0)).Y);
         }
     }

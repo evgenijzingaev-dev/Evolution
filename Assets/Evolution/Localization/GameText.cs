@@ -5,7 +5,7 @@ namespace Evolution.Localization
 {
     public enum TextKey
     {
-        SurveyAllDepth,SurveyResourceValues,SurveyPhoto,SurveyPredator,SurveyOrganic,SurveySubstrate,SurveyLegendLineage,SurveyLegendForm,SurveyLegendDiet,SurveyLegendThreat,SurveyLegendDensity,SurveyLegendFood,SurveyLegendHeat,SurveyLegendFlow,SurveyLegendLight,
+        SurveyOutside,SurveyLineageSelection,SurveyAllDepth,SurveyResourceValues,SurveyPhoto,SurveyPredator,SurveyOrganic,SurveySubstrate,SurveyLegendLineage,SurveyLegendForm,SurveyLegendDiet,SurveyLegendThreat,SurveyLegendDensity,SurveyLegendFood,SurveyLegendHeat,SurveyLegendFlow,SurveyLegendLight,
         SurveyTitle,SurveyCinematic,SurveyAnalytical,SurveyCounts,SurveyNoColonies,SurveyLineage,SurveyForm,SurveyDiet,SurveyThreat,SurveyDensity,SurveyFood,SurveyTemperature,SurveyCurrent,SurveyLight,SurveyFilterPrev,SurveyFilterNext,SurveyFullDepth,SurveySlice,SurveyDown,SurveyUp,SurveyHeight,SurveyDepthOn,SurveyDepthOff,SurveyRegion,SurveySelection,SurveyFollow,SurveyStopFollow,SurveyZoom,SurveyHome,SurveyTrackLineage,SurveySearch,SurveySearchHint,SurveyNotFound,SurveyRegions,SurveyEvents,SurveyAutoOn,SurveyAutoOff,SurveyOrbitOn,SurveyOrbitOff,SurveyControls,SurveyKnownRegions,SurveyRegionLink,SurveyNoRemote,SurveySnapshots,SurveyNoEvents,SurveyUnsupported,SurveyDeath,SurveyPredation,SurveyMigration,SurveyPopulation,SurveyLost,SurveyBirth,SurveyCluster,SurveyOldCluster,SurveyPage,SurveyLimit,SurveyDepthLegend,SurveyLegend,
         WaterCompactTitle,WaterBrief,WaterCellBrief,WaterFlow,WaterHeat,WaterFood,WaterDetails,WaterCollapse,WaterHint,WaterRun,WaterOverview,
         CrystalFocusOn,CrystalFocusOff,CrystalThreat,
@@ -44,6 +44,8 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.SurveyOutside]="Клетка № {0} вне активной области",
+                [TextKey.SurveyLineageSelection]="Линия {0}: {1} клеток в сводках",
                 [TextKey.SurveyAllDepth]="Показана вся толща воды",
                 [TextKey.SurveyResourceValues]="Субстрат: {0:F1} · органика: {1:F1}",
                 [TextKey.SurveyPhoto]="Фотосинтез",

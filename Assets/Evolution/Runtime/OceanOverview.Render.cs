@@ -26,6 +26,7 @@ namespace Evolution.Runtime
             if(Layer==SurveyLayer.Form)return forms[a.Form];
             if(Layer==SurveyLayer.Diet)return diets[a.Diet];
             if(Layer==SurveyLayer.Threat)return a.Threat?new Color(1,.3f,.24f):new Color(.45f,.68f,.76f,.35f);
+            if(DataLayer)return new Color(.46f,.69f,.79f,.6f);
             return LineageColour(a.Lineage);
         }
         static Color LineageColour(int id){uint hash=unchecked((uint)id*2654435761u);return Color.HSVToRGB((hash&65535u)/65536f,.55f,1);}
@@ -53,25 +54,28 @@ namespace Evolution.Runtime
             VisibleMarkers=VisibleClusters=0;if(!Active||!water.HudVisible||!water.OrganismsVisible)return;
             var eye=water.Lens.transform.position;
             bool fields=Analytical&&DataLayer;
+            int agentIndex=0;float interpolation=Mathf.Clamp01((Time.unscaledTime-observedAt)/.5f);
             foreach(var a in Survey.Agents) {
-                if(!InSlice(a.Position))continue;Vector3 p=VolumePainter.V(a.Position);var screen=water.Lens.WorldToViewportPoint(p);if(screen.z<=.2f||screen.x<-.03f||screen.x>1.03f||screen.y<-.03f||screen.y>1.03f)continue;
+                float first=agentIndex<appearanceTimes.Count?appearanceTimes[agentIndex]:Time.unscaledTime;agentIndex++;
+                bool selected=SelectionKind==OverviewSelection.Organism&&a.Identity==trackedIdentity;
+                var position=FullDepth&&!selected?V3.Lerp(a.Previous,a.Position,interpolation):selected&&water.SelectedIndex>=0?water.World.Get(water.SelectedIndex).Position:a.Position;
+                if(!InSlice(position))continue;Vector3 p=VolumePainter.V(position);var screen=water.Lens.WorldToViewportPoint(p);if(screen.z<=.2f||screen.x<-.03f||screen.x>1.03f||screen.y<-.03f||screen.y>1.03f||OverUi(new Vector2(screen.x*Screen.width,screen.y*Screen.height)))continue;
                 float distance=Vector3.Distance(eye,p),minimum=Mathf.Lerp(WaterOpticsValue(16,30,distance),1,Blend);
                 float grouped=WaterOpticsValue(Mathf.Lerp(65,100,Blend),Mathf.Lerp(110,160,Blend),distance);
-                Color c=AgentColour(a);c.a*=minimum*(1-grouped)*Mathf.Lerp(1,.35f,DataLayer?Blend:0);
-                bool selected=SelectionKind==OverviewSelection.Organism&&a.Identity==trackedIdentity;
+                Color c=AgentColour(a);float originalAlpha=c.a;c=Color.Lerp(Color.Lerp(new Color(.54f,.84f,.94f),c,.35f),c,Blend);c.a=originalAlpha*Mathf.Lerp(.65f,1,Blend);c.a*=WaterOpticsValue(0,.5f,Time.unscaledTime-first)*minimum*(1-grouped)*Mathf.Lerp(1,.35f,DataLayer?Blend:0);
                 draw.Add(p,c,selected?18:Analytical?11:8,Layer==SurveyLayer.Diet?a.Diet==1?2:0:0);if(c.a>.01f)VisibleMarkers++;
                 if(selected){c=Color.white;c.a=.8f;draw.Add(p,c,26,1);}
             }
             foreach(var r in nearby) {
-                if(!InSlice(r))continue;Vector3 p=VolumePainter.V(RegionPoint(r));var screen=water.Lens.WorldToViewportPoint(p);
-                if(screen.z<=.2f||screen.x<-.05f||screen.x>1.05f||screen.y<-.05f||screen.y>1.05f)continue;
+                if(!InSlice(r)||(!Analytical&&!r.Loaded))continue;Vector3 p=VolumePainter.V(RegionPoint(r));var screen=water.Lens.WorldToViewportPoint(p);
+                if(screen.z<=.2f||screen.x<-.05f||screen.x>1.05f||screen.y<-.05f||screen.y>1.05f||OverUi(new Vector2(screen.x*Screen.width,screen.y*Screen.height)))continue;
                 float d=Vector3.Distance(eye,p);float alpha=Mathf.Lerp(WaterOpticsValue(Mathf.Lerp(55,90,Blend),Mathf.Lerp(95,145,Blend),d)*.85f,.55f,DataLayer?Blend:0);
                 if(!r.Loaded)alpha=Mathf.Max(alpha,.4f);if(r.Living==0&&!fields)continue;
                 Color c=RegionColour(r);c.a=alpha;
                 if(fields)draw.Add(p,new Color(c.r,c.g,c.b,alpha*.25f*Blend),Mathf.Clamp(28+Mathf.Sqrt(r.Living)*14,28,85),4);
                 draw.Add(p,c,Mathf.Clamp(13+Mathf.Sqrt(r.Living)*4,13,36),fields?Layer==SurveyLayer.Current?3:1:1,VolumePainter.V(r.Current));
                 if(alpha>.01f)VisibleClusters++;
-                if(r.Key.Equals(RegionKey)){draw.Add(p,new Color(.85f,.98f,1,.8f),36,1);}
+                if(SelectionKind!=OverviewSelection.Organism&&r.Key.Equals(RegionKey)){draw.Add(p,new Color(.85f,.98f,1,.8f),36,1);}
             }
             draw.Flush();
         }

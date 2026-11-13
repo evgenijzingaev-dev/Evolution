@@ -19,12 +19,17 @@ namespace Evolution.Runtime
         public float Blend {get;private set;}
         public int VisibleMarkers {get;private set;}public int VisibleClusters {get;private set;}
         public bool Following {get;private set;}
-        string trackedIdentity;float nextRefresh,lastClick=-10;bool ready;int cachedRevision=-1;
+        string trackedIdentity;float nextRefresh,lastClick=-10,observedAt;long observedTick=-1;
+        readonly Dictionary<string,float> appearances=new Dictionary<string,float>();
+        readonly List<float> appearanceTimes=new List<float>(512);
+        readonly HashSet<string> visibleIdentities=new HashSet<string>();readonly List<string> removedIdentities=new List<string>();bool ready;int cachedRevision=-1;
         readonly List<SurveyRegion> navigation=new List<SurveyRegion>(256);
         readonly List<SurveyRegion> nearby=new List<SurveyRegion>(256);
         readonly WaterView[] views=new WaterView[8];readonly bool[] viewModes=new bool[8];int viewCount;
         string query="";bool noResults,searchFocused,clearSearchFocus;
-        public bool Typing=>Active&&searchFocused;
+        public bool Typing=>Active&&water.HudVisible&&searchFocused;
+        public bool HasSelectedOrganism=>SelectionKind==OverviewSelection.Organism&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Identity==trackedIdentity;
+        int chosenId;
         public void ClearSearchFocus(){clearSearchFocus=true;searchFocused=false;}
         public void Initialize(WaterPrototype prototype){water=prototype;draw=new SurveyDraw();water.Rig.SetStrategic(true);Refresh();}
         public void SetMode(bool analytical){if(!Active)Enter();Analytical=analytical;AutoOrbit=!analytical;}
@@ -42,10 +47,11 @@ namespace Evolution.Runtime
         public void Home(){Push();water.OrganismsVisible=true;water.Observe();Active=true;water.Rig.SetStrategic(true);AutoFrame=true;Following=false;FrameActive();}
         void FrameActive()
         {
-            if(Survey.Frame(VolumePainter.V(water.Rig.Focus),Analytical?36:20,0,out var center,out float radius,out int count)) {
-                water.Rig.FocusOn(VolumePainter.V(center),Mathf.Clamp(radius/Mathf.Sin(water.Lens.fieldOfView*Mathf.Deg2Rad*.5f)*1.12f,12,110));
-                RegionKey=ChunkKey.At(center);SelectionKind=OverviewSelection.Region;
-            }
+            var anchor=VolumePainter.V(water.Rig.Focus);
+            bool found=Survey.Frame(anchor,Analytical?36:12,0,out var center,out float radius,out int count);
+            if(!Analytical&&count<2)found=Survey.Frame(anchor,20,0,out center,out radius,out count);
+            if(found){water.Rig.FocusOn(VolumePainter.V(center),Mathf.Clamp(radius/Mathf.Sin(water.Lens.fieldOfView*Mathf.Deg2Rad*.5f)*1.12f,12,Analytical?110:48));
+                RegionKey=ChunkKey.At(center);SelectionKind=OverviewSelection.Region;}
         }
         public void BeforeCamera(bool overUi)
         {
@@ -64,6 +70,10 @@ namespace Evolution.Runtime
         public void Refresh()
         {
             Survey.Refresh(water.World,water.Ocean.LoadedKeys);cachedRevision=Survey.Revision;
+            if(observedTick!=Survey.Tick){observedAt=Time.unscaledTime;observedTick=Survey.Tick;}
+            appearanceTimes.Clear();visibleIdentities.Clear();foreach(var a in Survey.Agents){string id=a.Identity??"";visibleIdentities.Add(id);
+                if(!appearances.TryGetValue(id,out float first)){first=Time.unscaledTime;appearances[id]=first;}appearanceTimes.Add(first);}
+            removedIdentities.Clear();foreach(var p in appearances)if(!visibleIdentities.Contains(p.Key))removedIdentities.Add(p.Key);foreach(var id in removedIdentities)appearances.Remove(id);
             nearby.Clear();navigation.Clear();Vector3 center=water.Rig.Focus;float range=Mathf.Max(100,water.Rig.Distance*4);
             foreach(var r in Survey.Regions){if(!r.Loaded&&r.Living>0)navigation.Add(r);if((VolumePainter.V(r.Center)-center).sqrMagnitude<range*range)nearby.Add(r);}
             regionSort.Center=VolumePainter.V(center);nearby.Sort(regionSort);navigation.Sort(regionSort);if(nearby.Count>256)nearby.RemoveRange(256,nearby.Count-256);
@@ -80,8 +90,8 @@ namespace Evolution.Runtime
         public void ChooseOrganism(int index,bool zoom)
         {
             if(index<0||index>=water.World.Count)return;var a=water.World.Get(index);if(!a.Alive)return;
-            water.Choose(index,false);SelectionKind=OverviewSelection.Organism;SelectedLineage=a.Biology.LineageId;trackedIdentity=a.Identity;
-            RegionKey=ChunkKey.At(a.Position);Following=false;AutoFrame=false;if(zoom)ZoomSelection();
+            water.Choose(index,false);SelectionKind=OverviewSelection.Organism;SelectedLineage=a.Biology.LineageId;trackedIdentity=a.Identity;chosenId=a.Biology.Id;
+            RegionKey=ChunkKey.At(a.Position);query=chosenId.ToString();Following=false;AutoFrame=false;if(zoom)ZoomSelection();
         }
         public void ChooseRegion(ChunkKey key,bool travel)
         {
@@ -91,24 +101,26 @@ namespace Evolution.Runtime
         public void ZoomSelection()
         {
             Push();water.Observe();AutoFrame=false;
-            if(SelectionKind==OverviewSelection.Organism&&water.SelectedIndex>=0) {
-                var a=water.World.Get(water.SelectedIndex);water.Rig.FocusOn(VolumePainter.V(a.Position),Mathf.Clamp(a.Biology.Genes.Size*3,2.8f,8));trackedIdentity=a.Identity;Following=true;
+            if(HasSelectedOrganism) {
+                var a=water.World.Get(water.SelectedIndex);water.Rig.FocusOn(VolumePainter.V(a.Position),Mathf.Clamp(a.Biology.Genes.Size*3,2.8f,8));trackedIdentity=a.Identity;Following=a.Alive;
             }else if(Survey.TryRegion(RegionKey,out var r))water.Rig.FocusOn(VolumePainter.V(r.Center),SelectionKind==OverviewSelection.Lineage?20:24);
         }
         public void FollowSelection()
         {
+            if(SelectionKind==OverviewSelection.Organism&&(!HasSelectedOrganism||!water.World.Get(water.SelectedIndex).Alive))return;
+            if(SelectionKind==OverviewSelection.Lineage&&Survey.KnownPopulation(SelectedLineage)==0)return;
             Following=!Following;AutoFrame=false;
             if(SelectionKind==OverviewSelection.Organism&&water.SelectedIndex>=0)trackedIdentity=water.World.Get(water.SelectedIndex).Identity;
             if(SelectionKind==OverviewSelection.Region&&Survey.TryRegion(RegionKey,out var region))water.Rig.Follow(VolumePainter.V(region.Center));
             if(SelectionKind==OverviewSelection.Lineage)Refresh();
         }
-        public void SelectLineage(){if(water.SelectedIndex>=0){SelectedLineage=water.World.Get(water.SelectedIndex).Biology.LineageId;SelectionKind=OverviewSelection.Lineage;Following=false;}}
+        public void SelectLineage(){if(water.SelectedIndex>=0){SelectedLineage=water.World.Get(water.SelectedIndex).Biology.LineageId;SelectionKind=OverviewSelection.Lineage;query="л:"+SelectedLineage;Following=false;}}
         public void Search(string text)
         {
             noResults=true;query=text??"";string value=query.Trim();bool line=value.StartsWith("л:",StringComparison.OrdinalIgnoreCase);if(line)value=value.Substring(2).Trim();
             if(!int.TryParse(value,out int id))return;
             if(!line)foreach(var a in Survey.Agents)if(a.Id==id){int i=water.Ocean.Find(a.Identity);if(i>=0){ChooseOrganism(i,false);ZoomSelection();noResults=false;return;}}
-            SurveyRegion best=null;foreach(var r in Survey.Regions)if(r.Lineages.TryGetValue(id,out int n)&&n>0&&(best==null||r.Tick>best.Tick))best=r;
+            SurveyRegion best=null;foreach(var r in Survey.Regions)if(r.Lineages.TryGetValue(id,out int n)&&(best==null||r.Tick>best.Tick))best=r;
             if(best!=null){Push();SelectedLineage=id;RegionKey=best.Key;SelectionKind=OverviewSelection.Lineage;AutoFrame=false;Following=false;water.Rig.FocusOn(VolumePainter.V(best.Center),35);noResults=false;}
         }
         public void Click(Vector2 point)
