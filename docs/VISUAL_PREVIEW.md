@@ -194,7 +194,8 @@ No new repository secrets or Unity license configuration are needed. Only source
 runs of `.github/workflows/visual-preview.yml` from this repository's `main` or
 `codex/*` branches are accepted; fork PRs are excluded. There is no
 `pull_request_target`, inherited Unity secrets or uploaded logs/builds. The
-publisher uses its job's ephemeral `GITHUB_TOKEN` (`actions:read`, `contents:write`).
+publisher uses its job's ephemeral `GITHUB_TOKEN` (`actions:read`, `contents:write`,
+`pull-requests:read` to validate the destination PR).
 The comment job has only `pull-requests:write` and never checks out PR code.
 Repository collaborators who can push these trusted branches can modify workflow
 code; these are the explicit publication trust boundary. Narrow the branch
