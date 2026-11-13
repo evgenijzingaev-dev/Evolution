@@ -28,7 +28,7 @@ namespace Evolution.Runtime
             public Vector3 cameraPosition, cameraEuler;
             public long tick;
             public int visibleOrganisms, cameraFrames;
-            public float nearestDepth, farthestDepth, luminanceRange, luminanceDeviation;
+            public float nearestDepth, farthestDepth, projectedCoverage, luminanceRange, luminanceDeviation;
             public bool currents, temperature, food, hudVisible;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
@@ -121,11 +121,11 @@ namespace Evolution.Runtime
             var focus = ToVector(water.World.Get(selected).Position);
 
             float openingYaw = 25, openingScore = -1;
-            for(int angle=0;angle<360;angle+=45) {
+            for(int angle=0;angle<360;angle+=15) {
                 SetView(focus,10,angle,8,false,false,false);
                 var view=Measure("opening-probe");
                 float side=Mathf.Abs(Vector3.Dot(water.Lens.transform.forward,ToVector(water.World.Get(selected).Direction).normalized));
-                float score=view.visibleOrganisms*2+(view.nearestDepth<9?2:0)+(view.farthestDepth>20?2:0)+(side<.6f?2:0);
+                float score=view.projectedCoverage*100+view.visibleOrganisms*.25f+(view.farthestDepth>20?.5f:0)+(side<.6f?.5f:0);
                 if(score>openingScore){openingScore=score;openingYaw=angle;}
             }
             SetView(focus, 10, openingYaw, 8, false, false, false);
@@ -138,11 +138,11 @@ namespace Evolution.Runtime
 
             // Find a view of existing organisms with actual camera-space depth separation.
             float best = -1, bestYaw = 0;
-            for (int angle = 0; angle < 360; angle += 45) {
+            for (int angle = 0; angle < 360; angle += 15) {
                 SetView(focus, 20, angle, 12, false, false, false);
                 var measure = Measure("probe");
                 if (measure.visibleOrganisms < 3 || measure.farthestDepth - measure.nearestDepth < 3) continue;
-                float score = measure.visibleOrganisms + Mathf.Min(15, measure.farthestDepth - measure.nearestDepth);
+                float score = measure.projectedCoverage*100+measure.visibleOrganisms*.25f+Mathf.Min(15,measure.farthestDepth-measure.nearestDepth)*.05f;
                 if (score > best) { best = score; bestYaw = angle; }
             }
             SetView(focus, 20, bestYaw, 12, false, false, false);
@@ -197,6 +197,7 @@ namespace Evolution.Runtime
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
                 if (v.z < 1 || v.z > 30 || v.x < .05f || v.x > .95f || v.y < .05f || v.y > .95f) continue;
+                shot.projectedCoverage += a.Biology.Genes.Size*a.Biology.Genes.Size/(v.z*v.z);
                 shot.visibleOrganisms++; shot.nearestDepth = Mathf.Min(shot.nearestDepth, v.z);
                 shot.farthestDepth = Mathf.Max(shot.farthestDepth, v.z);
             }
