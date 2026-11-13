@@ -40,7 +40,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d0764eebc8e4f87a77dc4f8341ac62d, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  ParticleCount: 6144
+  ParticleCount: 8192
   Seed: 42
   OrganismsVisible: 1
   ShowCurrents: 0

@@ -151,6 +151,7 @@ jobs:
             artifacts/visual-preview/03-depth-ensemble.png
             artifacts/visual-preview/04-currents.png
             artifacts/visual-preview/05-temperature-food.png
+            artifacts/visual-preview/06-water-only.png
             artifacts/visual-preview/manifest.json
           if-no-files-found: error
           retention-days: 14

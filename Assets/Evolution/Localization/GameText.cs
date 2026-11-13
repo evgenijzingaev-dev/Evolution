@@ -5,6 +5,7 @@ namespace Evolution.Localization
 {
     public enum TextKey
     {
+        WaterCompactTitle,WaterBrief,WaterCellBrief,WaterFlow,WaterHeat,WaterFood,WaterDetails,WaterCollapse,WaterHint,
         CrystalFocusOn,CrystalFocusOff,CrystalThreat,
         VolumeTitle,VolumeScope,VolumeWaterOnly,VolumeLife,VolumeFlowOn,VolumeFlowOff,VolumeHeatOn,VolumeHeatOff,VolumeFoodOn,VolumeFoodOff,
         VolumeSample,VolumeVector,VolumeCell,VolumeIncome,VolumeNet,VolumePhotoDiet,VolumeDiet,VolumeParticles,VolumeControls,VolumeFoodLabel,VolumeChunks,VolumeProbe,
@@ -41,6 +42,15 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.WaterCompactTitle]="EVOLUTION · живой микромир",
+                [TextKey.WaterBrief]="{0:F1} °C · свет {1:P0} · поток {2:F2}",
+                [TextKey.WaterCellBrief]="Клетка № {0}\nЭнергия {1:F1} / {2:F1}",
+                [TextKey.WaterFlow]="Течения",
+                [TextKey.WaterHeat]="Температура",
+                [TextKey.WaterFood]="Пища",
+                [TextKey.WaterDetails]="Подробнее",
+                [TextKey.WaterCollapse]="Свернуть",
+                [TextKey.WaterHint]="ПКМ — облететь · колесо — масштаб · H — интерфейс",
                 [TextKey.CrystalFocusOn]="Фокус на организме: включён",
                 [TextKey.CrystalFocusOff]="Фокус на организме: выключен",
                 [TextKey.CrystalThreat]="Хищник · {0:F1}",

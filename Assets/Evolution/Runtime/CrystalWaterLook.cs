@@ -14,16 +14,16 @@ namespace Evolution.Runtime
             oldAmbient=RenderSettings.ambientMode;oldSky=RenderSettings.ambientSkyColor;oldEquator=RenderSettings.ambientEquatorColor;oldGround=RenderSettings.ambientGroundColor;
             root=new GameObject("Clear blue microworld lighting");root.transform.SetParent(parent,false);
             var key=new GameObject("Soft white underwater key");key.transform.SetParent(root.transform,false);key.transform.rotation=Quaternion.Euler(32,-30,0);
-            var light=key.AddComponent<Light>();light.type=LightType.Directional;light.color=new Color(.9f,.97f,1);light.intensity=1.5f;light.shadows=LightShadows.None;
+            var light=key.AddComponent<Light>();light.type=LightType.Directional;light.color=new Color(.87f,.95f,1);light.intensity=1.25f;light.shadows=LightShadows.None;
             RenderSettings.ambientMode=AmbientMode.Trilight;RenderSettings.ambientSkyColor=new Color(.23f,.4f,.6f);
             RenderSettings.ambientEquatorColor=new Color(.075f,.19f,.32f);RenderSettings.ambientGroundColor=new Color(.035f,.075f,.17f);
             camera.allowHDR=true;var data=camera.GetUniversalAdditionalCameraData();data.requiresColorTexture=true;data.requiresDepthTexture=true;data.renderPostProcessing=true;
             profile=ScriptableObject.CreateInstance<VolumeProfile>();
-            var bloom=profile.Add<Bloom>(true);bloom.threshold.value=1.05f;bloom.intensity.value=.24f;bloom.scatter.value=.65f;
+            var bloom=profile.Add<Bloom>(true);bloom.threshold.value=.95f;bloom.intensity.value=.32f;bloom.scatter.value=.7f;
             profile.Add<Tonemapping>(true).mode.value=TonemappingMode.Neutral;
-            var color=profile.Add<ColorAdjustments>(true);color.postExposure.value=.25f;color.contrast.value=5;color.saturation.value=2;
+            var color=profile.Add<ColorAdjustments>(true);color.postExposure.value=.5f;color.contrast.value=5;color.saturation.value=-5;
             var vignette=profile.Add<Vignette>(true);vignette.intensity.value=.065f;vignette.smoothness.value=.7f;
-            focus=profile.Add<DepthOfField>(true);focus.mode.value=DepthOfFieldMode.Bokeh;focus.aperture.value=6.3f;focus.focalLength.value=45;
+            focus=profile.Add<DepthOfField>(true);focus.mode.value=DepthOfFieldMode.Bokeh;focus.aperture.value=7.5f;focus.focalLength.value=42;
             var volume=root.AddComponent<UnityEngine.Rendering.Volume>();volume.isGlobal=true;volume.priority=20;volume.sharedProfile=profile;
             const int resolution=128;var pixels=new Color[resolution*resolution];
             for(int y=0;y<resolution;y++)for(int x=0;x<resolution;x++) {

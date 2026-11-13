@@ -24,6 +24,7 @@ namespace Evolution.Runtime
         readonly Mesh sphere,thread,quad;readonly Material solid,shell,dust,backdrop;
         readonly Mesh[] high=new Mesh[6],low=new Mesh[6];
         readonly Batch[] membranes=new Batch[6],farMembranes=new Batch[6];
+        readonly Batch[] cytoplasm=new Batch[6];
         readonly Vector3[][] pickVertices=new Vector3[6][];readonly int[][] pickTriangles=new int[6][];
         readonly Batch bodies,threads,vesicles,particles;
         sealed class Visual {public double Phase;public float Drive;}
@@ -39,11 +40,12 @@ namespace Evolution.Runtime
             for(int i=0;i<6;i++) {
                 high[i]=CrystalMeshes.Create((CrystalForm)i,24,48);low[i]=CrystalMeshes.Create((CrystalForm)i,8,16);
                 membranes[i]=new Batch(high[i],shell,128);farMembranes[i]=new Batch(low[i],shell,128);
+                cytoplasm[i]=new Batch(low[i],shell,128);
                 pickVertices[i]=high[i].vertices;pickTriangles[i]=high[i].triangles;
             }
         }
         static Material Material(string name)=>new Material(Resources.Load<Shader>(name)) {enableInstancing=true};
-        public void Draw(VolumeWorld world,Suspension suspension,Camera camera,float t,bool organisms,bool flow,bool heat,int selected=-1)
+        public void Draw(VolumeWorld world,Suspension suspension,Camera camera,float t,bool organisms,bool flow,bool heat,int selected=-1,bool foodHints=false)
         {
             Vector3 eye=camera.transform.position;
             double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+t*VolumeWorld.StepSeconds);
@@ -54,16 +56,22 @@ namespace Evolution.Runtime
             for(int i=0;i<suspension.Count;i++) {
                 Vector3 p=V(suspension.Get(i,t)),d=p-eye;float half=i<suspension.Count/3?12:32;
                 float edge=d.magnitude/half;
-                float alpha=(1-Mathf.SmoothStep(.75f,1,edge))*(i%9==0?.5f:.27f);
+                float alpha=(1-Mathf.SmoothStep(.75f,1,edge))*(i%9==0?.68f:.40f);
                 if(alpha<=.001f)continue;
-                particles.Add(p,Quaternion.identity,Vector3.one*(.035f+i%7*.014f),new Color(.6f,.79f,.98f,alpha));
+                bool flake=i%29==0;float size=(.07f+i%7*.018f)*(flake?2.2f:1);
+                Color color=i%5==0?new Color(.66f,.84f,1.12f,alpha):new Color(.52f,.84f,.91f,alpha);
+                particles.Add(p,Quaternion.identity,Vector3.one*size,color,new Vector4(flake?1:0,0,0,0));
             }
             for(int k=0;k<world.FoodCount;k++) {
                 var food=world.GetFood(k);float mass=food.Substrate+food.Organic;
                 float foodDistance=(V(food.Position)-eye).sqrMagnitude;if(foodDistance>38*38)continue;
                 int grains=Mathf.Min(128,Mathf.CeilToInt(mass*2));
                 if(foodDistance>18*18)grains=Mathf.Min(24,grains);
-                float size=.105f*Mathf.Pow(Mathf.Max(1,mass*2/Mathf.Max(1,grains)),1f/3);
+                float size=.125f*Mathf.Pow(Mathf.Max(1,mass*2/Mathf.Max(1,grains)),1f/3);
+                if(foodHints&&selected>=0&&world.FoodPotential(k,world.Get(selected).Biology)>0) {
+                    Color halo=food.Organic>food.Substrate?new Color(1,.68f,.25f,.18f):new Color(.45f,1,.65f,.18f);
+                    particles.Add(V(food.Position),Quaternion.identity,Vector3.one*food.Radius*2.2f,halo,new Vector4(4,0,0,0));
+                }
                 for(int j=0;j<grains;j++) {
                     float a=j*2.39996f+food.Pattern%997,vertical;
                     // Stable sample IDs, not an arrangement rebuilt from remaining grain count.
@@ -71,7 +79,7 @@ namespace Evolution.Runtime
                     Vector3 local=new Vector3(Mathf.Cos(a)*Mathf.Sqrt(1-vertical*vertical),vertical,Mathf.Sin(a)*Mathf.Sqrt(1-vertical*vertical));
                     local*=food.Radius*Mathf.Pow(Mathf.Repeat(j*.618034f+.13f,1),1f/3);
                     var tint=Color.Lerp(new Color(.5f,.93f,.68f,.65f),new Color(.98f,.72f,.3f,.7f),food.Organic/Mathf.Max(.001f,mass));
-                    particles.Add(V(food.Position)+local,Quaternion.identity,Vector3.one*size,tint);
+                    particles.Add(V(food.Position)+local,Quaternion.identity,Vector3.one*size,tint,new Vector4(2,0,0,0));
                 }
             }
             if(organisms) {
@@ -83,13 +91,24 @@ namespace Evolution.Runtime
                     bool detailed=distance<13&&(i==selected||near<12);if(detailed&&i!=selected)near++;
                     var c=a.Biology;var g=c.Genes;int phaseId=c.Id%997;var form=CrystalForms.From(g);
                     var traits=new Vector4(g.Photosynthesis,g.Predation,g.Membrane,Mathf.Repeat(phaseId*.618f,1));
-                    Color membrane=new Color(.66f,.86f,1,.18f+.1f*g.Membrane);
+                    Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
                     (detailed?membranes[(int)form]:farMembranes[(int)form]).Add(p,rotation,Vector3.one*size,membrane,traits);
+                    cytoplasm[(int)form].Add(p,rotation,Vector3.one*size*.84f,
+                        Color.Lerp(new Color(.16f,.26f,.39f,.20f),new Color(.13f,.34f,.32f,.20f),g.Photosynthesis),
+                        new Vector4(g.Photosynthesis,g.Predation,g.Membrane,-2));
                     Vector3 nucleusScale=form==CrystalForm.Diatom?new Vector3(.35f,.13f,.2f):form==CrystalForm.Spindle?new Vector3(.32f,.17f,.2f):new Vector3(.29f,.24f,.27f);
                     Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f));
-                    bodies.Add(p+rotation*nucleus*size,rotation,nucleusScale*size,new Color(.57f,.25f,.79f),traits);
-                    if(!detailed||!a.Alive)continue;
+                    bodies.Add(p+rotation*nucleus*size,rotation,nucleusScale*size,new Color(.43f,.27f,.65f),traits);
+                    if(!detailed||!a.Alive) {
+                        // Real residents keep a small internal silhouette at medium distance.
+                        if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
+                            Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
+                            Color pigment=g.Photosynthesis>.4f?new Color(.4f,.72f,.40f):new Color(.88f,.61f,.32f);
+                            bodies.Add(p+rotation*local,rotation,Vector3.one*size*.14f,pigment,traits);
+                        }
+                        continue;
+                    }
                     present.Add(a.Identity);
                     float drive=(a.Velocity-world.Current(a.Position)).Length;
                     if(!states.TryGetValue(a.Identity,out var visual)){visual=new Visual {Phase=phaseId+time*3,Drive=drive};states.Add(a.Identity,visual);}
@@ -123,23 +142,32 @@ namespace Evolution.Runtime
             }
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
-                var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.62f,.81f,.97f,.16f));
-                if((center-eye).sqrMagnitude<15*15)for(int j=0;j<10;j++) {
-                    Vector3 n=Fibonacci(j,10);Segment(center+n*.45f,center+n*1.22f,.025f,new Color(.72f,.85f,.93f));
+                // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
+                var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.28f));
+                for(int j=0;j<12;j++) {
+                    Vector3 n=Fibonacci(j,12);var knot=center+n*(.65f+.12f*Mathf.Sin(j*2.4f));
+                    bodies.Add(knot,Quaternion.Euler(j*17,j*31,0),new Vector3(.28f,.18f,.23f),new Color(.32f,.49f,.52f));
+                    Segment(knot,center+n*1.22f,.035f,new Color(.6f,.79f,.8f));
+                    if(j>0)Segment(knot,center+Fibonacci(j-1,12)*.68f,.028f,new Color(.42f,.61f,.65f));
                 }
             }
-            if(flow||heat)for(int y=-24;y<=24;y+=6)for(int z=-24;z<=24;z+=6)for(int x=-24;x<=24;x+=6) {
+            bool lightHints=foodHints&&selected>=0&&world.Get(selected).Biology.Genes.Photosynthesis>.5f;
+            if(flow||heat||lightHints)for(int y=-24;y<=24;y+=6)for(int z=-24;z<=24;z+=6)for(int x=-24;x<=24;x+=6) {
                 var p=new V3(x+Mathf.Floor(eye.x/6)*6,y+Mathf.Floor(eye.y/6)*6,z+Mathf.Floor(eye.z/6)*6);
+                p+=new V3(Mathf.Sin(p.Y*.31f+p.Z)*1.1f,Mathf.Sin(p.Z*.27f+p.X)*1.1f,Mathf.Sin(p.X*.37f+p.Y)*1.1f);
                 float fade=1-Mathf.SmoothStep(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
-                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.43f,.9f,.055f),new Color(.95f,.34f,.16f,.055f),Mathf.InverseLerp(9,35,temp));
-                    c.a*=fade;vesicles.Add(V(p),Quaternion.identity,Vector3.one*3,c,new Vector4(0,0,0,-1));}
-                if(flow) {var current=world.Current(p);Vector3 d=V(current);Vector3 tip=V(p)+d*5;
-                    Color c=Color.Lerp(new Color(.3f,.55f,.6f),new Color(.75f,.9f,.78f),current.Length/.35f);
-                    Segment(V(p),tip,.035f,c);Vector3 side=Vector3.Cross(d.normalized,Vector3.up).normalized;if(side.sqrMagnitude<.01f)side=Vector3.right;
-                    Segment(tip,tip-d.normalized*.24f+side*.12f,.04f,c);Segment(tip,tip-d.normalized*.24f-side*.12f,.04f,c);}
+                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.15f),new Color(1,.38f,.16f,.15f),Mathf.InverseLerp(9,35,temp));
+                    c.a*=fade;vesicles.Add(V(p),Quaternion.identity,Vector3.one*3.8f,c,new Vector4(0,0,0,-1));
+                    c.a=fade*.22f;particles.Add(V(p),Quaternion.identity,Vector3.one*2.3f,c,new Vector4(4,0,0,0));}
+                if(lightHints) {float light=world.Sample(p).Light;
+                    particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}
+                if(flow) {var current=world.Current(p);Vector3 d=V(current);float phase=Mathf.Repeat((float)time*current.Length*.45f+p.X*.13f+p.Y*.17f,1);
+                    float pulse=Mathf.SmoothStep(0,.15f,phase)*(1-Mathf.SmoothStep(.8f,1,phase));
+                    Color c=Color.Lerp(new Color(.35f,.80f,.91f),new Color(.75f,1,1.15f),current.Length/.35f);c.a=fade*(.3f+.5f*pulse);
+                    particles.Add(V(p)+d*(phase-.5f)*5,Quaternion.FromToRotation(Vector3.right,d),new Vector3(.6f+d.magnitude*5,.12f,.12f),c,new Vector4(3,0,0,0));}
             }
             bodies.Flush();threads.Flush();vesicles.Flush();particles.Flush();
-            for(int i=0;i<6;i++){membranes[i].Flush();farMembranes[i].Flush();}
+            for(int i=0;i<6;i++){cytoplasm[i].Flush();membranes[i].Flush();farMembranes[i].Flush();}
         }
         static Vector3 Fibonacci(int i,int count)
         {float y=1-2*(i+.5f)/count,r=Mathf.Sqrt(1-y*y),angle=i*2.39996f;return new Vector3(Mathf.Cos(angle)*r,y,Mathf.Sin(angle)*r);}
@@ -147,13 +175,20 @@ namespace Evolution.Runtime
         {
             var g=agent.Biology.Genes;
             Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f))*size;
-            bodies.Add(p+rotation*(nucleus+Vector3.up*.04f*size),rotation,Vector3.one*.085f*size,new Color(.88f,.48f,.91f));
+            bodies.Add(p+rotation*(nucleus+Vector3.up*.04f*size),rotation,Vector3.one*.085f*size,new Color(.72f,.43f,.78f));
+            vesicles.Add(p+rotation*nucleus,rotation,new Vector3(.39f,.32f,.37f)*size,new Color(.73f,.63f,.91f,.16f));
+            for(int band=0;band<3;band++)for(int j=0;j<9;j++) {
+                float a=j*.43f+band*.4f,b=(j+1)*.43f+band*.4f,r=.17f+band*.025f;
+                Vector3 aa=new Vector3(Mathf.Cos(a)*r,-.08f+band*.055f,Mathf.Sin(a)*r);
+                Vector3 bb=new Vector3(Mathf.Cos(b)*r,-.08f+band*.055f,Mathf.Sin(b)*r);
+                Segment(p+rotation*aa*size,p+rotation*bb*size,.012f*size,new Color(.43f,.64f,.72f));
+            }
             int count=5+(int)(g.Photosynthesis*5);
             for(int j=0;j<count;j++) {
                 Vector3 v=Fibonacci(j,count)*.23f+new Vector3(.03f,.012f*Mathf.Sin(phase*.12f+j),0);
                 Vector3 local=CrystalMeshes.Point(form,v)*size;
                 bool plastid=g.Photosynthesis>.35f&&j%3!=0;
-                Color color=plastid?Color.Lerp(new Color(.46f,.67f,.17f),new Color(.68f,.94f,.27f),Mathf.Clamp01(agent.Biology.Budget.Light*20)):new Color(.97f,.66f,.26f);
+                Color color=plastid?Color.Lerp(new Color(.28f,.56f,.31f),new Color(.52f,.78f,.34f),Mathf.Clamp01(agent.Biology.Budget.Light*20)):new Color(.87f,.60f,.30f);
                 Vector3 scale=(plastid?new Vector3(.15f,.095f,.12f):new Vector3(.09f,.1f,.09f))*size;
                 if(form==CrystalForm.Diatom)scale.y*=.65f;
                 bodies.Add(p+rotation*local,rotation*Quaternion.Euler(j*27,j*41,15),scale,color,traits);

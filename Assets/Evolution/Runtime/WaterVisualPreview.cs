@@ -155,6 +155,10 @@ namespace Evolution.Runtime
 
             Require(!failed && shots.Count == 5, "incomplete capture");
             File.WriteAllText(Path.Combine(destination, "manifest.json"), JsonUtility.ToJson(Context(shots.ToArray(), true), true));
+            // A separate evidence frame for the water itself; not an invented population or backdrop fixture.
+            water.OrganismsVisible = false;
+            SetView(focus, 23, 25, 22, false, false, false);
+            yield return Capture("06-water-only", false);
             Application.Quit(0);
         }
         Report Context(Shot[] frames, bool passed)
@@ -200,7 +204,7 @@ namespace Evolution.Runtime
             }
             return shot;
         }
-        IEnumerator Capture(string name)
+        IEnumerator Capture(string name,bool record=true)
         {
             // Ordinary URP camera frames, including post effects and 3D diagnostic layers.
             // WaitForEndOfFrame is deliberately used in a windowed player, never a batch-mode Editor.
@@ -253,7 +257,7 @@ namespace Evolution.Runtime
                 Require(false, error);
             }
             File.WriteAllBytes(Path.Combine(destination, shot.file), image.EncodeToPNG());
-            Destroy(image); shots.Add(shot);
+            Destroy(image); if(record)shots.Add(shot);
             Debug.Log("Visual Preview phase: saved " + name);
         }
     }
