@@ -14,6 +14,7 @@ PATTERNS = (
     "Assets/Evolution/Runtime/VolumePainter.cs", "Assets/Evolution/Runtime/CrystalWaterLook.cs",
     "Assets/Evolution/Runtime/CrystalMeshes.cs", "Assets/Evolution/Runtime/MicroMeshes.cs",
     "Assets/Evolution/Runtime/Resources/**", "Assets/Evolution/Scenes/WaterPrototype3D.unity",
+    "Assets/Evolution/Runtime/FriendlyOceanHud.cs",
     "Packages/manifest.json", "ProjectSettings/**",
 )
 
@@ -41,3 +42,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

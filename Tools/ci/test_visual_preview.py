@@ -21,7 +21,7 @@ class EvidenceTests(unittest.TestCase):
         shot = dict(tick=20, cameraFrames=4, luminanceRange=.8, luminanceDeviation=.2,
                     visibleOrganisms=5, nearestDepth=4, farthestDepth=20,
                     currents=True, currentSpeed=.2, temperature=True, food=True, hudVisible=True,
-                    foodSubstrate=12, foodOrganic=4, activePopulation=250, knownRegions=125, analytical=False, organismMarkers=20, regionClusters=15, surveyLayer=0, depthColours=False, markerMinY=-15, markerMaxY=15, selectedOrganism=7, fullDepth=True, sliceIndex=0)
+                    foodSubstrate=12, foodOrganic=4, activePopulation=250, knownRegions=125, analytical=False, organismMarkers=20, regionClusters=15, surveyLayer=0, depthColours=False, markerMinY=-15, markerMaxY=15, selectedOrganism=7, fullDepth=True, sliceIndex=0, friendlyHud=True,layoutFits=True,hudPage=0,hudDetail=0)
         self.report = dict(passed=True, navigationChecked=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
                            graphicsApi="OpenGLCore", graphicsDevice="test-device",
                            scene="WaterPrototype3D", width=1920, height=1080, seed=42,
@@ -30,7 +30,10 @@ class EvidenceTests(unittest.TestCase):
         self.report["screenshots"][7].update(analytical=True,surveyLayer=4)
         self.report["screenshots"][8]["depthColours"] = True
         self.report["screenshots"][10].update(analytical=True,fullDepth=False,markerMinY=1,markerMaxY=19)
-        self.images = {f: b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1920, 1080) + bytes([i]) * 24000
+        self.report["screenshots"][13]["hudPage"]=1
+        self.report["screenshots"][16]["hudDetail"]=2
+        self.report["screenshots"][-1]["hudPage"]=2
+        self.images = {f: b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", *((1366,768) if f=="19-ui-1366x768.png" else (2560,1440) if f=="20-ui-2560x1440.png" else (1920,1080))) + bytes([i]) * 24000
                        for i, f in enumerate(EXPECTED)}
 
     def check(self):
@@ -130,3 +133,4 @@ class TriggerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

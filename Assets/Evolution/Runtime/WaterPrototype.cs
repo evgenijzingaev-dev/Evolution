@@ -18,6 +18,8 @@ namespace Evolution.Runtime
         public Suspension Water {get;private set;}
         public WaterCamera Rig {get;private set;}
         public OceanOverview Overview {get;private set;}
+        public FriendlyOceanHud Hud {get;private set;}
+        Vector3? moveTarget;
         public int SelectedIndex=>selected;
         public bool Paused {get;set;}
         public Camera Lens {get;private set;}
@@ -52,8 +54,9 @@ namespace Evolution.Runtime
             feedSound=AudioClip.Create("Volume confirmed intake",pop.Length,1,rate,false);feedSound.SetData(pop,0);
             Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
             Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
+            Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;PlaySelected();
         }
-        public void Observe() {World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
+        public void Observe() {moveTarget=null;World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
         // Choose a real nearby resident in a naturally populated neighbourhood. No spawning,
         // repositioning, resource injection or mutation is performed for the opening view.
         public int ScenicSelection()
@@ -71,7 +74,9 @@ namespace Evolution.Runtime
         {
             if(World==null)return;
             Vector2 pointer=new Vector2(Input.mousePosition.x/Scale,(Screen.height-Input.mousePosition.y)/Scale);
-            bool over=HudVisible&&((Overview.Active?Overview.OverUi(Input.mousePosition):Panel.Contains(pointer)));
+            bool over=HudVisible&&Hud!=null&&Hud.OverUi(Input.mousePosition);
+            if(Input.GetKeyDown(KeyCode.F1))Hud.HelpVisible=!Hud.HelpVisible;
+            if(Input.GetKeyDown(KeyCode.F2))Hud.CycleDetail();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
             if(Input.GetKeyDown(KeyCode.Escape)){if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
@@ -80,13 +85,16 @@ namespace Evolution.Runtime
             else if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
             if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
                 if(Overview.Active)Overview.Click(Input.mousePosition);
-                else {int picked=PickOrganism(Input.mousePosition);if(picked>=0)Select(picked);}
+                else {int picked=PickOrganism(Input.mousePosition);if(picked>=0){Select(picked);moveTarget=null;}
+                    else if(World.Controlled>=0) {var plane=new Plane(-Lens.transform.forward,VolumePainter.V(Selection.Position));var ray=Lens.ScreenPointToRay(Input.mousePosition);if(plane.Raycast(ray,out float along))moveTarget=ray.GetPoint(along);}}
             }
             World.Input=default;World.Boost=World.Attack=false;
             if(World.Controlled>=0&&!Paused&&!over&&Application.isFocused) {
                 Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
-                World.Input=VolumePainter.V(Vector3.ClampMagnitude(command,1));World.Boost=Input.GetKey(KeyCode.LeftShift);World.Attack=Input.GetKey(KeyCode.Space);
+                if(command.sqrMagnitude>.001f)moveTarget=null;
+                else if(moveTarget.HasValue){command=moveTarget.Value-VolumePainter.V(Selection.Position);if(command.sqrMagnitude<.16f){moveTarget=null;command=Vector3.zero;}}
+                World.Input=VolumePainter.V(Vector3.ClampMagnitude(command,1));World.Boost=Input.GetKey(KeyCode.LeftShift);World.Attack=Input.GetKey(KeyCode.Space)||(Hud!=null&&Hud.AttackRequested);
             }
             Overview.BeforeCamera(over);
             if(!Selection.Alive)following=false;
@@ -142,53 +150,7 @@ namespace Evolution.Runtime
         }
         void OnGUI()
         {
-            if(World==null||!HudVisible)return;if(Overview.Active){Overview.DrawUi();return;}PrepareUi();var matrix=GUI.matrix;var old=GUI.skin;GUI.skin=skin;GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);
-            GUILayout.BeginArea(Panel,panelStyle);
-            GUILayout.Label(GameText.Get(TextKey.WaterCompactTitle),heading);
-            var agent=Selection;V3 point=OrganismsVisible&&agent.Alive?agent.Position:VolumePainter.V(Lens.transform.position);
-            var sample=World.Sample(point);var current=World.Current(point);
-            GUILayout.Label(GameText.Format(TextKey.WaterBrief,sample.Temperature,sample.Light,current.Length));
-            GUILayout.BeginHorizontal();
-            if(LayerButton(TextKey.WaterFlow,ShowCurrents))ShowCurrents=!ShowCurrents;
-            if(LayerButton(TextKey.WaterHeat,ShowTemperature))ShowTemperature=!ShowTemperature;
-            if(LayerButton(TextKey.WaterFood,FindFood))FindFood=!FindFood;
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            if(GUILayout.Button(GameText.Get(Paused?TextKey.WaterRun:TextKey.Pause)))Paused=!Paused;
-            if(GUILayout.Button(GameText.Get(TextKey.WaterOverview))) {Observe();Rig.FocusOn(Rig.Focus,10);}
-            if(GUILayout.Button(GameText.Get(details?TextKey.WaterCollapse:TextKey.WaterDetails)))details=!details;
-            GUILayout.EndHorizontal();
-            if(OrganismsVisible&&selected>=0) {
-                var c=agent.Biology;
-                GUILayout.Label(GameText.Format(TextKey.WaterCellBrief,c.Id,c.Energy,Biology.Capacity(c.Genes)));
-                if(World.Controlled>=0) {if(GUILayout.Button(GameText.Get(TextKey.ReturnObserve)))Observe();}
-                else if(agent.Alive&&GUILayout.Button(GameText.Get(TextKey.PlayOrganism)))PlaySelected();
-            }
-            if(ShowCurrents)GUILayout.Label(GameText.Format(TextKey.VolumeVector,current.X,current.Y,current.Z));
-            if(ShowTemperature) {var probe=VolumePainter.V(Rig.Focus);GUILayout.Label(GameText.Format(TextKey.VolumeProbe,World.Temperature(probe),World.Current(probe).Length));}
-            if(details) {
-            scroll.x=0;scroll=GUILayout.BeginScrollView(scroll,false,true,GUIStyle.none,skin.verticalScrollbar);
-            GUILayout.BeginVertical(GUILayout.Width(Panel.width-panelStyle.padding.horizontal-skin.verticalScrollbar.fixedWidth-8));
-            if(GUILayout.Button(GameText.Get(OrganismsVisible?TextKey.VolumeWaterOnly:TextKey.VolumeLife))) {OrganismsVisible=!OrganismsVisible;if(!OrganismsVisible)Observe();}
-            if(GUILayout.Button(GameText.Get(CinematicFocus?TextKey.CrystalFocusOn:TextKey.CrystalFocusOff)))CinematicFocus=!CinematicFocus;
-            GUILayout.Label(GameText.Format(TextKey.VolumeSample,sample.Temperature,sample.Light,current.Length));
-            if(OrganismsVisible&&selected>=0) {
-                var c=agent.Biology;float budgetSeconds=(float)System.Math.Max(VolumeWorld.StepSeconds,agent.RenderDuration);
-                GUILayout.Label(GameText.Format(TextKey.VolumeCell,c.Id,agent.Position.Y,c.Energy,Biology.Capacity(c.Genes)),heading);
-                GUILayout.Label(GameText.Format(TextKey.VolumeIncome,c.Budget.Substrate/budgetSeconds,c.Budget.Organic/budgetSeconds,c.Budget.Light/budgetSeconds,c.Budget.Prey/budgetSeconds));
-                GUILayout.Label(GameText.Format(TextKey.VolumeNet,c.Budget.Net/budgetSeconds));
-                GUILayout.Label(GameText.Get(c.Genes.Photosynthesis>.5f?TextKey.VolumePhotoDiet:TextKey.VolumeDiet));
-            }
-            GUILayout.Label(GameText.Format(TextKey.VolumeParticles,Water.Count));
-            GUILayout.Label(GameText.Format(TextKey.VolumeChunks,Ocean.LoadedCount,World.Count));
-            GUILayout.Label(GameText.Get(TextKey.SoundSetting));SoundVolume=GUILayout.HorizontalSlider(SoundVolume,0,.6f);
-            GUILayout.Label(GameText.Get(TextKey.VolumeScope));
-            GUILayout.Label(GameText.Get(TextKey.VolumeControls));
-            GUILayout.EndVertical();GUILayout.EndScrollView();}
-            GUILayout.EndArea();
-            if(FindFood)DrawFoodLabels(agent);
-            GUI.Label(new Rect(Screen.width/Scale-448,Screen.height/Scale-34,430,24),GameText.Get(TextKey.WaterHint),hint);
-            GUI.matrix=matrix;GUI.skin=old;
+            if(World!=null&&HudVisible&&Hud!=null)Hud.Draw();
         }
         void DrawFoodLabels(VolumeAgent observer)
         {
@@ -225,3 +187,4 @@ namespace Evolution.Runtime
         }
     }
 }
+
