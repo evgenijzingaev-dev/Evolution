@@ -20,7 +20,6 @@ namespace Evolution.Runtime
         bool failed,navigationChecked;
         RenderTexture target;
         int renderedFrames;
-        float yaw, pitch = 15;
         readonly List<Shot> shots = new List<Shot>();
 
         [Serializable] public sealed class Shot
@@ -36,6 +35,9 @@ namespace Evolution.Runtime
             public bool currents, temperature, food, hudVisible;
             public int width=Width,height=Height,hudDetail,hudPage,threatIndex=-1,foodIndex=-1,notificationCount;
             public bool friendlyHud,layoutFits;
+            public bool threatMarkerVisible;
+            public float threatConnectorLength;
+            public string divisionBlock;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
         [Serializable] sealed class Report
@@ -224,9 +226,12 @@ namespace Evolution.Runtime
                 water.World.Step();
                 if(step%20==19){danger=FindThreat();yield return null;}
             }
-            if(danger>=0)water.Select(danger);
-            else {int living=water.ScenicSelection();if(living>=0)water.Select(living);}
+            Require(danger>=0,"no factual threat for HUD regression capture");water.Select(danger);
             water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;water.Hud.RefreshNow();
+            water.Observe();
+            var threatPoint=ToVector(water.World.Get(water.Hud.Readout.Threat).Position);
+            // Frame the existing predator itself, without changing model state.
+            water.Rig.FocusOn(threatPoint,7);
             water.Rig.ApplyImmediate();
             yield return Capture("17-danger-food-ui");
             water.Hud.Detail=HudDetail.Scientific;
@@ -244,7 +249,24 @@ namespace Evolution.Runtime
             for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
             water.Hud.SetPage(HudPage.Development);
             yield return Capture("21-development-ui");
-            Require(!failed&&shots.Count==20,"incomplete friendly HUD capture");
+            Screen.SetResolution(1366,768,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            yield return Capture("22-development-1366x768");
+            water.Hud.SetPage(HudPage.Cell);water.Observe();
+            water.Rig.FocusOn(threatPoint,7);water.Rig.ApplyImmediate();
+            // The selected cell still senses the real threat, now behind the camera.
+            // Look away from the focus instead of relocating any organism.
+            var away=water.Rig.View;away.Focus=threatPoint-water.Lens.transform.forward*14;
+            away.Yaw+=180;away.Pitch=-away.Pitch;water.Rig.Restore(away);water.Rig.ApplyImmediate();
+            yield return Capture("23-offscreen-threat-1366x768");
+            int safe=-1;
+            for(int i=0;i<water.World.Count;i++)if(water.World.Get(i).Alive&&PlayerReadout.Read(water.World,i).Threat<0){safe=i;break;}
+            Require(safe>=0,"no real threat-free resident for HUD regression");
+            water.Select(safe);water.Hud.SetPage(HudPage.Cell);water.Observe();water.Hud.RefreshNow();water.Rig.ApplyImmediate();
+            yield return Capture("24-no-threat-1366x768");
+            Screen.SetResolution(Width,Height,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            Require(!failed&&shots.Count==23,"incomplete friendly HUD capture");
             File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
             yield return CaptureDivision();
             Application.Quit(0);
@@ -357,7 +379,7 @@ namespace Evolution.Runtime
             water.HudVisible = currents || temperature || food;
             water.ShowCurrents = currents; water.ShowTemperature = temperature; water.FindFood = food;
             water.Rig.FocusOn(point, distance);
-            water.Rig.Orbit(heading - yaw, tilt - pitch); yaw = heading; pitch = tilt;
+            var view=water.Rig.View;water.Rig.Orbit(heading-view.Yaw,tilt-view.Pitch);
             water.Rig.ApplyImmediate();
         }
         Shot Measure(string file)
@@ -368,7 +390,9 @@ namespace Evolution.Runtime
                 hudVisible = water.HudVisible, width=Screen.width,height=Screen.height,
                 friendlyHud=water.HudVisible&&water.Hud!=null,layoutFits=water.Hud!=null&&water.Hud.LayoutFits,
                 hudDetail=(int)water.Hud.Detail,hudPage=(int)water.Hud.Page,threatIndex=water.Hud.Readout.Threat,
-                foodIndex=water.Hud.Readout.Food,notificationCount=water.Hud.NotificationCount };
+                foodIndex=water.Hud.Readout.Food,notificationCount=water.Hud.NotificationCount,
+                threatMarkerVisible=water.Hud.ThreatMarkerVisible,threatConnectorLength=water.Hud.ThreatConnectorLength,
+                divisionBlock=water.Paused?"Продолжи симуляцию":water.World.DivisionBlock(water.SelectedIndex) };
             for (int i = 0; i < water.World.Count; i++) {
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
@@ -454,6 +478,10 @@ namespace Evolution.Runtime
                 else if(name=="12-horizontal-slice"&&(shot.fullDepth||shot.organismMarkers<1||shot.markerMinY<shot.sliceIndex*20-.01f||shot.markerMaxY>(shot.sliceIndex+1)*20+.01f))error="slice contains wrong depth data";
             }
             if(name.CompareTo("13-")>=0&&(!shot.friendlyHud||!shot.layoutFits))error="friendly HUD is missing or layout overlaps";
+            if((name=="17-danger-food-ui"||name=="19-ui-1366x768"||name=="20-ui-2560x1440")&&
+                (shot.threatIndex<0||!shot.threatMarkerVisible||Mathf.Abs(shot.threatConnectorLength-18)>.01f))error="real short threat marker missing";
+            if(name=="23-offscreen-threat-1366x768"&&(shot.threatIndex<0||shot.threatMarkerVisible))error="offscreen threat must not draw a marker";
+            if(name=="24-no-threat-1366x768"&&(shot.threatIndex>=0||shot.threatMarkerVisible))error="threat-free cell has false warning marker";
             if (error != null) {
                 var diagnostic = Path.Combine(destination, "diagnostics"); Directory.CreateDirectory(diagnostic);
                 File.WriteAllBytes(Path.Combine(diagnostic, shot.file), image.EncodeToPNG());

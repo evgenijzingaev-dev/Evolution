@@ -51,6 +51,41 @@ namespace Evolution.Tests
             yield return null;
         }
         [UnityTest]
+        public IEnumerator HudThreatProjectionAndDivisionReasonFollowTheRealPausedWorld()
+        {
+            var root=new GameObject("HUD real world regression");var water=root.AddComponent<WaterPrototype>();
+            water.PersistRegions=false;water.ParticleCount=512;water.SoundVolume=0;water.Paused=true;
+            yield return null;
+            try {
+                int selected=-1;
+                for(int i=0;i<water.World.Count;i++)if(water.World.Get(i).Alive&&PlayerReadout.Read(water.World,i).Threat>=0){selected=i;break;}
+                Assert.GreaterOrEqual(selected,0,"Seed42 must provide a factual threat");
+                water.Select(selected);water.Hud.RefreshNow();water.Observe();
+                var before=water.World.Get(selected);long tick=water.World.Tick;
+                int threat=water.Hud.Readout.Threat;
+                var point=VolumePainter.V(water.World.Get(threat).Position);
+                water.Rig.FocusOn(point,7);water.Rig.ApplyImmediate();
+                var projection=water.Lens.WorldToViewportPoint(point);
+                Assert.Greater(projection.z,0);
+                Assert.IsTrue(FriendlyOceanHud.TryWorldLabel(new Vector3(projection.x*1440,(1-projection.y)*810,projection.z),new Rect(18,80,1404,658),new Rect[0],out _,out var anchor));
+                Assert.That(Vector2.Distance(anchor,new Vector2(projection.x*1440,(1-projection.y)*810)),Is.EqualTo(18).Within(.001));
+                water.Lens.transform.rotation=Quaternion.LookRotation(water.Lens.transform.position-point);
+                projection=water.Lens.WorldToViewportPoint(point);
+                Assert.IsFalse(FriendlyOceanHud.TryWorldLabel(new Vector3(projection.x*1440,(1-projection.y)*810,projection.z),new Rect(18,80,1404,658),new Rect[0],out _,out _));
+                // A real newborn/immature cell has an explicit biological refusal;
+                // selection and UI overlays cannot make the unavailable action run.
+                int blocked=-1;
+                for(int i=0;i<water.World.Count;i++)if(water.World.Get(i).Alive&&water.World.DivisionBlock(i)!=null){blocked=i;break;}
+                Assert.GreaterOrEqual(blocked,0);Assert.IsNotEmpty(water.World.DivisionBlock(blocked));
+                water.Select(blocked);water.PlaySelected();
+                Assert.IsFalse(water.World.RequestDivision());
+                water.Hud.SetPage(HudPage.Development);yield return null;
+                Assert.AreEqual(tick,water.World.Tick);Assert.AreEqual(before,water.World.Get(selected));
+                Assert.IsTrue(water.Hud.LayoutFits);
+            } finally {Object.Destroy(root);}
+            yield return null;
+        }
+        [UnityTest]
         public IEnumerator FastCameraFlightStaysWithinStreamingVisibilityMargin()
         {
             var root=new GameObject("Fast volume camera");var lens=root.AddComponent<Camera>();var rig=root.AddComponent<WaterCamera>();rig.Initialize(lens);

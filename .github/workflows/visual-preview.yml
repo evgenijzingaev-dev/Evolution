@@ -172,6 +172,9 @@ jobs:
             artifacts/visual-preview/19-ui-1366x768.png
             artifacts/visual-preview/20-ui-2560x1440.png
             artifacts/visual-preview/21-development-ui.png
+            artifacts/visual-preview/22-development-1366x768.png
+            artifacts/visual-preview/23-offscreen-threat-1366x768.png
+            artifacts/visual-preview/24-no-threat-1366x768.png
             artifacts/visual-preview/manifest.json
             artifacts/visual-preview/division*.png
             artifacts/visual-preview/division.json
@@ -202,6 +205,9 @@ jobs:
             artifacts/visual-preview/19-ui-1366x768.png
             artifacts/visual-preview/20-ui-2560x1440.png
             artifacts/visual-preview/21-development-ui.png
+            artifacts/visual-preview/22-development-1366x768.png
+            artifacts/visual-preview/23-offscreen-threat-1366x768.png
+            artifacts/visual-preview/24-no-threat-1366x768.png
             artifacts/visual-preview/manifest.json
             artifacts/visual-preview/division*.png
             artifacts/visual-preview/division.json
