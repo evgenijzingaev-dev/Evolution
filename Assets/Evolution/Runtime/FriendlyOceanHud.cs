@@ -477,11 +477,11 @@ namespace Evolution.Runtime
             if(threat)ThreatConnectorLength=Vector2.Distance(anchor,target);
             return true;
         }
-        static readonly string[] Layers={"Генетические линии","Формы жизни","Способы питания","Угрозы","Плотность жизни","Запасы пищи","Температура","Течения","Свет"};
+        static readonly string[] Layers={"Генетические линии","Формы жизни","Способы питания","Угрозы","Плотность жизни","Запасы пищи","Температура","Течения","Свет","Минералы","Кислород","Химическая энергия","Температурный оптимум"};
         void DrawObserverLinks()
         {
             var r=ObserverBox;occupied.Add(r);float half=(r.width-8)/2;
-            if(Button(new Rect(r.x,r.y,half,34),"Слой: "+Layers[(int)water.Overview.Layer],"Переключить аналитические данные")){water.Overview.Layer=(SurveyLayer)(((int)water.Overview.Layer+1)%9);water.Overview.SetMode(true);}
+            if(Button(new Rect(r.x,r.y,half,34),"Слой: "+Layers[(int)water.Overview.Layer],"Переключить аналитические данные")){water.Overview.Layer=(SurveyLayer)(((int)water.Overview.Layer+1)%Layers.Length);water.Overview.SetMode(true);}
             if(busiest!=null&&Button(new Rect(r.x+half+8,r.y,half,34),"Больше жизни: "+busiest.Living))water.Overview.ChooseRegion(busiest.Key,true);
             if(foodRegion!=null&&Button(new Rect(r.x,r.y+40,half,32),"Найти пищу"))water.Overview.ChooseRegion(foodRegion.Key,true);
             if(dangerRegion!=null&&Button(new Rect(r.x+half+8,r.y+40,half,32),"Недавние атаки"))water.Overview.ChooseRegion(dangerRegion.Key,true);

@@ -135,6 +135,9 @@ namespace Evolution.Runtime
             while (water.World == null || water.World.Tick < 20) yield return null;
             Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-evolution-ecology")>=0) {
+                yield return CaptureNicheEcology();Application.Quit(failed?1:0);yield break;
+            }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-evolution-living-cells")>=0) {
                 yield return CaptureLivingCells();Application.Quit(failed?1:0);yield break;
             }

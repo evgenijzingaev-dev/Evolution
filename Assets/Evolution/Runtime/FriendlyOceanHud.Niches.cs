@@ -5,6 +5,7 @@ namespace Evolution.Runtime
     public sealed partial class FriendlyOceanHud
     {
         int miniLayer;
+        internal void SetNicheLayer(int value)=>miniLayer=Mathf.Clamp(value,0,miniNames.Length-1);
         static readonly string[] miniNames={"Население","Свет","Температура","Минералы","Кислород","Химическая пища","Органика","Стратегии"};
         string MiniLayerName=>miniNames[miniLayer];
         static Color MiniDietColour(int diet)=>diet==0?new Color(.4f,1,.5f):diet==1?new Color(1,.4f,.35f):diet==2?new Color(1,.75f,.3f):new Color(.45f,.75f,1);

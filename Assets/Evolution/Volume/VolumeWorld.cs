@@ -136,6 +136,7 @@ namespace Evolution.Volume
                 if(Niches&&i!=Controlled&&cloud>=0)throttle=Math.Min(1,Math.Max(.12f,(a.Position-food[cloud].Position).Length/food[cloud].Radius));
                 float speed;
                 if(members>1) {
+                    if(Niches&&!driven){if(i==root)colonyEffort[root]=throttle;throttle=colonyEffort[root];}
                     if(i==root) {
                         if(driven) {
                             float influence=ControlColony?1:agents[Controlled].Biology.Genes.Size/colonyMass[root];
@@ -166,19 +167,20 @@ namespace Evolution.Volume
                     var delta=a.Position-obstacle;float radius=ObstacleRadius+.4f*a.Biology.Genes.Size;
                     if(delta.Sqr<radius*radius) { a.Position=obstacle+delta.Unit*radius;float inward=V3.Dot(a.Velocity,delta.Unit);if(inward<0) a.Velocity-=delta.Unit*inward; }
                 }
-                var c=a.Biology;var sample=Sample(a.Position);c.Age+=dt;c.SwimSpeed=speed;
+                var c=a.Biology;var nicheEnvironment=Niches?EnvironmentAt(a.Position):default;
+                var sample=Niches?new OceanSample {Temperature=nicheEnvironment.Temperature,Light=nicheEnvironment.Light,Fertility=1}:Sample(a.Position);c.Age+=dt;c.SwimSpeed=speed;
                 for(int k=0;k<food.Length;k++) if((food[k].Position-a.Position).Sqr<food[k].Radius*food[k].Radius) {
                     float before=c.Energy;
                     if(Niches) {
-                        a.Biology=c;var environment=NicheEnvironment.Sample(a.Position,Time,FlowOffset,Scenario);environment.Light*=lightTransmission[k];
-                        NicheMetabolism.Feed(ref a,ref food[k],environment,dt*NicheEnvironment.Kernel(a.Position,food[k]),Diagnostics);c=a.Biology;
+                        a.Biology=c;var environment=NicheEnvironment.Sample(a.Position,Time,FlowOffset,Scenario);environment.Light=sample.Light;
+                        NicheMetabolism.Feed(ref a,ref food[k],environment,dt*NicheEnvironment.Kernel(a.Position,food[k])/Math.Max(1,nicheEnvironment.Coverage),Diagnostics);c=a.Biology;
                     } else CloudEcology.Feed(ref c,ref food[k],sample,dt,Diagnostics);
                     if(c.Energy>before){a.FoodCloud=k;a.FoodIdentity=food[k].Identity;}
                 }
                 c.FoodLastStep=c.Budget.Intake;
                 c.AssimilatedEnergy+=c.FoodLastStep;
                 if(c.Budget.Substrate+c.Budget.Organic>0 && Time-a.FedAt>1.1) a.FedAt=Time;
-                c.Budget.Upkeep=(Multicellularity.Cost(c,sample.Temperature,Protection(i))+(Niches?NicheMetabolism.Stress(c,EnvironmentAt(a.Position)):0))*dt;
+                c.Budget.Upkeep=(Multicellularity.Cost(c,sample.Temperature,Protection(i))+(Niches?NicheMetabolism.Stress(c,nicheEnvironment):0))*dt;
                 c.AngularVelocity=(float)Math.Acos(Math.Max(-1,Math.Min(1,V3.Dot(a.PreviousDirection,a.Direction))))/dt;
                 c.Boosting=driven&&Boost;
                 c.Budget.Swimming=CellMotion.SwimmingCost(c)*dt;c.Budget.Turning=CellMotion.TurningCost(c)*dt;
@@ -341,11 +343,22 @@ namespace Evolution.Volume
         public OceanSample Sample(V3 p)=>new OceanSample {Temperature=Temperature(p),Light=Niches?EnvironmentAt(p).Light:WaterField.Light(p),Fertility=1};
         public NicheSample EnvironmentAt(V3 p) {
             var s=NicheEnvironment.Sample(p,Time,FlowOffset,Scenario);s.Nutrients=s.Oxygen=s.Chemicals=s.Dissolved=s.Particles=0;float shade=0;
-            for(int k=0;k<food.Length;k++){var f=food[k];float w=NicheEnvironment.Kernel(p,f);s.Nutrients+=w*f.Nutrients;s.Oxygen+=w*f.Oxygen;s.Chemicals+=w*f.Substrate;s.Dissolved+=w*f.Dissolved;s.Particles+=w*f.Organic;if(lightTransmission!=null)shade+=w*(1-lightTransmission[k]);}
-            s.Light*=Math.Max(.05f,1-Math.Min(.95f,shade));
+            for(int k=0;k<food.Length;k++){var f=food[k];float w=NicheEnvironment.Kernel(p,f);s.Nutrients+=w*f.Nutrients;s.Oxygen+=w*f.Oxygen;s.Chemicals+=w*f.Substrate;s.Dissolved+=w*f.Dissolved;s.Particles+=w*f.Organic;s.Coverage+=w;if(lightTransmission!=null)shade+=w*(1-lightTransmission[k]);}
+            s.Light*=s.Coverage>.000001f?Math.Max(.05f,1-shade/s.Coverage):1;
             return s;
         }
-        void InitializeNiches() {if(!Niches)return;for(int k=0;k<food.Length;k++)NicheResources.Initialize(ref food[k],NicheEnvironment.Sample(food[k].Position,Time,FlowOffset,Scenario),Diagnostics);for(int i=0;i<agents.Count;i++){var a=agents[i];NicheResources.Initialize(ref a,Diagnostics);agents[i]=a;}CacheNiches();}
+        void InitializeNiches()
+        {
+            if(!Niches)return;
+            if(!Diagnostics.NicheLedger) {
+                Diagnostics.BeginNicheEpoch(Tick);
+                foreach(var f in food)if(f.NicheInitialized){Diagnostics.InitialEnergy+=f.Substrate*2+f.Organic+f.Dissolved;Diagnostics.InitialMatter+=f.Nutrients+f.DetritalMatter;Diagnostics.InitialOxygen+=f.Oxygen;}
+                foreach(var a in agents)if(a.NicheInitialized&&a.Alive){Diagnostics.InitialEnergy+=Math.Max(0,a.Biology.Energy)+Biology.StructureEnergy(a.Biology.Genes);Diagnostics.InitialMatter+=a.Matter+a.MineralReserve;}
+            }
+            for(int k=0;k<food.Length;k++)NicheResources.Initialize(ref food[k],NicheEnvironment.Sample(food[k].Position,Time,FlowOffset,Scenario),Diagnostics);
+            for(int i=0;i<agents.Count;i++){var a=agents[i];NicheResources.Initialize(ref a,Diagnostics);agents[i]=a;}
+            CacheNiches();
+        }
     }
 }
 

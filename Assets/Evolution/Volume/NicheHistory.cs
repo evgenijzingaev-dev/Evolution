@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 namespace Evolution.Volume
 {
-    public struct NicheHistoryPoint
+    [Serializable] public struct NicheHistoryPoint
     {
         public long Tick,Births,Deaths;public ChunkKey Scope;public int Living;
         public float Photo,Organic,Hot,Frugal,Generation,Nutrients,Oxygen;
@@ -44,13 +44,14 @@ namespace Evolution.Volume
             if(index<0||index>=world.Count)return "Выбери организм: среда определяет его возможности.";
             var a=world.Get(index);if(!a.Alive)return CellEvolution.DeathReason(a);
             var c=a.Biology;var e=world.EnvironmentAt(a.Position);var b=c.Budget;
-            string source=b.Light>=b.Organic&&b.Light>=b.Substrate?"свет":b.Organic>b.Substrate?"органика":"химический субстрат";
+            if(b.PredationLoss>0)return "Укусы отнимают энергию. Уходи от хищника.";
+            string source=b.Transport>b.Intake?"обмен в колонии":b.Light>=b.Organic&&b.Light>=b.Substrate?"свет":b.Organic>b.Substrate?"органика":"химический субстрат";
             string limit=a.MineralReserve<NicheMetabolism.NewbornMatter(c.Genes)?"Мало минералов для новой биомассы.":"Минералов для роста достаточно.";
             if(NicheMetabolism.Thermal(c.Genes,e.Temperature)<.6f)limit="Температура снижает усвоение и повышает расход.";
             else if(e.Oxygen<3)limit="Мало кислорода: дыхание менее эффективно.";
             else if(c.Genes.Photosynthesis>.6f&&e.Light<.18f)limit="Мало света: фотосистемы требуют содержания.";
-            if(b.Intake<=.00001f)return "Питание сейчас не покрывает расходы. "+limit;
-            return "Источник: "+source+" · баланс "+b.Net.ToString("+0.00;-0.00;0.00")+" за шаг.\n"+limit;
+            if(b.Intake+Math.Max(0,b.Transport)<=.00001f)return "Питание сейчас не покрывает расходы. "+limit;
+            return "Источник: "+source+" · "+(b.Net>=0?"запас растёт.":"расходы выше питания.")+"\n"+limit;
         }
         public static string Trend(IReadOnlyList<NicheHistoryPoint> history)
         {

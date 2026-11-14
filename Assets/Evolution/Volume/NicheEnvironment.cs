@@ -4,7 +4,7 @@ namespace Evolution.Volume
     public enum EcologicalScenario { Legacy, Natural, Sunlit, Dark, Hydrothermal, Organic }
     public struct NicheSample
     {
-        public float Light,Temperature,Nutrients,Oxygen,Chemicals,Dissolved,Particles,Vent;
+        public float Light,Temperature,Nutrients,Oxygen,Chemicals,Dissolved,Particles,Vent,Coverage;
         public V3 Current;
     }
     // Continuous deterministic forcing, not species zones. Stocks are held by moving fluid parcels.
@@ -42,7 +42,7 @@ namespace Evolution.Volume
         }
         // Compact-support C1 kernel: no concentration jump at a parcel edge.
         public static float Kernel(V3 point,FoodCloud parcel)
-        {float q=(point-parcel.Position).Sqr/(parcel.Radius*parcel.Radius);return q>=1?0:(1-q)*(1-q);}
+        {if(!(parcel.Radius>0)||float.IsInfinity(parcel.Radius))return 0;float q=(point-parcel.Position).Sqr/(parcel.Radius*parcel.Radius);return q>=1?0:(1-q)*(1-q);}
     }
     public interface INicheArchive { EcologicalScenario Scenario {get;set;} }
 }

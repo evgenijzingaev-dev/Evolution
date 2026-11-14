@@ -143,6 +143,7 @@ namespace Evolution.Runtime
                     membranes[(int)form].Motion=farMembranes[(int)form].Motion=cytoplasm[(int)form].Motion=cellPose;
                     float phase=cellPose.Phase;
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
+                    if(world.Niches)membrane=Color.Lerp(membrane,new Color(1,.74f,.45f,membrane.a),g.ThermalTolerance*.24f*Mathf.InverseLerp(25,43,g.PreferredTemperature));
                     if(c.Specialization>0) {
                         Color role=c.Role==CellRole.Feeding?new Color(.45f,1,.65f,membrane.a):c.Role==CellRole.Movement?new Color(.4f,.8f,1,membrane.a):c.Role==CellRole.Defense?new Color(.9f,.72f,.42f,membrane.a):membrane;
                         membrane=Color.Lerp(membrane,role,c.Specialization*.65f);
@@ -245,7 +246,7 @@ farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector
                 var p=new V3(x+Mathf.Floor(eye.x/6)*6,y+Mathf.Floor(eye.y/6)*6,z+Mathf.Floor(eye.z/6)*6);
                 p+=new V3(Mathf.Sin(p.Y*.31f+p.Z)*1.1f,Mathf.Sin(p.Z*.27f+p.X)*1.1f,Mathf.Sin(p.X*.37f+p.Y)*1.1f);
                 float fade=1-WaterOptics.SmoothRange(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
-                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.17f),new Color(1,.38f,.16f,.17f),Mathf.InverseLerp(9,35,temp));
+                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.17f),new Color(1,.38f,.16f,.17f),Mathf.InverseLerp(9,world.Niches?50:35,temp));
                     c.a*=fade;particles.Add(V(p),Quaternion.identity,Vector3.one*7.2f,c,new Vector4(4,0,0,0));}
                 if(lightHints) {float light=world.Sample(p).Light;
                     particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}

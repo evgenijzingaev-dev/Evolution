@@ -9,6 +9,7 @@ namespace Evolution.Tests
     {
         [Test] public void FieldsAreContinuousAcrossNegativeAndPositiveChunkBoundaries()
         {
+            Assert.AreEqual(0,NicheEnvironment.Kernel(default,new FoodCloud()));
             foreach(float edge in new[] {-40f,-20,0,20,40}) {
                 var a=NicheEnvironment.Sample(new V3(edge-.0001f,-18,0),0,default,EcologicalScenario.Natural);
                 var b=NicheEnvironment.Sample(new V3(edge+.0001f,-18,0),0,default,EcologicalScenario.Natural);
@@ -154,6 +155,78 @@ namespace Evolution.Tests
             var single=new VolumeWorld(new[]{a},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit);
             var crowded=new VolumeWorld(new[]{a,b},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit);
             Assert.Less(crowded.Sample(default).Light,single.Sample(default).Light);
+        }
+        [Test] public void OverlappingParcelsDoNotMultiplyCellPhotosystemsOrUptakeBudget()
+        {
+            var a=Consumer();a.Identity="overlap-cell";a.Alive=true;a.Biology.Id=a.Biology.LineageId=1;a.Direction=new V3(1,0,0);
+            var first=new FoodCloud {Identity="pool-1",Radius=3,NicheInitialized=true,Nutrients=20,Oxygen=40};var second=first;second.Identity="pool-2";
+            var one=new VolumeWorld(new[]{a},new[]{first},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit){Controlled=0};
+            var two=new VolumeWorld(new[]{a},new[]{first,second},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit){Controlled=0};
+            one.Step();two.Step();Assert.LessOrEqual(two.Diagnostics.Solar,one.Diagnostics.Solar*1.01);
+            Assert.LessOrEqual(two.Get(0).MineralReserve-a.MineralReserve,(one.Get(0).MineralReserve-a.MineralReserve)*1.01);
+        }
+        [Test] public void UpgradingLegacyLedgerStartsAnExplicitEpochWithoutRewritingExistingCells()
+        {
+            var store=new MemoryRegionArchive();var old=new ChunkOcean(42,store);
+            for(int tick=0;tick<20;tick++)old.World.Step();old.Save();
+            var cell=old.World.Get(0);long births=old.World.Diagnostics.Births;Assert.Greater(old.World.Diagnostics.Upkeep,0);
+            var upgraded=new ChunkOcean(42,store,EcologicalScenario.Natural);var a=upgraded.World.Get(upgraded.Find(cell.Identity));
+            Assert.AreEqual(cell.Biology,a.Biology);Assert.AreEqual(cell.Position,a.Position);Assert.AreEqual(births,upgraded.World.Diagnostics.Births);
+            Assert.IsTrue(upgraded.World.Diagnostics.NicheLedger);Assert.AreEqual(20,upgraded.World.Diagnostics.NicheEpochTick);
+            var total=upgraded.Snapshot(out _);var d=upgraded.World.Diagnostics;
+            Assert.AreEqual(d.InitialEnergy+d.Solar+d.ExternalNutrients+d.ExternalOrganic-d.Dissipated,total.Stored,d.InitialEnergy*.0001);
+            Assert.AreEqual(d.InitialMatter+d.ExternalMatter-d.MatterLost,total.Matter,d.InitialMatter*.0002);
+        }
+        [Test] public void UnobservedLegacyTimeIsResolvedBeforeTheNewEcologyEpoch()
+        {
+            var source=new MemoryRegionArchive();var old=new ChunkOcean(42,source);old.Save();source.Clock=20;
+            MemoryRegionArchive Clone() {
+                var result=new MemoryRegionArchive {Clock=source.Clock,Diagnostics=source.Diagnostics.Clone()};
+                foreach(var key in source.Keys){source.TryLoad(key,out var r);result.Save(r);}return result;
+            }
+            var reference=new ChunkOcean(42,Clone());var actual=new ChunkOcean(42,Clone(),EcologicalScenario.Natural);
+            for(int i=0;i<reference.World.Count;i++) {
+                var a=reference.World.Get(i);int index=actual.Find(a.Identity);Assert.GreaterOrEqual(index,0);
+                var b=actual.World.Get(index);Assert.AreEqual(a.Biology.Genes,b.Biology.Genes);Assert.AreEqual(a.Biology.Age,b.Biology.Age);Assert.AreEqual(a.Biology.Energy,b.Biology.Energy);
+            }
+            Assert.AreEqual(reference.World.Tick,actual.World.Tick);
+            var total=actual.Snapshot(out _);var d=actual.World.Diagnostics;
+            Assert.AreEqual(d.InitialEnergy+d.Solar+d.ExternalNutrients+d.ExternalOrganic-d.Dissipated,total.Stored,d.InitialEnergy*.0001);
+        }
+        [TestCase(15)] [TestCase(60)] [TestCase(144)]
+        public void DifferentObservationRatesCannotChangeNicheBirthsGenomesOrStocks(int fps)
+        {
+            var baseline=NicheExperiment.Create(EcologicalScenario.Natural,7);var observed=NicheExperiment.Create(EcologicalScenario.Natural,7);
+            for(int tick=0;tick<200;tick++) {
+                NicheExperiment.Step(baseline);NicheExperiment.Step(observed);
+                for(int frame=0;frame<fps;frame++){observed.EnvironmentAt(observed.Get(0).Position);observed.FoodPotential(0,observed.Get(0).Biology);NicheReadout.Explain(observed,0);}
+                Assert.AreEqual(baseline.Count,observed.Count);for(int i=0;i<baseline.Count;i++)Assert.AreEqual(baseline.Get(i),observed.Get(i));
+                for(int k=0;k<baseline.FoodCount;k++)Assert.AreEqual(baseline.GetFood(k),observed.GetFood(k));
+                Assert.AreEqual(baseline.Diagnostics.Solar,observed.Diagnostics.Solar);Assert.AreEqual(baseline.Life.Latest,observed.Life.Latest);
+            }
+        }
+        [Test] public void EveryNpcColonyMotorPaysTheSameActualOrganismThrottle()
+        {
+            var pair=VolumeColonyTests.Pair();var a=pair.Get(0);var b=pair.Get(1);
+            var food=new FoodCloud {Identity="colony-effort-food",Position=b.Position,Radius=2.2f,Substrate=35,Organic=35};
+            var world=new VolumeWorld(new[]{a,b},new[]{food},Array.Empty<V3>(),pair.Tick,default,scenario:EcologicalScenario.Sunlit){ActiveCenter=a.Position};
+            world.Step();Assert.AreEqual(2,world.OrganismSize(0));
+            var first=world.Get(0).Biology;var second=world.Get(1).Biology;
+            float effortA=first.SwimSpeed/(Ecology.Mobility(first.Genes)*Multicellularity.Motor(first));
+            float effortB=second.SwimSpeed/(Ecology.Mobility(second.Genes)*Multicellularity.Motor(second));
+            Assert.AreEqual(effortA,effortB,1e-5);Assert.Greater(first.Budget.Movement,0);Assert.Greater(second.Budget.Movement,0);
+        }
+        [Test] public void PredationTransfersFinitePreyMatterOnceAndOnlyCoreCreatesDetritus()
+        {
+            var hunter=Consumer(0,.1f);hunter.NicheInitialized=false;hunter.Identity="hunter";hunter.Alive=true;hunter.Direction=new V3(1,0,0);hunter.Biology.Id=hunter.Biology.LineageId=1;hunter.Biology.Genes.Predation=1;hunter.Biology.Genes.Size=1.2f;
+            var prey=Consumer(0,.1f);prey.NicheInitialized=false;prey.Identity="prey";prey.Alive=true;prey.Direction=new V3(1,0,0);prey.Position=new V3(.1f,0,0);prey.Biology.Id=prey.Biology.LineageId=2;prey.Biology.Genes.Size=.6f;prey.Biology.Integrity=.000001f;prey.Biology.Energy=.1f;
+            var f=new FoodCloud {Identity="detritus-pool",Position=default,Radius=3};
+            var w=new VolumeWorld(new[]{hunter,prey},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit){NutrientSupply=false};
+            double initial=VolumeSnapshot.Read(w).Stored;w.Step();Assert.IsFalse(w.Get(1).Alive);Assert.Greater(w.Diagnostics.Predated,0);
+            Assert.AreEqual(0,w.Get(1).Matter+w.Get(1).MineralReserve);Assert.Greater(w.GetFood(0).DetritalMatter,0);
+            var result=VolumeSnapshot.Read(w);Assert.AreEqual(w.Diagnostics.InitialMatter-w.Diagnostics.MatterLost,result.Matter,.0001);
+            Assert.AreEqual(initial-w.Diagnostics.Dissipated,result.Stored,.0001);long events=w.Life.Latest;
+            for(int frame=0;frame<10;frame++)w.Life.TryRead(events,out _);Assert.AreEqual(result,VolumeSnapshot.Read(w));
         }
     }
 }

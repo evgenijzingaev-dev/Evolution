@@ -71,7 +71,7 @@ namespace Evolution.Runtime
                 if(selected){c=Color.white;c.a=.8f;draw.Add(p,c,26,1);}
             }
             foreach(var r in nearby) {
-                if(!InSlice(r)||(!Analytical&&!r.Loaded))continue;Vector3 p=VolumePainter.V(RegionPoint(r));var screen=water.Lens.WorldToViewportPoint(p);
+                if(!InSlice(r)||(!Analytical&&!r.Loaded)||Layer==SurveyLayer.Adaptation&&r.Living==0)continue;Vector3 p=VolumePainter.V(RegionPoint(r));var screen=water.Lens.WorldToViewportPoint(p);
                 if(screen.z<=.2f||screen.x<-.05f||screen.x>1.05f||screen.y<-.05f||screen.y>1.05f||OverUi(new Vector2(screen.x*Screen.width,screen.y*Screen.height)))continue;
                 float d=Vector3.Distance(eye,p);float alpha=Mathf.Lerp(WaterOpticsValue(Mathf.Lerp(55,90,Blend),Mathf.Lerp(95,145,Blend),d)*.85f,.55f,DataLayer?Blend:0);
                 if(!r.Loaded)alpha=Mathf.Max(alpha,.4f);if(r.Living==0&&!fields)continue;
