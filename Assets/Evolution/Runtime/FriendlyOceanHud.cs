@@ -344,8 +344,11 @@ namespace Evolution.Runtime
                 divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка.";
             }
             if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
-            if(water.SelectedIndex>=0)GUI.Label(new Rect(r.x+70,r.y-42,r.width-140,38),
-                "Нужно "+water.World.DivisionThreshold(water.SelectedIndex).ToString("F1")+" · Расход ≈ "+divisionCost.ToString("F1")+" энергии\n"+(blocked??"Готово · R"),muted);
+            if(water.SelectedIndex>=0) {
+                var energyInfo=new Rect(r.x+70,r.y-42,r.width-140,38);
+                occupied.Add(energyInfo);
+                GUI.Label(energyInfo,"Нужно "+water.World.DivisionThreshold(water.SelectedIndex).ToString("F1")+" · Расход ≈ "+divisionCost.ToString("F1")+" энергии\n"+(blocked??"Готово · R"),muted);
+            }
             if(Action(new Rect(r.x+416,r.y,cell,76),4,"Развитие","Просмотреть наследуемые черты",development))SetPage(HudPage.Development);
         }
         void DrawFooter()
