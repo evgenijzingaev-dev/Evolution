@@ -2,7 +2,9 @@
 # Run the actual IL2CPP player with a software OpenGL display. Capture only the
 # player window; never upload activation/Editor logs or runner home directories.
 set -euo pipefail
-mkdir -p artifacts/visual
+# GameCI Docker may leave artifacts/ owned by root.
+# Give only the capture output directory to the runner, not the entire checkout.
+sudo install -d -o "$(id -u)" -g "$(id -g)" artifacts/visual
 player=$(find build/StandaloneLinux64 -type f \( -name '*.x86_64' -o -name 'EVOLUTION' \) -print -quit)
 if [[ -z "$player" ]]; then
   echo '::error::No built Linux player executable found.'
