@@ -60,11 +60,14 @@ namespace Evolution.Runtime
         public VolumePainter(CrystalWaterLook look)
         {
             sphere=MicroMeshes.Cell(12,20);thread=MicroMeshes.Cell(2,6);quad=MicroMeshes.LightSheet();
+            var sphereBounds=sphere.bounds;sphereBounds.Expand(.45f);sphere.bounds=sphereBounds;
             solid=Material("VolumeBody");shell=Material("VolumeMembrane");dust=Material("VolumeSuspension");backdrop=Material("VolumeBackdrop");
             foreach(var material in new[] {solid,shell,dust,backdrop})look.Apply(material);
             bodies=new Batch(sphere,solid,128);threads=new Batch(thread,solid,128);vesicles=new Batch(sphere,shell,128);particles=new Batch(quad,dust,256);
             for(int i=0;i<6;i++) {
                 high[i]=CrystalMeshes.Create((CrystalForm)i,24,48);low[i]=CrystalMeshes.Create((CrystalForm)i,8,16);
+                var highBounds=high[i].bounds;highBounds.Expand(.55f);high[i].bounds=highBounds;
+                var lowBounds=low[i].bounds;lowBounds.Expand(.55f);low[i].bounds=lowBounds;
                 membranes[i]=new Batch(high[i],shell,128);farMembranes[i]=new Batch(low[i],shell,128);
                 cytoplasm[i]=new Batch(low[i],shell,128);
                 pickVertices[i]=high[i].vertices;pickTriangles[i]=high[i].triangles;
@@ -125,6 +128,7 @@ namespace Evolution.Runtime
                     var target=AnimationTargets.From(c,world.Sample(a.Position),c.SwimSpeed,VolumeWorld.StepSeconds);
                     float propulsion=(a.Velocity-world.Current(a.Position)).Length;
                     target.Drive=AnimationTargets.Clamp(propulsion/System.Math.Max(.1f,Ecology.Mobility(g)));
+                    target.Turn=Mathf.Clamp(Vector3.Dot(Vector3.Cross(V(a.PreviousDirection),V(a.Direction)),rotation*Vector3.up)*12,-1,1);
                     target.Frequency=(.7f+2.7f*target.Drive)*target.Activity/(float)System.Math.Sqrt(g.Size);
                     if(!states.TryGetValue(a.Identity,out var visual)) {
                         var animation=new CellAnimation(phaseId,target);animation.Advance(time);
@@ -132,7 +136,7 @@ namespace Evolution.Runtime
                     } else {visual.Animation.Target=target;visual.Animation.Advance(dt);}
                     visual.Animation.Observe(c,time,0);
                     Vector3 actual=V(a.Velocity-world.Current(a.Position));
-                    if(actual.sqrMagnitude>.0025f&&a.DivisionAt+VolumeWorld.DivisionSeconds<time)
+                    if(actual.sqrMagnitude>.0025f&&(a.DivisionAt<=0||a.DivisionAt+VolumeWorld.DivisionSeconds<time))
                         rotation=Quaternion.LookRotation(actual.normalized,Mathf.Abs(actual.normalized.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
                     visual.Rotation=Quaternion.Slerp(visual.Rotation,rotation,1-Mathf.Exp(-8*dt));rotation=visual.Rotation;
                     cellPose=WaterCellPose.From(visual.Animation,c,time);visual.Pose=cellPose;
@@ -172,9 +176,9 @@ namespace Evolution.Runtime
                         bodies.Opacity=(1-detail)*anatomyWeight;
                         // Real residents keep a small internal silhouette at medium distance.
                         if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
-                            Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
+                            Vector3 local=Deform(CrystalMeshes.Point(form,Fibonacci(j,3)*.22f),cellPose)*size;
                             Color pigment=Color.Lerp(new Color(.88f,.61f,.32f),new Color(.4f,.72f,.40f),g.Photosynthesis);
-                            bodies.Add(p+rotation*Deform(local,cellPose),rotation,Vector3.one*size*.14f,pigment,traits);
+                            bodies.Add(p+rotation*local,rotation,Vector3.one*size*.14f,pigment,traits);
                         }
                         bodies.Opacity=1;if(!detailed||!a.Alive)continue;
                     }

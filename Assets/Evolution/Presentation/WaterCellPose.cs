@@ -13,7 +13,7 @@ namespace Evolution.Presentation
                 Phase=(float)(animation.Phase%(Math.PI*40)), Drive=animation.Drive,
                 Activity=animation.Activity, Turn=animation.Turn,
                 Amoeba=CrystalForms.From(cell.Genes)==CrystalForm.Amoeboid?1:0,
-                Feed=animation.Feeding(time), Damage=animation.Damage(time), Shell=cell.Genes.Membrane
+                Feed=animation.Feeding(time)+animation.Readiness*.45f, Damage=animation.Damage(time), Shell=cell.Genes.Membrane
             };
         }
         public void Deform(ref float x,ref float y,ref float z)
