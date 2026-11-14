@@ -131,7 +131,7 @@ namespace Evolution.Runtime
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
             long previousEventTick=eventTick;
             foreach(var e in water.Overview.Survey.Events)if(e.Tick>previousEventTick){
-                if(e.Kind==SurveyEventKind.Division)Notify("birth","Родился потомок","Линия сохранена; геном унаследован с возможной мутацией",false);
+                if(e.Kind==SurveyEventKind.Division)Notify("birth","Родился потомок","Геном и линия унаследованы",false);
                 else if(e.Kind==SurveyEventKind.KnownLineageLost)Notify("line","Линия исчезла из известной области","Подтверждено наблюдавшейся гибелью",true);
                 else if(e.Kind==SurveyEventKind.PopulationChange&&e.Count<0)Notify("decline","В регионе стало меньше жизни","Изменение наблюдаемой численности",false);
                 eventTick=Math.Max(eventTick,e.Tick);

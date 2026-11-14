@@ -16,7 +16,7 @@ namespace Evolution.Volume
         public string Nutrition => FoodRate < Need ? "Мало" : FoodRate < Need * 2 ? "Достаточно" : "Много";
         public string Illumination => Light < .2f ? "Темно" : Light < .7f ? "Достаточно света" : "Ярко";
         public string Condition => !Alive ? "Жизнь завершилась" : Integrity < .4f ? "Повреждена" : Integrity < .8f ? "Есть повреждения" : Energy < .2f ? "Нужна энергия" : "Хорошее";
-        public string Goal => !Alive ? "Выбери другую живую клетку" : Threat >= 0 ? "Отплыви от хищника" : ReadyToDivide ? "Разделись и наблюдай за потомком" : !EnoughFood ? "Найди подходящую пищу" : Energy < .8f ? "Подплыви к пище и накопи энергию" : "Исследуй воду и береги энергию";
+        public string Goal => !Alive ? "Выбери другую живую клетку" : Threat >= 0 ? "Отплыви от хищника" : ReadyToDivide ? "Пора разделиться" : !EnoughFood ? "Найди подходящую пищу" : Energy < .8f ? "Подплыви к пище и накопи энергию" : "Исследуй воду и береги энергию";
         public static PlayerReadout Read(VolumeWorld world, int index)
         {
             var r = new PlayerReadout { Food = -1, Threat = -1 };
