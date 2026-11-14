@@ -9,11 +9,11 @@ namespace Evolution.Tests
     {
         static readonly Rect Toast = new Rect(1130, 88, 292, 150);
 
-        // Unity test assemblies do not automatically reference Assembly-CSharp.
+        // Resolve the production class from its actual Unity asmdef assembly.
         // Resolve the actual production implementation, never a test-only copy.
         static bool NoticeHit(Vector2 point, Rect area, int count, bool journal, bool covered)
         {
-            var type = Type.GetType("Evolution.Runtime.FriendlyOceanHud, Assembly-CSharp");
+            var type = Type.GetType("Evolution.Runtime.FriendlyOceanHud, Evolution.Runtime");
             Assert.IsNotNull(type, "Production FriendlyOceanHud must be present");
             var method = type.GetMethod("NoticeHit", BindingFlags.Public | BindingFlags.Static);
             Assert.IsNotNull(method, "Production NoticeHit method must remain public");
