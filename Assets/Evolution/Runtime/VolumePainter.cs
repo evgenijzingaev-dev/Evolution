@@ -66,8 +66,8 @@ namespace Evolution.Runtime
             bodies=new Batch(sphere,solid,128);threads=new Batch(thread,solid,128);vesicles=new Batch(sphere,shell,128);particles=new Batch(quad,dust,256);
             for(int i=0;i<6;i++) {
                 high[i]=CrystalMeshes.Create((CrystalForm)i,24,48);low[i]=CrystalMeshes.Create((CrystalForm)i,8,16);
-                var highBounds=high[i].bounds;highBounds.Expand(.55f);high[i].bounds=highBounds;
-                var lowBounds=low[i].bounds;lowBounds.Expand(.55f);low[i].bounds=lowBounds;
+                var highBounds=high[i].bounds;highBounds.Expand(2f);high[i].bounds=highBounds;
+                var lowBounds=low[i].bounds;lowBounds.Expand(2f);low[i].bounds=lowBounds;
                 membranes[i]=new Batch(high[i],shell,128);farMembranes[i]=new Batch(low[i],shell,128);
                 cytoplasm[i]=new Batch(low[i],shell,128);
                 pickVertices[i]=high[i].vertices;pickTriangles[i]=high[i].triangles;
