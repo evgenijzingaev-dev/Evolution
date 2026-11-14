@@ -13,7 +13,12 @@ fi
 # GameCI creates the Linux build as root; chmod as runner fails with EPERM.
 # Change only the built executable mode, leaving checkout ownership untouched.
 sudo chmod +x "$player"
-export EVOLUTION_CAPTURE_PLAYER="$player"
+export EVOLUTION_CAPTURE_PLAYER="$PWD/$player"
+# First require actual 3D URP frames from this IL2CPP player, using the same
+# strict in-player evidence validator as Visual Preview. Keep the legacy
+# external-input smoke test below as an additional, independent check.
+export EVOLUTION_CAPTURE_DESTINATION="$PWD/artifacts/visual"
+bash Tools/ci/visual_preview.sh
 xvfb-run -a -s '-screen 0 2560x1440x24 +extension GLX' bash <<'CAPTURE'
 set -euo pipefail
 export LIBGL_ALWAYS_SOFTWARE=1

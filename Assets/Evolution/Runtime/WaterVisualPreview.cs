@@ -65,6 +65,17 @@ namespace Evolution.Runtime
         }
         static void PrepareScene(Scene scene, LoadSceneMode mode)
         {
+            // The verification player retains CellPrototype as its ordinary
+            // startup scene. Only an explicit preview request enters the 3D game.
+            if (scene.name != "WaterPrototype3D") {
+                if (!Application.CanStreamedLevelBeLoaded("WaterPrototype3D")) {
+                    SceneManager.sceneLoaded -= PrepareScene;
+                    Debug.LogError("Visual Preview: WaterPrototype3D is missing from the build");
+                    Application.Quit(1); return;
+                }
+                SceneManager.LoadScene("WaterPrototype3D", LoadSceneMode.Single);
+                return;
+            }
             SceneManager.sceneLoaded -= PrepareScene;
             var prototype = UnityEngine.Object.FindFirstObjectByType<WaterPrototype>();
             if (scene.name != "WaterPrototype3D" || !prototype) { Application.Quit(1); return; }
