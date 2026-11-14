@@ -332,7 +332,7 @@ namespace Evolution.Runtime
             if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Разрешить укусы в пределах досягаемости. Также можно удерживать Space":why,AttackRequested,canAttack))AttackRequested=!AttackRequested;
             string blocked=water.World.DivisionBlock(water.SelectedIndex);
             if(water.Paused)blocked="Продолжи симуляцию";
-            else if(water.World.Controlled!=water.SelectedIndex)blocked="Сначала возьми управление";
+            else if(water.World.Controlled!=water.SelectedIndex&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Alive)blocked="Сначала возьми управление";
             float divisionCost=0;
             string divisionTip=blocked??"Рождение самостоятельного потомка";
             if(water.SelectedIndex>=0) {
