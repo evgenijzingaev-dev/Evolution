@@ -314,7 +314,8 @@ namespace Evolution.Runtime
             b.AppendLine($"Current {v.X:F3} / {v.Y:F3} / {v.Z:F3}");
             b.AppendLine($"Budget dt {a.RenderDuration:F3}: intake {c.Budget.Intake:F4} · net {c.Budget.Net:F4}");
             b.AppendLine($"Substrate {c.Budget.Substrate:F4} · Organic {c.Budget.Organic:F4} · Light {c.Budget.Light:F4} · Prey {c.Budget.Prey:F4}");
-            b.AppendLine($"Division {c.Budget.Division:F4} · Growth {c.Budget.Growth:F4} · Movement {c.Budget.Movement:F4} · Attack {c.Budget.Attack:F4} · Loss {c.Budget.PredationLoss:F4}");
+            b.AppendLine($"Upkeep {c.Budget.Upkeep:F4} · Movement {c.Budget.Movement:F4} · Attack {c.Budget.Attack:F4} · Loss {c.Budget.PredationLoss:F4}");
+            b.AppendLine($"Division {c.Budget.Division:F4} · Growth {c.Budget.Growth:F4}");
             b.AppendLine("Геном (только чтение):");
             foreach(var f in typeof(Genome).GetFields())b.AppendLine(f.Name+": "+((float)f.GetValue(g)).ToString("F3"));
             if(readout.Food>=0){var f=water.World.GetFood(readout.Food);b.AppendLine($"Food {f.Identity}: S {f.Substrate:F3} · O {f.Organic:F3} · concentration {f.Concentration:F4}");}
