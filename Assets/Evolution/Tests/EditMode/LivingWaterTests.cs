@@ -69,5 +69,54 @@ namespace Evolution.Tests
             Assert.AreEqual(1,WaterCellPose.ShellSeparation(1));Assert.AreEqual(1,WaterCellPose.Separation(1));
             float last=0;for(int i=0;i<=100;i++){float s=WaterCellPose.Separation(i/100f);Assert.GreaterOrEqual(s,last);last=s;}
         }
+        [Test] public void RealDeathIsPublishedOnceAfterCoreRecyclingAndDoesNotCreateVfxFood()
+        {
+            var w=Ready(.00001f);w.Step();Assert.IsFalse(w.Get(0).Alive);
+            Assert.AreEqual(1,w.Life.Latest);Assert.IsTrue(w.Life.TryRead(1,out var e));
+            Assert.AreEqual(LifeEventKind.Death,e.Kind);Assert.AreEqual(DeathAppearance.Exhaustion,e.Cause);
+            Assert.AreEqual(w.Get(0),e.Agent);Assert.AreEqual(0,e.Agent.Biology.Energy);
+            float organic=0;for(int k=0;k<w.FoodCount;k++)organic+=w.GetFood(k).Organic;
+            var diagnostics=w.Diagnostics.Clone();
+            for(int frame=0;frame<240;frame++) {
+                Assert.IsTrue(w.Life.TryRead(1,out var snapshot));
+                WaterCellPose.Remains(frame/60f);WaterCellPose.Rupture(frame/60f);
+                Assert.AreEqual(e.Agent,snapshot.Agent);
+            }
+            float after=0;for(int k=0;k<w.FoodCount;k++)after+=w.GetFood(k).Organic;
+            Assert.AreEqual(organic,after);Assert.AreEqual(diagnostics.RecyclingLoss,w.Diagnostics.RecyclingLoss);
+            for(int step=0;step<90;step++)w.Step();Assert.AreEqual(1,w.Life.Latest);
+            Assert.AreEqual(1,w.Diagnostics.Deaths);
+        }
+        [Test] public void DamageAppearanceUsesConsumedStateAndDoesNotInventAnotherDeathRule()
+        {
+            var a=Ready(.00001f).Get(0);a.Biology.Consumed=true;
+            var w=new VolumeWorld(1,42,new[] {a}) {Controlled=0,ActiveCenter=a.Position};w.Step();
+            Assert.IsTrue(w.Life.TryRead(1,out var e));Assert.AreEqual(DeathAppearance.Damage,e.Cause);
+        }
+        [Test] public void DeathSequenceHasDwellRuptureAndCompleteDissolution()
+        {
+            Assert.AreEqual(0,WaterCellPose.Rupture(.5f));Assert.AreEqual(1,WaterCellPose.Remains(1.5f));
+            Assert.Greater(WaterCellPose.Rupture(1.2f),0);Assert.Less(WaterCellPose.Remains(3),1);
+            Assert.AreEqual(0,WaterCellPose.Remains(4));
+        }
+        [TestCase(15)] [TestCase(60)] [TestCase(144)]
+        public void PresentationSamplingDoesNotChangeCoreAtAnyRenderRate(int fps)
+        {
+            var baseline=Ready();var observed=Ready();baseline.RequestDivision();observed.RequestDivision();
+            for(int tick=0;tick<400;tick++) {
+                baseline.Step();observed.Step();
+                for(int frame=0;frame<fps;frame++) {
+                    var c=observed.Get(0).Biology;var animation=new CellAnimation(c.Id,AnimationTargets.From(c,observed.Sample(observed.Get(0).Position),c.SwimSpeed,.05f));
+                    animation.Advance(.05*(frame+1)/fps);
+                    var pose=WaterCellPose.From(animation,c,observed.Time);
+                    float x=.3f,y=.1f,z=.2f;pose.Deform(ref x,ref y,ref z);
+                    for(long seq=observed.Life.Oldest;seq<=observed.Life.Latest;seq++)observed.Life.TryRead(seq,out _);
+                }
+                Assert.AreEqual(baseline.Count,observed.Count);
+                for(int i=0;i<baseline.Count;i++)Assert.AreEqual(baseline.Get(i),observed.Get(i));
+                Assert.AreEqual(baseline.Diagnostics.RecyclingLoss,observed.Diagnostics.RecyclingLoss);
+                for(int k=0;k<baseline.FoodCount;k++)Assert.AreEqual(baseline.GetFood(k),observed.GetFood(k));
+            }
+        }
     }
 }

@@ -13,13 +13,13 @@ namespace Evolution.Runtime
         internal static V3 V(Vector3 p)=>new V3(p.x,p.y,p.z);
         sealed class Batch
         {
-            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits,motions,responses;readonly float[] fissions;public float Fission;public WaterCellPose Motion;
+            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits,motions,responses,deaths;readonly float[] fissions;public float Fission;public WaterCellPose Motion;public float Rupture;
             readonly MaterialPropertyBlock block=new MaterialPropertyBlock();readonly float[] visibility;int used;public float Opacity=1;
-            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];motions=new Vector4[count];responses=new Vector4[count];visibility=new float[count];fissions=new float[count];}
+            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];motions=new Vector4[count];responses=new Vector4[count];deaths=new Vector4[count];visibility=new float[count];fissions=new float[count];}
             public void Add(Vector3 p,Quaternion r,Vector3 s,Color c,Vector4 phenotype=default)
-            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;motions[used]=new Vector4(Motion.Phase,Motion.Drive,Motion.Activity,Motion.Amoeba);responses[used]=new Vector4(Motion.Turn,Motion.Feed,Motion.Damage,Motion.Shell);fissions[used]=Fission;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
+            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;motions[used]=new Vector4(Motion.Phase,Motion.Drive,Motion.Activity,Motion.Amoeba);responses[used]=new Vector4(Motion.Turn,Motion.Feed,Motion.Damage,Motion.Shell);deaths[used]=new Vector4(Rupture,0,0,0);fissions[used]=Fission;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
             public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);block.SetFloatArray("_Visibility",visibility);block.SetFloatArray("_Fission",fissions);
-                block.SetVectorArray("_Motion",motions);block.SetVectorArray("_Response",responses);Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
+                block.SetVectorArray("_Death",deaths);block.SetVectorArray("_Motion",motions);block.SetVectorArray("_Response",responses);Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
         }
         readonly Mesh sphere,thread,quad;readonly Material solid,shell,dust,backdrop;
         readonly Mesh[] high=new Mesh[6],low=new Mesh[6];
@@ -34,17 +34,19 @@ namespace Evolution.Runtime
         readonly HashSet<string> present=new HashSet<string>();readonly List<string> expired=new List<string>();
         double lastDrawTime=-1;
         LifeJournal journal;long consumed;
-        readonly LifeEvent[] divisions=new LifeEvent[32];int divisionSlot;
+        readonly LifeEvent[] divisions=new LifeEvent[32],deaths=new LifeEvent[32];int divisionSlot,deathSlot;
         readonly Dictionary<string,int> indices=new Dictionary<string,int>();
         void ObserveLife(VolumeWorld world,double time)
         {
             if(!object.ReferenceEquals(journal,world.Life)) {
                 journal=world.Life;consumed=journal.Oldest-1;
-                System.Array.Clear(divisions,0,divisions.Length);divisionSlot=0;
+                System.Array.Clear(divisions,0,divisions.Length);System.Array.Clear(deaths,0,deaths.Length);divisionSlot=deathSlot=0;
             }
             for(long sequence=System.Math.Max(consumed+1,journal.Oldest);sequence<=journal.Latest;sequence++)
-                if(journal.TryRead(sequence,out var e)&&e.Kind==LifeEventKind.Division&&time-e.Time<VolumeWorld.DivisionSeconds)
-                    divisions[divisionSlot++%divisions.Length]=e;
+                if(journal.TryRead(sequence,out var e)) {
+                    if(e.Kind==LifeEventKind.Division&&time-e.Time<VolumeWorld.DivisionSeconds)divisions[divisionSlot++%divisions.Length]=e;
+                    if(e.Kind==LifeEventKind.Death&&time-e.Time<4)deaths[deathSlot++%deaths.Length]=e;
+                }
             consumed=journal.Latest;
         }
         bool Division(VolumeAgent agent,out LifeEvent result)
@@ -111,7 +113,7 @@ namespace Evolution.Runtime
             if(organisms) {
                 int near=0;
                 for(int i=0;i<world.Count;i++) {
-                    var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive&&world.Time-a.DiedAt>1.6)continue;
+                    var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive)continue;
                     Pose(world,a,t,out Vector3 p,out Quaternion rotation,out float size);
                     float distance=Vector3.Distance(eye,p);if(distance>36)continue;
                     bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
@@ -206,6 +208,8 @@ namespace Evolution.Runtime
                     }
                 }
             }
+            cellPose=default;
+            if(organisms)DrawDeaths(world,eye,time,slice);
             bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
             for(int form=0;form<6;form++){membranes[form].Fission=farMembranes[form].Fission=cytoplasm[form].Fission=0;membranes[form].Motion=farMembranes[form].Motion=cytoplasm[form].Motion=default;}
@@ -235,6 +239,52 @@ namespace Evolution.Runtime
             }
             bodies.Flush();threads.Flush();vesicles.Flush();particles.Flush();
             for(int i=0;i<6;i++){cytoplasm[i].Flush();membranes[i].Flush();farMembranes[i].Flush();}
+        }
+        void DrawDeaths(VolumeWorld world,Vector3 eye,double time,int slice)
+        {
+            for(int eventIndex=0;eventIndex<deaths.Length;eventIndex++) {
+                var e=deaths[eventIndex];if(e.Sequence==0)continue;
+                float age=(float)(time-e.Time);if(age<0||age>=4)continue;
+                var a=e.Agent;if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;
+                Vector3 center=V(a.Position);if((center-eye).sqrMagnitude>36*36)continue;
+                bool attacked=e.Cause==DeathAppearance.Damage;
+                float rupture=WaterCellPose.Rupture(age+(attacked?.3f:0));
+                float fade=WaterCellPose.Remains(age),size=a.Biology.Genes.Size;
+                var form=CrystalForms.From(a.Biology.Genes);int f=(int)form;
+                Vector3 forward=V(a.Direction);var rotation=Quaternion.LookRotation(forward,Mathf.Abs(forward.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
+                // A terminal snapshot follows the surrounding fluid without retaining biological data.
+                center+=V(world.Current(a.Position))*age*.25f;
+                var collapse=new Vector3(1+.12f*rupture,1-.5f*Mathf.Clamp01(age/2),1-.18f*rupture)*size;
+                var motion=new WaterCellPose {Phase=(float)(a.Biology.Id%997)+age*2,Activity=1-Mathf.Clamp01(age/1.3f),Damage=attacked?1:0,Shell=a.Biology.Genes.Membrane};
+                farMembranes[f].Motion=cytoplasm[f].Motion=motion;
+                farMembranes[f].Opacity=cytoplasm[f].Opacity=fade;
+                farMembranes[f].Rupture=cytoplasm[f].Rupture=rupture;
+                farMembranes[f].Add(center,rotation,collapse,attacked?new Color(.85f,.62f,.85f,.32f):new Color(.49f,.68f,.78f,.28f));
+                cytoplasm[f].Add(center,rotation,collapse*.84f,new Color(.27f,.44f,.57f,.3f),new Vector4(0,0,0,-2));
+                bodies.Opacity=fade;threads.Opacity=fade*(1-Mathf.Clamp01(age/.9f));
+                bodies.Add(center+rotation*new Vector3(-.04f,.02f,0)*size,rotation,new Vector3(.29f,.20f,.25f)*size,new Color(.48f,.34f,.60f));
+                // Motile structures visibly lose their stroke before membrane rupture.
+                if(age<.9f)for(int j=0;j<12;j++) {
+                    Vector3 n=Fibonacci(j,12),root=CrystalMeshes.Point(form,n*.5f)*size;
+                    Segment(center+rotation*root,center+rotation*(root+n*.12f*size*(1-age/.9f)),.008f*size,new Color(.5f,.7f,.8f));
+                }
+                // Fixed procedural slots: no GameObjects, ParticleSystems, food or ledger writes.
+                for(int j=0;j<24;j++) {
+                    float release=.8f+j*.035f-(attacked?.3f:0),elapsed=age-release;if(elapsed<=0)continue;
+                    Vector3 spread=Fibonacci(j,24),exit=rotation*new Vector3(.42f,.03f,0)*size;
+                    Vector3 jet=rotation*(Vector3.right*(.25f+(attacked?.35f:0))+spread*.19f)*size;
+                    Vector3 point=center+exit+jet*elapsed+Vector3.up*(elapsed*elapsed*.035f);
+                    float opacity=fade*Mathf.Clamp01(elapsed*4)*(1-.6f*Mathf.Clamp01(elapsed/3));
+                    Color gel=j%4==0?new Color(.65f,.48f,.78f,opacity*.58f):new Color(.57f,.81f,.91f,opacity*.32f);
+                    particles.Add(point,Quaternion.identity,Vector3.one*size*(.16f+j%3*.035f),gel,new Vector4(4,0,0,0));
+                    if(j%4==0) {
+                        vesicles.Opacity=opacity;vesicles.Add(point,rotation,Vector3.one*size*.09f,new Color(.7f,.85f,1,.25f));
+                    }
+                }
+                farMembranes[f].Motion=cytoplasm[f].Motion=default;
+                farMembranes[f].Opacity=cytoplasm[f].Opacity=1;farMembranes[f].Rupture=cytoplasm[f].Rupture=0;
+            }
+            bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
         }
         void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,LifeEvent division,float interpolation,float age,Vector3 p,float size,Vector4 traits)
         {
@@ -337,7 +387,7 @@ namespace Evolution.Runtime
                 float alignment=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.2f,age))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));
                 rotation=Quaternion.Slerp(rotation,divisionRotation,alignment);
             }
-            if(!a.Alive)size*=Mathf.Max(.02f,1-(float)(world.Time-a.DiedAt)/1.6f);
+
         }
         public int Pick(VolumeWorld world,Ray ray,float interpolation,int slice=int.MinValue)
         {

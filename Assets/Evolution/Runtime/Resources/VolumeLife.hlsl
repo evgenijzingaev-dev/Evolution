@@ -12,10 +12,11 @@ UNITY_INSTANCING_BUFFER_START(Props)
     UNITY_DEFINE_INSTANCED_PROP(float,_Fission)
     UNITY_DEFINE_INSTANCED_PROP(float4,_Motion)
     UNITY_DEFINE_INSTANCED_PROP(float4,_Response)
+    UNITY_DEFINE_INSTANCED_PROP(float4,_Death)
 UNITY_INSTANCING_BUFFER_END(Props)
 float4 _OceanDataCenter;
 struct Attributes {float4 positionOS:POSITION;float3 normalOS:NORMAL;float2 uv:TEXCOORD0;UNITY_VERTEX_INPUT_INSTANCE_ID};
-struct Varyings {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float2 uv:TEXCOORD2;UNITY_VERTEX_INPUT_INSTANCE_ID};
+struct Varyings {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float2 uv:TEXCOORD2;float3 local:TEXCOORD3;UNITY_VERTEX_INPUT_INSTANCE_ID};
 Varyings Vert(Attributes i) {
     Varyings o;UNITY_SETUP_INSTANCE_ID(i);UNITY_TRANSFER_INSTANCE_ID(i,o);
     float fission=UNITY_ACCESS_INSTANCED_PROP(Props,_Fission);
@@ -35,12 +36,15 @@ Varyings Vert(Attributes i) {
     float3 dy=WaterCellDeform(i.positionOS.xyz+bitangent*.002,motion,response)-WaterCellDeform(i.positionOS.xyz-bitangent*.002,motion,response);
     float3 animatedNormal=normalize(cross(dx,dy));
     normal=lerp(animatedNormal,normal,saturate(fission));
-    o.normal=TransformObjectToWorldNormal(normal);o.uv=i.uv;return o;
+    o.normal=TransformObjectToWorldNormal(normal);o.uv=i.uv;o.local=i.positionOS.xyz;return o;
 }
 half4 Frag(Varyings i):SV_Target {
     UNITY_SETUP_INSTANCE_ID(i);half4 color=UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor);
     float4 genes=UNITY_ACCESS_INSTANCED_PROP(Props,_Phenotype);
     float visibility=UNITY_ACCESS_INSTANCED_PROP(Props,_Visibility)*(1-_OceanDataCenter.w*smoothstep(28,36,length(i.world-_OceanDataCenter.xyz)));
+    float rupture=UNITY_ACCESS_INSTANCED_PROP(Props,_Death).x;
+    // Local rupture opens on the forward surface, where the decorative gel jet originates.
+    if(rupture>0)clip(1-rupture*1.85-i.local.x/max(.00001,length(i.local)));
     float3 n=normalize(i.normal),eye=normalize(GetCameraPositionWS()-i.world);
     Light light=GetMainLight();float diffuse=saturate(dot(n,light.direction))*.55+.45;
     float rim=pow(1-saturate(dot(n,eye)),2.4);

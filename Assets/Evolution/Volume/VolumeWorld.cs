@@ -214,7 +214,10 @@ namespace Evolution.Volume
                         Diagnostics.RecyclingLoss+=biomass-recycled;
                     }
                     Diagnostics.Unpaid+=Math.Max(0,-a.Biology.Energy);
-                    Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
+                    Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;
+                    Life.Record(new LifeEvent {Kind=LifeEventKind.Death,Time=Time,Agent=a,
+                        Cause=a.Biology.Consumed||a.Biology.DamageLastStep>0?DeathAppearance.Damage:DeathAppearance.Exhaustion});
+                    if(Controlled==i)Controlled=-1;continue;
                 }
                 if((i!=Controlled||requested==a.Identity)&&Biology.CanDivide(a.Biology)&&a.Biology.Energy>=DivisionThreshold(i)&&DivisionBlock(i)==null)Divide(i);
             }
