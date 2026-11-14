@@ -30,11 +30,11 @@ namespace Evolution.Volume
             float reclaimed=Math.Min(Math.Max(0,NutrientCapacity-f.Nutrients),matter*.85f);
             f.Nutrients+=reclaimed;d.MatterLost+=matter-reclaimed;
             if(supply) {
-                float chemical=Math.Min(Math.Max(0,CloudEcology.SubstrateCapacity-f.Substrate),.4f*forcing.Chemicals*dt);
+                float chemical=Math.Min(Math.Max(0,CloudEcology.SubstrateCapacity-f.Substrate),.65f*forcing.Chemicals*dt);
                 f.Substrate+=chemical;d.ExternalNutrients+=chemical*Biology.SubstrateEnergy;
                 float nutrient=Math.Min(Math.Max(0,NutrientCapacity-f.Nutrients),.11f*forcing.Nutrients*dt);
                 f.Nutrients+=nutrient;d.ExternalMatter+=nutrient;
-                float organic=Math.Min(Math.Max(0,DissolvedCapacity-f.Dissolved),.48f*forcing.Dissolved*dt);
+                float organic=Math.Min(Math.Max(0,DissolvedCapacity-f.Dissolved),1.1f*forcing.Dissolved*dt);
                 f.Dissolved+=organic;d.ExternalOrganic+=organic;
             }
             // Gas exchange with unmodelled surrounding water is a measured gas flux, not energy.
@@ -42,9 +42,9 @@ namespace Evolution.Volume
             f.Oxygen+=exchange;if(exchange>=0)d.OxygenIn+=exchange;else d.OxygenOut-=exchange;
         }
         public static void ConsumeOxygen(ref FoodCloud f,float demand,VolumeDiagnostics d)
-        {float used=Math.Min(f.Oxygen,Math.Max(0,demand));f.Oxygen-=used;d.OxygenUsed+=used;}
+        {float used=Math.Min(f.Oxygen,Math.Max(0,demand));f.Oxygen-=used;if(d!=null)d.OxygenUsed+=used;}
         public static void ProduceOxygen(ref FoodCloud f,float amount,VolumeDiagnostics d)
-        {d.OxygenProduced+=amount;float kept=Math.Min(Math.Max(0,OxygenCapacity-f.Oxygen),amount);f.Oxygen+=kept;d.OxygenOut+=amount-kept;}
+        {if(d!=null)d.OxygenProduced+=amount;float kept=Math.Min(Math.Max(0,OxygenCapacity-f.Oxygen),amount);f.Oxygen+=kept;if(d!=null)d.OxygenOut+=amount-kept;}
         public static void Mix(ref FoodCloud a,ref FoodCloud b,float dt)
         {
             float q=(a.Position-b.Position).Sqr/36;if(q>=1)return;float fraction=Math.Min(.2f,.06f*dt*(1-q)*(1-q));

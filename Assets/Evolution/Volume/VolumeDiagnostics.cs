@@ -7,6 +7,7 @@ namespace Evolution.Volume
     // Cumulative events, never inferred from disappearing slots or camera visibility.
     public sealed class VolumeDiagnostics
     {
+        public double NichePhoto,NicheDissolved,NicheFiltered,NicheChemical;
         public double InitialMatter,ExternalMatter,MatterLost,InitialOxygen,OxygenIn,OxygenOut,OxygenProduced,OxygenUsed,ExternalOrganic;
         public long Births,Starved,Predated,NextAgentOrder,NextFoodOrder;
         public int MaxGeneration;
@@ -19,18 +20,20 @@ namespace Evolution.Volume
         public long Deaths=>Starved+Predated;
         internal void Write(BinaryWriter w)
         {
-            w.Write(3);w.Write(Births);w.Write(Starved);w.Write(Predated);w.Write(MaxGeneration);w.Write(NextAgentOrder);w.Write(NextFoodOrder);
+            w.Write(4);w.Write(Births);w.Write(Starved);w.Write(Predated);w.Write(MaxGeneration);w.Write(NextAgentOrder);w.Write(NextFoodOrder);
             foreach(double v in new[] {Intake,Light,Upkeep,Movement,Growth,Attack,Division,PredationLoss,ExternalNutrients,Solar,Recycled,RecyclingLoss,DecayLoss,AssimilationLoss,BirthOverhead,PredationDissipation,Unpaid,Contact,TransportLoss,TransportReceived})w.Write(v);
             foreach(double v in new[] {InitialMatter,ExternalMatter,MatterLost,InitialOxygen,OxygenIn,OxygenOut,OxygenProduced,OxygenUsed,ExternalOrganic})w.Write(v);
+            foreach(double v in new[]{NichePhoto,NicheDissolved,NicheFiltered,NicheChemical})w.Write(v);
         }
         internal static VolumeDiagnostics Read(BinaryReader r)
         {
-            int version=r.ReadInt32();if(version<1||version>3)throw new InvalidDataException("Unsupported ecology ledger; original retained.");
+            int version=r.ReadInt32();if(version<1||version>4)throw new InvalidDataException("Unsupported ecology ledger; original retained.");
             var d=new VolumeDiagnostics {Births=r.ReadInt64(),Starved=r.ReadInt64(),Predated=r.ReadInt64(),MaxGeneration=r.ReadInt32(),NextAgentOrder=r.ReadInt64(),NextFoodOrder=r.ReadInt64(),
                 Intake=r.ReadDouble(),Light=r.ReadDouble(),Upkeep=r.ReadDouble(),Movement=r.ReadDouble(),Growth=r.ReadDouble(),Attack=r.ReadDouble(),Division=r.ReadDouble(),PredationLoss=r.ReadDouble(),
                 ExternalNutrients=r.ReadDouble(),Solar=r.ReadDouble(),Recycled=r.ReadDouble(),RecyclingLoss=r.ReadDouble(),DecayLoss=r.ReadDouble(),AssimilationLoss=r.ReadDouble(),BirthOverhead=r.ReadDouble(),PredationDissipation=r.ReadDouble(),Unpaid=r.ReadDouble()};
             if(version>=2){d.Contact=r.ReadDouble();d.TransportLoss=r.ReadDouble();d.TransportReceived=r.ReadDouble();}
-            if(version>=3){d.InitialMatter=r.ReadDouble();d.ExternalMatter=r.ReadDouble();d.MatterLost=r.ReadDouble();d.InitialOxygen=r.ReadDouble();d.OxygenIn=r.ReadDouble();d.OxygenOut=r.ReadDouble();d.OxygenProduced=r.ReadDouble();d.OxygenUsed=r.ReadDouble();d.ExternalOrganic=r.ReadDouble();}return d;
+            if(version>=3){d.InitialMatter=r.ReadDouble();d.ExternalMatter=r.ReadDouble();d.MatterLost=r.ReadDouble();d.InitialOxygen=r.ReadDouble();d.OxygenIn=r.ReadDouble();d.OxygenOut=r.ReadDouble();d.OxygenProduced=r.ReadDouble();d.OxygenUsed=r.ReadDouble();d.ExternalOrganic=r.ReadDouble();}
+            if(version>=4){d.NichePhoto=r.ReadDouble();d.NicheDissolved=r.ReadDouble();d.NicheFiltered=r.ReadDouble();d.NicheChemical=r.ReadDouble();}return d;
         }
         public void Metabolism(Cell c)
         {

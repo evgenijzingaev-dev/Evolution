@@ -61,6 +61,7 @@ namespace Evolution.Volume
         public ChunkOcean(uint seed,IRegionArchive archive,EcologicalScenario scenario=EcologicalScenario.Legacy)
         {
             this.scenario=scenario==EcologicalScenario.Legacy&&archive is INicheArchive niche?niche.Scenario:scenario;
+            if(archive is INicheArchive profile)profile.Scenario=this.scenario;
             this.seed=seed;this.archive=archive;diagnostics=archive.Diagnostics.Clone();
             var rng=new RandomSource(seed^0x718197u);offset=new V3(rng.Range(-100,100),rng.Range(-100,100),rng.Range(-100,100));
             if(archive is ISurveyArchive store){var records=new List<SurveyRegion>();store.ReadSurvey(records);Survey.Restore(records);}
