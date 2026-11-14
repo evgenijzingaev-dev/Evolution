@@ -7,7 +7,7 @@ namespace Evolution.Volume
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
     public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive
     {
-        const int Magic=0x45564f33,Version=3;
+        const int Magic=0x45564f33,Version=4;
         readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         public BinaryRegionArchive(string directory)
         {
@@ -61,7 +61,7 @@ namespace Evolution.Volume
             WriteGenome(w,c.Genes);WriteGenome(w,c.ParentGenes);
             var b=c.Budget;
             foreach(float f in new[] {b.Start,b.Substrate,b.Organic,b.Light,b.Prey,b.Upkeep,b.Movement,b.Defense,b.Stress,b.Repair,b.Growth,b.Attack,b.Division,b.Contact,b.Transport,b.PredationLoss,b.Swimming,b.Turning,b.Boost})w.Write(f);
-            w.Write(a.Order);
+            w.Write(a.Order);w.Write((int)a.PlannedDevelopment);w.Write((int)a.InheritedDevelopment);w.Write(a.DevelopmentPaid);w.Write(a.NaturalMutationMask);
         }
         static void WriteGenome(BinaryWriter w,Genome g)
         {
@@ -81,6 +81,9 @@ namespace Evolution.Volume
                 Movement=r.ReadSingle(),Defense=r.ReadSingle(),Stress=r.ReadSingle(),Repair=r.ReadSingle(),Growth=r.ReadSingle(),Attack=r.ReadSingle(),Division=r.ReadSingle(),
                 Contact=r.ReadSingle(),Transport=r.ReadSingle(),PredationLoss=r.ReadSingle(),Swimming=r.ReadSingle(),Turning=r.ReadSingle(),Boost=r.ReadSingle()};
             if(version>=3)a.Order=r.ReadInt64();
+            if(version>=4){a.PlannedDevelopment=(DevelopmentDirection)r.ReadInt32();a.InheritedDevelopment=(DevelopmentDirection)r.ReadInt32();a.DevelopmentPaid=r.ReadSingle();a.NaturalMutationMask=r.ReadInt32();
+                if(!CellEvolution.Valid(a.PlannedDevelopment)||!CellEvolution.Valid(a.InheritedDevelopment)||float.IsNaN(a.DevelopmentPaid)||float.IsInfinity(a.DevelopmentPaid)||a.DevelopmentPaid<0)throw new InvalidDataException("Invalid development record");}
+            if(version<4)a.NaturalMutationMask=a.Biology.BirthMutationMask;
             return a;
         }
         static Genome ReadGenome(BinaryReader r)=>new Genome {Speed=r.ReadSingle(),Size=r.ReadSingle(),Uptake=r.ReadSingle(),PreferredTemperature=r.ReadSingle(),OrganicSpecialization=r.ReadSingle(),

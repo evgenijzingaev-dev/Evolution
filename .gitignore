@@ -128,3 +128,5 @@ InitTestScene*.unity*
 .env.*
 
 !Tools/VolumeDiagnostics/VolumeDiagnostics.csproj
+
+!Tools/CellPlayDiagnostics/CellPlayDiagnostics.csproj
