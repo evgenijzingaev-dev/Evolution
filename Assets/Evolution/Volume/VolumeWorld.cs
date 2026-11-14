@@ -29,6 +29,7 @@ namespace Evolution.Volume
         internal string DivisionRequest;
         public string LastOffspringIdentity {get;internal set;}
         public int Births {get;private set;}
+        public VolumeDiagnostics Diagnostics {get;internal set;}=new VolumeDiagnostics();
         readonly FoodCloud[] food;
         public readonly V3[] Obstacles;
         public V3 FlowOffset {get;private set;}
@@ -129,6 +130,7 @@ namespace Evolution.Volume
                     float growth=Math.Min(1-c.Growth,.15f*dt);c.Growth+=growth;
                     c.Budget.Growth=growth*c.Genes.Size*.8f;c.Energy-=c.Budget.Growth;
                 }
+                Diagnostics.Metabolism(c);
                 a.Biology=c;agents[i]=a;
             }
             for(int i=0;i<Count;i++) {
@@ -146,6 +148,7 @@ namespace Evolution.Volume
                     hunter.Biology.Budget.Attack+=cost;
                     hunter.Biology.Budget.Prey+=Math.Max(0,hunter.Biology.Energy-before+cost);
                     hunter.Biology.AssimilatedEnergy+=Math.Max(0,hunter.Biology.Energy-before+cost);
+                    Diagnostics.Attack+=cost;Diagnostics.Intake+=Math.Max(0,hunter.Biology.Energy-before+cost);Diagnostics.PredationLoss+=Math.Max(0,victim-prey.Biology.Energy);
                     prey.Biology.Budget.PredationLoss+=Math.Max(0,victim-prey.Biology.Energy);
                     hunter.Biology.AttackLastStep=prey.Biology.DamageLastStep=1;
                     hunter.BitAt=Time;int remnant=NearestFood(prey.Position);if(remnant>=0)food[remnant].Organic+=remains;
@@ -157,7 +160,7 @@ namespace Evolution.Volume
                 if(a.Biology.Energy<=0) {
                     int remnant=NearestFood(a.Position);
                     if(!a.Biology.Consumed&&remnant>=0)food[remnant].Organic+=Biology.CarcassEnergy(a.Biology);
-                    a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
+                    Diagnostics.Death(a.Biology);a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
                 }
                 if((i!=Controlled||requested==a.Identity)&&DivisionBlock(i)==null)Divide(i);
             }
@@ -206,7 +209,7 @@ namespace Evolution.Volume
                 Velocity=a.Velocity+axis*.15f,RenderTime=at,RenderDuration=StepSeconds,
                 DivisionAt=at,DivisionOrigin=origin,DivisionAxis=axis,DivisionChild=true,
                 FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
-            agents.Add(daughter);Births++;if(index==Controlled)LastOffspringIdentity=identity;
+            agents.Add(daughter);Births++;Diagnostics.Births++;Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes);if(index==Controlled)LastOffspringIdentity=identity;
         }
         V3 Steer(int i,out int cloud)
         {

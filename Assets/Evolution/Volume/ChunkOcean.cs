@@ -47,6 +47,7 @@ namespace Evolution.Volume
         readonly uint seed;readonly IRegionArchive archive;
         readonly Dictionary<ChunkKey,RegionState> loaded=new Dictionary<ChunkKey,RegionState>();
         readonly Dictionary<string,ChunkKey> agentOwners=new Dictionary<string,ChunkKey>(),foodOwners=new Dictionary<string,ChunkKey>();
+        readonly VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         readonly V3 offset;ChunkKey center;bool initialized;
         public VolumeWorld World {get;private set;}
         public OceanSurvey Survey {get;}=new OceanSurvey();
@@ -82,7 +83,7 @@ namespace Evolution.Volume
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
             for(int i=0;i<agents.Count;i++){var a=agents[i];a.FoodCloud=0;if(a.FoodIdentity!=null)for(int k=0;k<food.Count;k++)if(food[k].Identity==a.FoodIdentity){a.FoodCloud=k;break;}agents[i]=a;}
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {Diagnostics=diagnostics,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
