@@ -28,7 +28,7 @@ namespace Evolution.Runtime
         readonly List<Notice> notices=new List<Notice>(3);
         readonly Dictionary<string,float> cooldown=new Dictionary<string,float>();
         struct Notice { public string Text, Sub; public float Until; public bool Danger; }
-        GUISkin skin; GUIStyle text, title, micro, centered, button, panel, activeButton, muted, valueText;
+        GUISkin skin; GUIStyle text, title, micro, centered, compactAction, button, panel, activeButton, muted, valueText;
         Texture2D chrome, chromeActive, white, dot;
         readonly List<Rect> occupied=new List<Rect>(10);
         Vector2 scienceScroll;
@@ -173,6 +173,7 @@ namespace Evolution.Runtime
             valueText=new GUIStyle(text){fontSize=14};
             micro=new GUIStyle(text){fontSize=13};micro.normal.textColor=new Color(.64f,.80f,.88f);
             centered=new GUIStyle(text){alignment=TextAnchor.MiddleCenter};
+            compactAction=new GUIStyle(centered){fontSize=13,wordWrap=false};
             muted=new GUIStyle(micro){alignment=TextAnchor.MiddleCenter};
             button=new GUIStyle(skin.button){font=skin.font,fontSize=15,wordWrap=true,border=new RectOffset(13,13,13,13),padding=new RectOffset(7,7,5,5)};
             button.normal.background=button.hover.background=button.active.background=button.focused.background=chrome;
@@ -218,7 +219,7 @@ namespace Evolution.Runtime
                 }
                 if(icon==2){Line(c+Vector2.left*16,c+Vector2.right*16,ink);Line(c+Vector2.up*16,c+Vector2.down*16,ink);}
             }
-            GUI.Label(new Rect(r.x+3,r.y+47,r.width-6,25),name,centered);GUI.color=old;return clicked;
+            GUI.Label(new Rect(r.x+3,r.y+47,r.width-6,25),name,name.Length>10?compactAction:centered);GUI.color=old;return clicked;
         }
         string hoverTip;
         void Label(float x,float y,float width,string value,GUIStyle style=null)=>GUI.Label(new Rect(x,y,width,28),value,style??text);
