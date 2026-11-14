@@ -16,7 +16,7 @@ struct Varyings {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 nor
 Varyings Vert(Attributes i) {
     Varyings o;UNITY_SETUP_INSTANCE_ID(i);UNITY_TRANSFER_INSTANCE_ID(i,o);
     float fission=UNITY_ACCESS_INSTANCED_PROP(Props,_Fission);
-    // The CPU supplies this only after a paid biological birth, for both real daughters.
+    // Only the shared membrane neck receives this after a paid biological birth.
     float3 local=i.positionOS.xyz;
     float waist=1-fission*.62*exp(-local.x*local.x*45);
     local.x*=1+fission*.38;local.yz*=waist;

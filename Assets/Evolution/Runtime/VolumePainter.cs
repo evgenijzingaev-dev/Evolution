@@ -39,7 +39,6 @@ namespace Evolution.Runtime
             bodies=new Batch(sphere,solid,128);threads=new Batch(thread,solid,128);vesicles=new Batch(sphere,shell,128);particles=new Batch(quad,dust,256);
             for(int i=0;i<6;i++) {
                 high[i]=CrystalMeshes.Create((CrystalForm)i,24,48);low[i]=CrystalMeshes.Create((CrystalForm)i,8,16);
-                foreach(var mesh in new[] {high[i],low[i]}){var bounds=mesh.bounds;bounds.extents*=1.38f;mesh.bounds=bounds;}
                 membranes[i]=new Batch(high[i],shell,128);farMembranes[i]=new Batch(low[i],shell,128);
                 cytoplasm[i]=new Batch(low[i],shell,128);
                 pickVertices[i]=high[i].vertices;pickTriangles[i]=high[i].triangles;
@@ -98,8 +97,9 @@ namespace Evolution.Runtime
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
                     float divisionAge=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
-                    float fission=divisionAge>=0&&divisionAge<1?Mathf.Sin(Mathf.Clamp01(divisionAge)*Mathf.PI):0;
-                    membranes[(int)form].Fission=farMembranes[(int)form].Fission=cytoplasm[(int)form].Fission=fission;
+                    // Daughter shells remain whole: a single shared neck represents fission.
+                    membranes[(int)form].Fission=farMembranes[(int)form].Fission=cytoplasm[(int)form].Fission=0;
+                    DrawDivisionBridge(world,a,t,divisionAge,p,size,traits);
                     if(detail>0){membranes[(int)form].Opacity=detail;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     if(detail<1){farMembranes[(int)form].Opacity=1-detail;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     membranes[(int)form].Opacity=farMembranes[(int)form].Opacity=1;
@@ -181,6 +181,25 @@ namespace Evolution.Runtime
             bodies.Flush();threads.Flush();vesicles.Flush();particles.Flush();
             for(int i=0;i<6;i++){cytoplasm[i].Flush();membranes[i].Flush();farMembranes[i].Flush();}
         }
+        void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,float interpolation,float age,Vector3 p,float size,Vector4 traits)
+        {
+            if(!parent.Alive||parent.DivisionChild||age<.12f||age>=.90f)return;
+            for(int i=0;i<world.Count;i++) {
+                var child=world.Get(i);
+                if(!child.Alive||!child.DivisionChild||child.DivisionAt!=parent.DivisionAt||
+                    child.Biology.ParentId!=parent.Biology.Id||!child.Identity.StartsWith(parent.Identity+"/b",System.StringComparison.Ordinal))continue;
+                Pose(world,child,interpolation,out var q,out _,out float childSize);
+                var delta=q-p;if(delta.sqrMagnitude<.0001f)return;
+                float opening=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.30f,age));
+                float closure=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,.90f,age));
+                float gauge=.48f*Mathf.Min(size,childSize)*opening*closure;
+                if(gauge<.001f)return;
+                vesicles.Fission=1;
+                vesicles.Add((p+q)*.5f,Quaternion.FromToRotation(Vector3.right,delta),new Vector3(delta.magnitude,gauge,gauge),
+                    new Color(.66f,.86f,1,.23f),traits);
+                vesicles.Fission=0;return;
+            }
+        }
         static Vector3 Fibonacci(int i,int count)
         {float y=1-2*(i+.5f)/count,r=Mathf.Sqrt(1-y*y),angle=i*2.39996f;return new Vector3(Mathf.Cos(angle)*r,y,Mathf.Sin(angle)*r);}
         void DrawInterior(VolumeWorld world,VolumeAgent agent,CrystalForm form,Vector3 p,Quaternion rotation,float size,Vector4 traits,float phase)
@@ -258,31 +277,24 @@ namespace Evolution.Runtime
                 float emerge=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.16f,.86f,age));
                 p=Vector3.Lerp(V(a.DivisionOrigin),p,emerge);
                 size*=a.DivisionChild?Mathf.Lerp(.025f,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.72f,age))):1+.12f*Mathf.Sin(age*Mathf.PI);
-                var divisionRotation=Quaternion.FromToRotation(Vector3.right,V(a.DivisionAxis));
+                Vector3 axis=V(a.DivisionAxis);
+                var divisionRotation=Quaternion.LookRotation(axis,Mathf.Abs(axis.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
                 float alignment=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.2f,age))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));
                 rotation=Quaternion.Slerp(rotation,divisionRotation,alignment);
             }
             if(!a.Alive)size*=Mathf.Max(.02f,1-(float)(world.Time-a.DiedAt)/1.6f);
-        }
-        static Vector3 FissionPoint(Vector3 p,float amount)
-        {
-            float waist=1-amount*.62f*Mathf.Exp(-p.x*p.x*45);
-            return new Vector3(p.x*(1+amount*.38f),p.y*waist,p.z*waist);
         }
         public int Pick(VolumeWorld world,Ray ray,float interpolation,int slice=int.MinValue)
         {
             int selected=-1;float closest=36;
             for(int i=0;i<world.Count;i++) {
                 var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive)continue;Pose(world,a,interpolation,out var p,out var rotation,out float size);
-                double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+interpolation*VolumeWorld.StepSeconds);
-                float age=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
-                float fission=age>=0&&age<1?Mathf.Sin(age*Mathf.PI):0;
                 Vector3 offset=ray.origin-p;
-                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size*1.38f)))continue;
+                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size)))continue;
                 Quaternion inverse=Quaternion.Inverse(rotation);Vector3 origin=inverse*offset/size,direction=inverse*ray.direction;
                 int form=(int)CrystalForms.From(a.Biology.Genes);var vertices=pickVertices[form];var triangles=pickTriangles[form];
                 for(int j=0;j<triangles.Length;j+=3) {
-                    Vector3 v0=FissionPoint(vertices[triangles[j]],fission),edge1=FissionPoint(vertices[triangles[j+1]],fission)-v0,edge2=FissionPoint(vertices[triangles[j+2]],fission)-v0;
+                    Vector3 v0=vertices[triangles[j]],edge1=vertices[triangles[j+1]]-v0,edge2=vertices[triangles[j+2]]-v0;
                     Vector3 h=Vector3.Cross(direction,edge2);float determinant=Vector3.Dot(edge1,h);if(Mathf.Abs(determinant)<.0000001f)continue;
                     float inv=1/determinant;Vector3 s=origin-v0;float u=Vector3.Dot(s,h)*inv;if(u<0||u>1)continue;
                     Vector3 q=Vector3.Cross(s,edge1);float v=Vector3.Dot(direction,q)*inv;if(v<0||u+v>1)continue;

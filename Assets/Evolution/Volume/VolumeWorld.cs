@@ -195,7 +195,8 @@ namespace Evolution.Volume
             if(!Biology.TryDivide(ref c,ref child))return;
             c.Budget.Division=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+child.Energy;
             child.Budget.Start=child.Energy;child.BirthMutationMask=Observation.MutationMask(c.Genes,child.Genes);
-            V3 axis=new V3(random.Range(-1,1),random.Range(-1,1),random.Range(-1,1)).Unit;
+            // Division follows the existing body axis; independent steering starts next tick.
+            V3 axis=a.Direction.Unit;
             V3 origin=a.Position;
             double at=(Tick+1)*(double)StepSeconds;
             a.Biology=c;a.DivisionAt=at;a.DivisionOrigin=origin;a.DivisionAxis=axis;a.DivisionChild=false;
