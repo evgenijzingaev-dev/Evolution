@@ -33,6 +33,28 @@ namespace Evolution.Runtime
         readonly Dictionary<string,Visual> states=new Dictionary<string,Visual>();
         readonly HashSet<string> present=new HashSet<string>();readonly List<string> expired=new List<string>();
         double lastDrawTime=-1;
+        LifeJournal journal;long consumed;
+        readonly LifeEvent[] divisions=new LifeEvent[32];int divisionSlot;
+        readonly Dictionary<string,int> indices=new Dictionary<string,int>();
+        void ObserveLife(VolumeWorld world,double time)
+        {
+            if(!object.ReferenceEquals(journal,world.Life)) {
+                journal=world.Life;consumed=journal.Oldest-1;
+                System.Array.Clear(divisions,0,divisions.Length);divisionSlot=0;
+            }
+            for(long sequence=System.Math.Max(consumed+1,journal.Oldest);sequence<=journal.Latest;sequence++)
+                if(journal.TryRead(sequence,out var e)&&e.Kind==LifeEventKind.Division&&time-e.Time<VolumeWorld.DivisionSeconds)
+                    divisions[divisionSlot++%divisions.Length]=e;
+            consumed=journal.Latest;
+        }
+        bool Division(VolumeAgent agent,out LifeEvent result)
+        {
+            if(agent.DivisionAt>0)for(int i=0;i<divisions.Length;i++) {
+                var e=divisions[i];if(e.Sequence!=0&&e.Time==agent.DivisionAt&&(e.Agent.Identity==agent.Identity||e.Child.Identity==agent.Identity)) {result=e;return true;}
+            }
+            result=default;return false;
+        }
+        bool PairAlive(VolumeWorld world,LifeEvent e)=>indices.TryGetValue(e.Agent.Identity,out int parent)&&indices.TryGetValue(e.Child.Identity,out int child)&&world.Get(parent).Alive&&world.Get(child).Alive;
         public VolumePainter(CrystalWaterLook look)
         {
             sphere=MicroMeshes.Cell(12,20);thread=MicroMeshes.Cell(2,6);quad=MicroMeshes.LightSheet();
@@ -54,7 +76,8 @@ namespace Evolution.Runtime
             float dt=lastDrawTime<0?0:(float)System.Math.Max(0,time-lastDrawTime);lastDrawTime=time;
             solid.SetFloat("_WaterTime",(float)time);shell.SetFloat("_WaterTime",(float)time);dust.SetFloat("_WaterTime",(float)time);backdrop.SetFloat("_WaterTime",(float)time);
             var dataCenter=new Vector4(world.ActiveCenter.X,world.ActiveCenter.Y,world.ActiveCenter.Z,strategic?1:0);solid.SetVector("_OceanDataCenter",dataCenter);shell.SetVector("_OceanDataCenter",dataCenter);
-            present.Clear();
+            present.Clear();ObserveLife(world,time);
+            indices.Clear();for(int i=0;i<world.Count;i++)indices[world.Get(i).Identity]=i;
             Graphics.DrawMesh(sphere,Matrix4x4.TRS(eye,Quaternion.identity,Vector3.one*240),backdrop,0,camera,0,null,ShadowCastingMode.Off,false);
             for(int i=0;i<suspension.Count;i++) {
                 Vector3 p=V(suspension.Get(i,t)),d=p-eye;float half=i<suspension.Count/3?12:32;
@@ -125,20 +148,26 @@ namespace Evolution.Runtime
                     }
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
                     float divisionAge=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
-                    // Daughter shells remain whole: a single shared neck represents fission.
+                    bool dividing=Division(a,out var division)&&PairAlive(world,division)&&divisionAge>=0&&divisionAge<1;
+                    float shellWeight=dividing?WaterCellPose.ShellSeparation(divisionAge):1;
+                    float anatomyWeight=dividing&&a.DivisionChild?WaterCellPose.DaughterVisibility(divisionAge):1;
+                    bodies.Opacity=threads.Opacity=vesicles.Opacity=anatomyWeight;
+                    // A paid pair shares one continuous envelope before the two real shells separate.
                     membranes[(int)form].Fission=farMembranes[(int)form].Fission=cytoplasm[(int)form].Fission=0;
-                    DrawDivisionBridge(world,a,t,divisionAge,p,size,traits);
-                    if(detail>0){membranes[(int)form].Opacity=detail;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
-                    if(detail<1){farMembranes[(int)form].Opacity=1-detail;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
+                    if(dividing)DrawDivisionBridge(world,a,division,t,divisionAge,p,size,traits);
+                    if(detail>0){membranes[(int)form].Opacity=detail*shellWeight;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
+                    if(detail<1){farMembranes[(int)form].Opacity=(1-detail)*shellWeight;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     membranes[(int)form].Opacity=farMembranes[(int)form].Opacity=1;
+                    cytoplasm[(int)form].Opacity=shellWeight;
                     cytoplasm[(int)form].Add(p,rotation,Vector3.one*size*.84f,
                         Color.Lerp(new Color(.16f,.26f,.39f,.20f),new Color(.13f,.34f,.32f,.20f),g.Photosynthesis),
                         new Vector4(g.Photosynthesis,g.Predation,g.Membrane,-2));
+                    cytoplasm[(int)form].Opacity=1;
                     Vector3 nucleusScale=form==CrystalForm.Diatom?new Vector3(.35f,.13f,.2f):form==CrystalForm.Spindle?new Vector3(.32f,.17f,.2f):new Vector3(.29f,.24f,.27f);
                     Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f));
                     bodies.Add(p+rotation*Deform(nucleus,cellPose)*size,rotation,nucleusScale*size,new Color(.43f,.27f,.65f),traits);
                     if(detail<1||!a.Alive) {
-                        bodies.Opacity=1-detail;
+                        bodies.Opacity=(1-detail)*anatomyWeight;
                         // Real residents keep a small internal silhouette at medium distance.
                         if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
                             Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
@@ -147,7 +176,7 @@ namespace Evolution.Runtime
                         }
                         bodies.Opacity=1;if(!detailed||!a.Alive)continue;
                     }
-                    bodies.Opacity=threads.Opacity=vesicles.Opacity=detail;
+                    bodies.Opacity=threads.Opacity=vesicles.Opacity=detail*anatomyWeight;
                     DrawInterior(world,a,form,p,rotation,size,traits,phase);
                     Color fibre=new Color(.55f,.82f,.96f);
                     if(target.Flagellum||c.Role==CellRole.Movement&&c.Specialization>.1f) {
@@ -207,24 +236,20 @@ namespace Evolution.Runtime
             bodies.Flush();threads.Flush();vesicles.Flush();particles.Flush();
             for(int i=0;i<6;i++){cytoplasm[i].Flush();membranes[i].Flush();farMembranes[i].Flush();}
         }
-        void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,float interpolation,float age,Vector3 p,float size,Vector4 traits)
+        void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,LifeEvent division,float interpolation,float age,Vector3 p,float size,Vector4 traits)
         {
-            if(!parent.Alive||parent.DivisionChild||age<.12f||age>=.90f)return;
-            for(int i=0;i<world.Count;i++) {
-                var child=world.Get(i);
-                if(!child.Alive||!child.DivisionChild||child.DivisionAt!=parent.DivisionAt||
-                    child.Biology.ParentId!=parent.Biology.Id||!child.Identity.StartsWith(parent.Identity+"/b",System.StringComparison.Ordinal))continue;
-                Pose(world,child,interpolation,out var q,out _,out float childSize);
-                var delta=q-p;if(delta.sqrMagnitude<.0001f)return;
-                float opening=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.30f,age));
-                float closure=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,.90f,age));
-                float gauge=.48f*Mathf.Min(size,childSize)*opening*closure;
-                if(gauge<.001f)return;
-                vesicles.Fission=1;
-                vesicles.Add((p+q)*.5f,Quaternion.FromToRotation(Vector3.right,delta),new Vector3(delta.magnitude,gauge,gauge),
-                    new Color(.66f,.86f,1,.23f),traits);
-                vesicles.Fission=0;return;
-            }
+            if(!parent.Alive||parent.DivisionChild||!indices.TryGetValue(division.Child.Identity,out int childIndex))return;
+            var child=world.Get(childIndex);if(!child.Alive)return;
+            Pose(world,child,interpolation,out var q,out _,out float childSize);
+            var delta=q-p;if(delta.sqrMagnitude<.000001f)delta=V(parent.DivisionAxis)*.001f;
+            float merge=1-WaterCellPose.ShellSeparation(age);
+            // The shared envelope starts as the parent's body, forms two lobes, then a narrow neck.
+            // Its endpoints follow the true pair. Permanent connections are drawn by BondParent.
+            vesicles.Opacity=merge;vesicles.Fission=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.82f,age));
+            vesicles.Add((p+q)*.5f,Quaternion.FromToRotation(Vector3.right,delta),
+                new Vector3((delta.magnitude+Mathf.Max(size,childSize))/(1+vesicles.Fission*.38f),Mathf.Max(size,childSize)*.9f,Mathf.Max(size,childSize)*.9f),
+                new Color(.66f,.86f,1,.34f),traits);
+            vesicles.Fission=0;vesicles.Opacity=1;
         }
         static Vector3 Fibonacci(int i,int count)
         {float y=1-2*(i+.5f)/count,r=Mathf.Sqrt(1-y*y),angle=i*2.39996f;return new Vector3(Mathf.Cos(angle)*r,y,Mathf.Sin(angle)*r);}
@@ -295,18 +320,18 @@ namespace Evolution.Runtime
                 }
             }
         }
-        static void Pose(VolumeWorld world,VolumeAgent a,float t,out Vector3 p,out Quaternion rotation,out float size)
+        void Pose(VolumeWorld world,VolumeAgent a,float t,out Vector3 p,out Quaternion rotation,out float size)
         {
             float blend=Mathf.Clamp01((float)((world.Time-VolumeWorld.StepSeconds+t*VolumeWorld.StepSeconds-a.RenderTime)/System.Math.Max(.05,a.RenderDuration)));
             p=V(V3.Lerp(a.Previous,a.Position,blend));Vector3 forward=V(V3.Lerp(a.PreviousDirection,a.Direction,blend)).normalized;
             rotation=Quaternion.LookRotation(forward,Mathf.Abs(forward.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
             double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+t*VolumeWorld.StepSeconds);
             size=a.Biology.Genes.Size*(a.Biology.Generation==0?1:Mathf.Lerp(.72f,1,Mathf.Clamp01(a.Biology.Growth)))*(1+.008f*Mathf.Sin((float)time*1.8f+a.Biology.Id%997));
-            if(a.DivisionAt>0&&time-a.DivisionAt<VolumeWorld.DivisionSeconds) {
+            if(Division(a,out var division)&&PairAlive(world,division)&&time-a.DivisionAt>=0&&time-a.DivisionAt<VolumeWorld.DivisionSeconds) {
                 float age=Mathf.Clamp01((float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds));
-                float emerge=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.16f,.86f,age));
+                float emerge=WaterCellPose.Separation(age);
                 p=Vector3.Lerp(V(a.DivisionOrigin),p,emerge);
-                size*=a.DivisionChild?Mathf.Lerp(.025f,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.72f,age))):1+.12f*Mathf.Sin(age*Mathf.PI);
+                size*=a.DivisionChild?Mathf.Lerp(.78f,1,emerge):1+.12f*Mathf.Sin(age*Mathf.PI);
                 Vector3 axis=V(a.DivisionAxis);
                 var divisionRotation=Quaternion.LookRotation(axis,Mathf.Abs(axis.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
                 float alignment=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.2f,age))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));

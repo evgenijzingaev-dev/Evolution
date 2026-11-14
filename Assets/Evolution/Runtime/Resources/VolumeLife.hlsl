@@ -22,10 +22,10 @@ Varyings Vert(Attributes i) {
     // Only the shared membrane neck receives this after a paid biological birth.
     float4 motion=UNITY_ACCESS_INSTANCED_PROP(Props,_Motion),response=UNITY_ACCESS_INSTANCED_PROP(Props,_Response);
     float3 local=WaterCellDeform(i.positionOS.xyz,motion,response);
-    float waist=1-fission*.62*exp(-local.x*local.x*45);
+    float waist=1-fission*.90*exp(-local.x*local.x*45);
     local.x*=1+fission*.38;local.yz*=waist;
     // Inverse transpose of the deformation Jacobian keeps the constricted neck lit correctly.
-    float slope=fission*.62*90*i.positionOS.x*exp(-i.positionOS.x*i.positionOS.x*45);
+    float slope=fission*.90*90*i.positionOS.x*exp(-i.positionOS.x*i.positionOS.x*45);
     float3 normal=float3((i.normalOS.x-slope*dot(i.positionOS.yz,i.normalOS.yz)/waist)/(1+fission*.38),i.normalOS.yz/waist);
     o.world=TransformObjectToWorld(local);o.positionCS=TransformWorldToHClip(o.world);
     // Tangent samples include the living deformation in the normal, including turn and flow.
