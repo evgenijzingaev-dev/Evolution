@@ -38,16 +38,19 @@ namespace Evolution.Volume
     }
     public struct VolumeSnapshot
     {
+        public int Solitary,Pairs,SmallColonies,MediumColonies,LargeColonies;
         public int Alive,MaxGeneration,EnergyBlocked,GrowthBlocked,MaturityBlocked,CapacityBlocked;
         public double Substrate,Organic,Energy,Structure;
         public double Stored=>Substrate*Biology.SubstrateEnergy+Organic+Energy+Structure;
-        public void Add(VolumeSnapshot s) {Alive+=s.Alive;EnergyBlocked+=s.EnergyBlocked;GrowthBlocked+=s.GrowthBlocked;MaturityBlocked+=s.MaturityBlocked;CapacityBlocked+=s.CapacityBlocked;MaxGeneration=Math.Max(MaxGeneration,s.MaxGeneration);Substrate+=s.Substrate;Organic+=s.Organic;Energy+=s.Energy;Structure+=s.Structure;}
+        public void Add(VolumeSnapshot s) {Alive+=s.Alive;Solitary+=s.Solitary;Pairs+=s.Pairs;SmallColonies+=s.SmallColonies;MediumColonies+=s.MediumColonies;LargeColonies+=s.LargeColonies;EnergyBlocked+=s.EnergyBlocked;GrowthBlocked+=s.GrowthBlocked;MaturityBlocked+=s.MaturityBlocked;CapacityBlocked+=s.CapacityBlocked;MaxGeneration=Math.Max(MaxGeneration,s.MaxGeneration);Substrate+=s.Substrate;Organic+=s.Organic;Energy+=s.Energy;Structure+=s.Structure;}
         public static VolumeSnapshot Read(VolumeWorld w)
         {
             var s=new VolumeSnapshot();
             for(int k=0;k<w.FoodCount;k++){var f=w.GetFood(k);s.Substrate+=f.Substrate;s.Organic+=f.Organic;}
             for(int i=0;i<w.Count;i++){
-                var a=w.Get(i);if(!a.Alive)continue;var c=a.Biology;s.Alive++;s.Energy+=Math.Max(0,c.Energy);s.Structure+=Biology.StructureEnergy(c.Genes);s.MaxGeneration=Math.Max(s.MaxGeneration,c.Generation);
+                var a=w.Get(i);if(!a.Alive)continue;var c=a.Biology;s.Alive++;
+                if(w.OrganismRoot(i)==i){int size=w.OrganismSize(i);if(size==1)s.Solitary++;else if(size==2)s.Pairs++;else if(size<=4)s.SmallColonies++;else if(size<=8)s.MediumColonies++;else s.LargeColonies++;}
+                s.Energy+=Math.Max(0,c.Energy);s.Structure+=Biology.StructureEnergy(c.Genes);s.MaxGeneration=Math.Max(s.MaxGeneration,c.Generation);
                 if(w.Count>=VolumeWorld.PopulationLimit)s.CapacityBlocked++;
                 else if(c.Generation>0&&c.Growth<1)s.GrowthBlocked++;
                 else if(c.Age<Multicellularity.MaturityAge(c))s.MaturityBlocked++;

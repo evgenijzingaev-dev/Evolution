@@ -86,6 +86,26 @@ namespace Evolution.Volume
             for(int i=0;i<Count;i++)if(i!=index&&agents[i].Alive&&(agents[i].Position-position).Length<.3f*(child.Genes.Size+agents[i].Biology.Genes.Size))return false;
             return true;
         }
+        Cell PreviewChild(int index)
+        {
+            var a=agents[index];uint seed=2166136261;foreach(char ch in a.Identity)seed=unchecked((seed^ch)*16777619);
+            var rng=new RandomSource(seed^unchecked((uint)Tick)^0x6d2b79f5u);rng.Next();
+            return new Cell {Genes=CellEvolution.Template(a.Biology.Genes,a.PlannedDevelopment).Inherit(ref rng,.15f,.06f,true)};
+        }
+        void ResolveContacts()
+        {
+            // Passive hard-sphere contact removes overlap, not a propulsion source.
+            for(int i=0;i<Count;i++)if(agents[i].Alive&&colonyNear[colonyRoot[i]])
+            for(int j=i+1;j<Count;j++)if(agents[j].Alive) {
+                var a=agents[i];var b=agents[j];var delta=b.Position-a.Position;
+                float radius=.28f*(a.Biology.Genes.Size+b.Biology.Genes.Size),distance=delta.Length;
+                if(distance>=radius)continue;
+                var shift=delta.Unit*((radius-distance)*.5f);a.Position-=shift;b.Position+=shift;
+                float closing=V3.Dot(b.Velocity-a.Velocity,delta.Unit);
+                if(closing<0){var impulse=delta.Unit*(closing*.5f);a.Velocity+=impulse;b.Velocity-=impulse;}
+                agents[i]=a;agents[j]=b;
+            }
+        }
         void DevelopColony(ref Cell c,float dt)
         {
             if(c.ColonyId!=0) {

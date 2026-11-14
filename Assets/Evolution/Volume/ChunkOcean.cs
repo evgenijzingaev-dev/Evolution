@@ -71,6 +71,7 @@ namespace Evolution.Volume
             string controlled=World!=null&&World.Controlled>=0?World.Get(World.Controlled).Identity:null;
             string divisionRequest=World?.DivisionRequest,offspring=World?.LastOffspringIdentity;
             V3 input=World?.Input??default;bool boost=World?.Boost??false,attack=World?.Attack??false;
+            bool controlColony=World?.ControlColony??false;
             long tick=World?.Tick??archive.Clock;
             bool supply=World?.NutrientSupply??true;
             if(initialized){Survey.Refresh(World,loaded.Keys);Synchronize();}
@@ -88,8 +89,8 @@ namespace Evolution.Volume
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
 
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics) {NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
-            agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics) {NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,ControlColony=controlColony,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
+            agentOwners.Clear();foodOwners.Clear();for(int i=0;i<World.Count;i++)agentOwners[World.Get(i).Identity]=World.OwnerChunk(i);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Diagnostics=diagnostics.Clone();archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
             if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);return true;
@@ -124,6 +125,7 @@ namespace Evolution.Volume
         }
         void Synchronize()
         {
+            World.RefreshColonies();
             foreach(var r in loaded.Values) {r.Agents.Clear();r.Food.Clear();r.LastTick=World.Tick;}
             var outbound=new Dictionary<ChunkKey,RegionState>();
             RegionState DestinationKey(ChunkKey key)
@@ -133,7 +135,7 @@ namespace Evolution.Volume
                 r=archive.TryLoad(key,out var saved)?saved:new RegionState {Key=key,LastTick=World.Tick};CatchUp(r,World.Tick);outbound.Add(key,r);return r;
             }
             for(int i=0;i<World.Count;i++) {
-                var a=World.Get(i);if(!a.Alive&&World.Time-a.DiedAt>VolumeWorld.DivisionSeconds)continue;var key=ChunkKey.At(a.Position);
+                var a=World.Get(i);if(!a.Alive&&World.Time-a.DiedAt>VolumeWorld.DivisionSeconds)continue;var key=World.OwnerChunk(i);
                 if(agentOwners.TryGetValue(a.Identity,out var old)&&!old.Equals(key)&&!loaded.ContainsKey(old))DestinationKey(old).Agents.RemoveAll(v=>v.Identity==a.Identity);
                 var region=DestinationKey(key);int index=region.Agents.FindIndex(v=>v.Identity==a.Identity);
                 if(index<0)region.Agents.Add(a);else region.Agents[index]=a;agentOwners[a.Identity]=key;
