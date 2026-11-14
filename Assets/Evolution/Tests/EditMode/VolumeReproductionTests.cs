@@ -80,6 +80,28 @@ namespace Evolution.Tests
             Assert.IsNull(w.DivisionBlock(candidate));Assert.Greater(w.Get(candidate).Biology.AssimilatedEnergy,0);
             Assert.IsTrue(w.RequestDivision());w.Step();Assert.IsNotNull(w.LastOffspringIdentity);
         }
+        [Test] public void ReadsRealVersionOneArchiveWrittenByBaseBranch()
+        {
+            // Written by BinaryRegionArchive from base 445c3a26, before v2 animation fields.
+            const string fixture="M09WRQEAAAAqAAAAAAAAAAEAAAAObGVnYWN5LWZvdW5kZXIAAACAPwAAAEAAAEBAAAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAcAAAAAAAAAAAAAAAAAAAAAAIhBAADAQAAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB6thk/vgVEP+wEnz9Gxs1BuTHMPSAMMD5OQ28/aMSpPmw4vz5MvHI/ACfnPQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+            string directory=Path.Combine(Path.GetTempPath(),"evolution-v1-"+Guid.NewGuid());Directory.CreateDirectory(directory);
+            try {
+                File.WriteAllBytes(Path.Combine(directory,"0_0_0.region"),Convert.FromBase64String(fixture));
+                var archive=new BinaryRegionArchive(directory);Assert.IsTrue(archive.TryLoad(default,out var state));
+                Assert.AreEqual(42,state.LastTick);Assert.AreEqual(1,state.Agents.Count);var a=state.Agents[0];
+                Assert.AreEqual("legacy-founder",a.Identity);Assert.AreEqual(17,a.Biology.Energy);Assert.AreEqual(7,a.Biology.LineageId);
+                Assert.AreEqual(new V3(1,2,3),a.Position);Assert.AreEqual(0,a.DivisionAt);
+                archive.Save(state);Assert.IsTrue(archive.TryLoad(default,out var upgraded));Assert.AreEqual(a,upgraded.Agents[0]);
+            } finally {Directory.Delete(directory,true);}
+        }
+        [Test] public void SurveyReportsPaidBirthOnceAndDoesNotInventStreamedBirths()
+        {
+            var w=Ready();var survey=new OceanSurvey();var keys=new[] {ChunkKey.At(w.Get(0).Position)};
+            survey.Refresh(w,keys);w.RequestDivision();w.Step();survey.Refresh(w,keys);survey.Refresh(w,keys);
+            Assert.AreEqual(1,survey.Events.FindAll(e=>e.Kind==SurveyEventKind.Division).Count);
+            var restoredSurvey=new OceanSurvey();restoredSurvey.Refresh(w,keys);
+            Assert.AreEqual(0,restoredSurvey.Events.FindAll(e=>e.Kind==SurveyEventKind.Division).Count);
+        }
         [Test] public void BinarySaveRestoresBothGenomesEnergyAndDivisionPhase()
         {
             string directory=Path.Combine(Path.GetTempPath(),"evolution-birth-"+Guid.NewGuid());
@@ -90,6 +112,28 @@ namespace Evolution.Tests
                 Assert.IsTrue(new BinaryRegionArchive(directory).TryLoad(key,out var loaded));Assert.AreEqual(2,loaded.Agents.Count);
                 for(int i=0;i<2;i++)Assert.AreEqual(state.Agents[i],loaded.Agents[i]);
             } finally {if(Directory.Exists(directory))Directory.Delete(directory,true);}
+        }
+        [Test] public void ExpiredCorpsesCannotPermanentlyExhaustBirthSlots()
+        {
+            var archive=new MemoryRegionArchive {Clock=100};var region=new RegionState {Key=default,LastTick=100};
+            var living=Ready().Get(0);region.Agents.Add(living);
+            for(int i=0;i<VolumeWorld.PopulationLimit;i++) {
+                var dead=living;dead.Identity="dead-"+i;dead.Alive=false;dead.DiedAt=0;region.Agents.Add(dead);
+            }
+            archive.Save(region);var ocean=new ChunkOcean(42,archive);
+            Assert.IsNotNull(ocean.World.DivisionBlock(ocean.Find(living.Identity)));
+            Assert.IsTrue(ocean.Stream(default));int index=ocean.Find(living.Identity);
+            Assert.GreaterOrEqual(index,0);Assert.IsNull(ocean.World.DivisionBlock(index));
+            ocean.Save();var restored=new ChunkOcean(42,archive);Assert.IsNull(restored.World.DivisionBlock(restored.Find(living.Identity)));
+        }
+        [Test] public void QueuedDivisionSurvivesCameraChunkTransition()
+        {
+            var archive=new MemoryRegionArchive();var w=Ready();var region=new RegionState {Key=default};region.Agents.Add(w.Get(0));archive.Save(region);
+            var ocean=new ChunkOcean(42,archive);string identity=w.Get(0).Identity;
+            ocean.World.Controlled=ocean.Find(identity);Assert.IsTrue(ocean.World.RequestDivision());
+            ocean.Stream(new V3(21,0,0));Assert.AreEqual(identity,ocean.World.Get(ocean.World.Controlled).Identity);
+            ocean.World.Step();Assert.IsNotNull(ocean.World.LastOffspringIdentity);
+            Assert.AreEqual(ocean.World.Get(ocean.World.Controlled).Biology.Id,ocean.World.Get(ocean.Find(ocean.World.LastOffspringIdentity)).Biology.ParentId);
         }
         [Test] public void ChunkStreamingAndReloadPreserveNewbornIdentityAndLineage()
         {

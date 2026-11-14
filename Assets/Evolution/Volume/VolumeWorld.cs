@@ -26,7 +26,7 @@ namespace Evolution.Volume
         readonly List<VolumeAgent> agents;
         public const int PopulationLimit=2048;
         public const float DivisionSeconds=2;
-        bool divisionRequested;
+        internal string DivisionRequest;
         public string LastOffspringIdentity {get;private set;}
         public int Births {get;private set;}
         readonly FoodCloud[] food;
@@ -35,6 +35,9 @@ namespace Evolution.Volume
         public V3 ActiveCenter;
         public const float ObstacleRadius=1.3f;
         public int Count=>agents.Count;
+        internal bool NeedsCompaction {
+            get {if(Count<PopulationLimit)return false;foreach(var a in agents)if(!a.Alive&&Time-a.DiedAt>DivisionSeconds)return true;return false;}
+        }
         public int FoodCount=>food.Length;
         public long Tick {get;private set;}
         public double Time=>Tick*(double)StepSeconds;
@@ -79,7 +82,7 @@ namespace Evolution.Volume
         }
         public void Step()
         {
-            float dt=StepSeconds;bool requested=divisionRequested;divisionRequested=false;
+            float dt=StepSeconds;string requested=DivisionRequest;DivisionRequest=null;
             int originalCount=Count;
             for(int k=0;k<food.Length;k++) {
                 food[k].Position+=Current(food[k].Position)*dt;
@@ -156,7 +159,7 @@ namespace Evolution.Volume
                     if(!a.Biology.Consumed&&remnant>=0)food[remnant].Organic+=Biology.CarcassEnergy(a.Biology);
                     a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
                 }
-                if((i!=Controlled||requested)&&DivisionBlock(i)==null)Divide(i);
+                if((i!=Controlled||requested==a.Identity)&&DivisionBlock(i)==null)Divide(i);
             }
             Tick++;
         }
@@ -175,7 +178,7 @@ namespace Evolution.Volume
         public bool RequestDivision()
         {
             if(DivisionBlock(Controlled)!=null)return false;
-            divisionRequested=true;return true;
+            DivisionRequest=agents[Controlled].Identity;return true;
         }
         void Divide(int index)
         {

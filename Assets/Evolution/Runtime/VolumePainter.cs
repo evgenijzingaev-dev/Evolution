@@ -153,6 +153,7 @@ namespace Evolution.Runtime
             }
             bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
+            for(int form=0;form<6;form++)membranes[form].Fission=farMembranes[form].Fission=cytoplasm[form].Fission=0;
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
                 // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
                 var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.10f));
@@ -258,7 +259,8 @@ namespace Evolution.Runtime
                 p=Vector3.Lerp(V(a.DivisionOrigin),p,emerge);
                 size*=a.DivisionChild?Mathf.Lerp(.025f,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.72f,age))):1+.12f*Mathf.Sin(age*Mathf.PI);
                 var divisionRotation=Quaternion.FromToRotation(Vector3.right,V(a.DivisionAxis));
-                rotation=Quaternion.Slerp(divisionRotation,rotation,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));
+                float alignment=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.2f,age))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));
+                rotation=Quaternion.Slerp(rotation,divisionRotation,alignment);
             }
             if(!a.Alive)size*=Mathf.Max(.02f,1-(float)(world.Time-a.DiedAt)/1.6f);
         }

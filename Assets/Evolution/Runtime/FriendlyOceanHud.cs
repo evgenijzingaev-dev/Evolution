@@ -131,7 +131,8 @@ namespace Evolution.Runtime
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
             long previousEventTick=eventTick;
             foreach(var e in water.Overview.Survey.Events)if(e.Tick>previousEventTick){
-                if(e.Kind==SurveyEventKind.KnownLineageLost)Notify("line","Линия исчезла из известной области","Подтверждено наблюдавшейся гибелью",true);
+                if(e.Kind==SurveyEventKind.Division)Notify("birth","Родился потомок","Линия сохранена; геном унаследован с возможной мутацией",false);
+                else if(e.Kind==SurveyEventKind.KnownLineageLost)Notify("line","Линия исчезла из известной области","Подтверждено наблюдавшейся гибелью",true);
                 else if(e.Kind==SurveyEventKind.PopulationChange&&e.Count<0)Notify("decline","В регионе стало меньше жизни","Изменение наблюдаемой численности",false);
                 eventTick=Math.Max(eventTick,e.Tick);
             }
@@ -405,7 +406,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,96),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,96),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
@@ -450,7 +451,7 @@ namespace Evolution.Runtime
             int count=water.Overview.Survey.Events.Count;
             if(count>0){var e=water.Overview.Survey.Events[count-1];if(Button(new Rect(r.x,r.y+80,r.width,32),"События: "+count+" · "+EventName(e.Kind),"Показать журнал последних наблюдений"))journal=!journal;}
         }
-        static string EventName(SurveyEventKind kind)=>kind==SurveyEventKind.Predation?"атака":kind==SurveyEventKind.Death?"гибель клетки":kind==SurveyEventKind.Migration?"перемещение группы":kind==SurveyEventKind.KnownLineageLost?"исчезновение линии":"изменение численности";
+        static string EventName(SurveyEventKind kind)=>kind==SurveyEventKind.Division?"рождение потомка":kind==SurveyEventKind.Predation?"атака":kind==SurveyEventKind.Death?"гибель клетки":kind==SurveyEventKind.Migration?"перемещение группы":kind==SurveyEventKind.KnownLineageLost?"исчезновение линии":"изменение численности";
         void OnDestroy(){Destroy(skin);Destroy(chrome);Destroy(chromeActive);Destroy(white);Destroy(dot);}
     }
 }

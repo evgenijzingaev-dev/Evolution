@@ -60,7 +60,7 @@ namespace Evolution.Volume
         }
         public void Observe(IReadOnlyList<VolumeAgent> cells,IReadOnlyList<FoodCloud> resources,IEnumerable<ChunkKey> loaded,long tick,V3 offset)
         {
-            bool advanced=Revision>0&&tick>Tick;Tick=tick;touched.Clear();Agents.Clear();ActiveLiving=0;
+            long previousTick=Tick;bool advanced=Revision>0&&tick>Tick;Tick=tick;touched.Clear();Agents.Clear();ActiveLiving=0;
             oldPopulation.Clear();foreach(var r in Regions){if(advanced&&r.Loaded)oldPopulation[r.Key]=r.Living;r.Loaded=false;}
             foreach(var key in loaded)Touch(key,offset);
             for(int i=0;i<cells.Count;i++) {
@@ -81,7 +81,9 @@ namespace Evolution.Volume
                         move.Ids.Add(a.Identity??"");if(move.Ids.Count>=3){Add(SurveyEventKind.Migration,a.Position,c.LineageId,move.Ids.Count,null);move.Ids.Clear();move.Since=tick;}
                     }
                 }
-                // The current VolumeWorld has no birth/colony transitions. Do not infer them from streamed records.
+                // A timestamped paid birth is evidence; newly streamed founders are not births.
+                if(advanced&&!seen&&a.DivisionChild&&a.DivisionAt>previousTick*VolumeWorld.StepSeconds&&a.DivisionAt<=tick*VolumeWorld.StepSeconds+.00001)
+                    Add(SurveyEventKind.Division,a.DivisionOrigin,c.LineageId,1,a.Identity);
                 if(seen||history.Count<AgentHistoryLimit)history[a.Identity??""]=new Seen {Position=a.Position,Previous=seen?(before.Tick==tick?before.Previous:before.Position):a.Position,Tick=tick,Alive=a.Alive,Bite=a.BitAt,Lineage=c.LineageId};
             }
             for(int i=0;i<resources.Count;i++){var f=resources[i];var r=Touch(ChunkKey.At(f.Position),offset);r.Substrate+=f.Substrate;r.Organic+=f.Organic;}
