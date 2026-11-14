@@ -1,6 +1,7 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "VolumeWater.hlsl"
+#include "WaterCellMotion.hlsl"
 #ifdef VOLUME_SHELL
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 #endif
@@ -9,6 +10,8 @@ UNITY_INSTANCING_BUFFER_START(Props)
     UNITY_DEFINE_INSTANCED_PROP(float4,_Phenotype)
     UNITY_DEFINE_INSTANCED_PROP(float,_Visibility)
     UNITY_DEFINE_INSTANCED_PROP(float,_Fission)
+    UNITY_DEFINE_INSTANCED_PROP(float4,_Motion)
+    UNITY_DEFINE_INSTANCED_PROP(float4,_Response)
 UNITY_INSTANCING_BUFFER_END(Props)
 float4 _OceanDataCenter;
 struct Attributes {float4 positionOS:POSITION;float3 normalOS:NORMAL;float2 uv:TEXCOORD0;UNITY_VERTEX_INPUT_INSTANCE_ID};
@@ -17,13 +20,21 @@ Varyings Vert(Attributes i) {
     Varyings o;UNITY_SETUP_INSTANCE_ID(i);UNITY_TRANSFER_INSTANCE_ID(i,o);
     float fission=UNITY_ACCESS_INSTANCED_PROP(Props,_Fission);
     // Only the shared membrane neck receives this after a paid biological birth.
-    float3 local=i.positionOS.xyz;
+    float4 motion=UNITY_ACCESS_INSTANCED_PROP(Props,_Motion),response=UNITY_ACCESS_INSTANCED_PROP(Props,_Response);
+    float3 local=WaterCellDeform(i.positionOS.xyz,motion,response);
     float waist=1-fission*.62*exp(-local.x*local.x*45);
     local.x*=1+fission*.38;local.yz*=waist;
     // Inverse transpose of the deformation Jacobian keeps the constricted neck lit correctly.
     float slope=fission*.62*90*i.positionOS.x*exp(-i.positionOS.x*i.positionOS.x*45);
     float3 normal=float3((i.normalOS.x-slope*dot(i.positionOS.yz,i.normalOS.yz)/waist)/(1+fission*.38),i.normalOS.yz/waist);
     o.world=TransformObjectToWorld(local);o.positionCS=TransformWorldToHClip(o.world);
+    // Tangent samples include the living deformation in the normal, including turn and flow.
+    float3 tangent=normalize(cross(i.normalOS,abs(i.normalOS.y)>.9?float3(1,0,0):float3(0,1,0)));
+    float3 bitangent=cross(i.normalOS,tangent);
+    float3 dx=WaterCellDeform(i.positionOS.xyz+tangent*.002,motion,response)-WaterCellDeform(i.positionOS.xyz-tangent*.002,motion,response);
+    float3 dy=WaterCellDeform(i.positionOS.xyz+bitangent*.002,motion,response)-WaterCellDeform(i.positionOS.xyz-bitangent*.002,motion,response);
+    float3 animatedNormal=normalize(cross(dx,dy));
+    normal=lerp(animatedNormal,normal,saturate(fission));
     o.normal=TransformObjectToWorldNormal(normal);o.uv=i.uv;return o;
 }
 half4 Frag(Varyings i):SV_Target {
@@ -77,3 +88,4 @@ half4 Frag(Varyings i):SV_Target {
         return half4(VolumeFog(lit,i.world),color.a);
     #endif
 }
+

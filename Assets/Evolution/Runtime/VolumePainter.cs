@@ -13,13 +13,13 @@ namespace Evolution.Runtime
         internal static V3 V(Vector3 p)=>new V3(p.x,p.y,p.z);
         sealed class Batch
         {
-            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits;readonly float[] fissions;public float Fission;
+            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits,motions,responses;readonly float[] fissions;public float Fission;public WaterCellPose Motion;
             readonly MaterialPropertyBlock block=new MaterialPropertyBlock();readonly float[] visibility;int used;public float Opacity=1;
-            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];visibility=new float[count];fissions=new float[count];}
+            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];motions=new Vector4[count];responses=new Vector4[count];visibility=new float[count];fissions=new float[count];}
             public void Add(Vector3 p,Quaternion r,Vector3 s,Color c,Vector4 phenotype=default)
-            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;fissions[used]=Fission;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
+            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;motions[used]=new Vector4(Motion.Phase,Motion.Drive,Motion.Activity,Motion.Amoeba);responses[used]=new Vector4(Motion.Turn,Motion.Feed,Motion.Damage,Motion.Shell);fissions[used]=Fission;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
             public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);block.SetFloatArray("_Visibility",visibility);block.SetFloatArray("_Fission",fissions);
-                Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
+                block.SetVectorArray("_Motion",motions);block.SetVectorArray("_Response",responses);Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
         }
         readonly Mesh sphere,thread,quad;readonly Material solid,shell,dust,backdrop;
         readonly Mesh[] high=new Mesh[6],low=new Mesh[6];
@@ -27,7 +27,9 @@ namespace Evolution.Runtime
         readonly Batch[] cytoplasm=new Batch[6];
         readonly Vector3[][] pickVertices=new Vector3[6][];readonly int[][] pickTriangles=new int[6][];
         readonly Batch bodies,threads,vesicles,particles;
-        sealed class Visual {public double Phase;public float Drive;}
+        sealed class Visual {public CellAnimation Animation;public Quaternion Rotation;public WaterCellPose Pose;}
+        WaterCellPose cellPose;
+        static Vector3 Deform(Vector3 point,WaterCellPose pose) {pose.Deform(ref point.x,ref point.y,ref point.z);return point;}
         readonly Dictionary<string,Visual> states=new Dictionary<string,Visual>();
         readonly HashSet<string> present=new HashSet<string>();readonly List<string> expired=new List<string>();
         double lastDrawTime=-1;
@@ -94,6 +96,23 @@ namespace Evolution.Runtime
                     float detail=detailed?1-WaterOptics.SmoothRange(10,14,distance):0;
                     var c=a.Biology;var g=c.Genes;int phaseId=(c.ColonyId!=0?c.ColonyId:c.Id)%997;var form=CrystalForms.From(g);
                     var traits=new Vector4(g.Photosynthesis,g.Predation,g.Membrane,Mathf.Repeat(phaseId*.618f,1));
+                    present.Add(a.Identity);
+                    var target=AnimationTargets.From(c,world.Sample(a.Position),c.SwimSpeed,VolumeWorld.StepSeconds);
+                    float propulsion=(a.Velocity-world.Current(a.Position)).Length;
+                    target.Drive=AnimationTargets.Clamp(propulsion/System.Math.Max(.1f,Ecology.Mobility(g)));
+                    target.Frequency=(.7f+2.7f*target.Drive)*target.Activity/(float)System.Math.Sqrt(g.Size);
+                    if(!states.TryGetValue(a.Identity,out var visual)) {
+                        var animation=new CellAnimation(phaseId,target);animation.Advance(time);
+                        visual=new Visual {Animation=animation,Rotation=rotation};states.Add(a.Identity,visual);
+                    } else {visual.Animation.Target=target;visual.Animation.Advance(dt);}
+                    visual.Animation.Observe(c,time,0);
+                    Vector3 actual=V(a.Velocity-world.Current(a.Position));
+                    if(actual.sqrMagnitude>.0025f&&a.DivisionAt+VolumeWorld.DivisionSeconds<time)
+                        rotation=Quaternion.LookRotation(actual.normalized,Mathf.Abs(actual.normalized.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
+                    visual.Rotation=Quaternion.Slerp(visual.Rotation,rotation,1-Mathf.Exp(-8*dt));rotation=visual.Rotation;
+                    cellPose=WaterCellPose.From(visual.Animation,c,time);visual.Pose=cellPose;
+                    membranes[(int)form].Motion=farMembranes[(int)form].Motion=cytoplasm[(int)form].Motion=cellPose;
+                    float phase=cellPose.Phase;
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
                     if(c.Specialization>0) {
                         Color role=c.Role==CellRole.Feeding?new Color(.45f,1,.65f,membrane.a):c.Role==CellRole.Movement?new Color(.4f,.8f,1,membrane.a):c.Role==CellRole.Defense?new Color(.9f,.72f,.42f,membrane.a):membrane;
@@ -117,40 +136,38 @@ namespace Evolution.Runtime
                         new Vector4(g.Photosynthesis,g.Predation,g.Membrane,-2));
                     Vector3 nucleusScale=form==CrystalForm.Diatom?new Vector3(.35f,.13f,.2f):form==CrystalForm.Spindle?new Vector3(.32f,.17f,.2f):new Vector3(.29f,.24f,.27f);
                     Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f));
-                    bodies.Add(p+rotation*nucleus*size,rotation,nucleusScale*size,new Color(.43f,.27f,.65f),traits);
+                    bodies.Add(p+rotation*Deform(nucleus,cellPose)*size,rotation,nucleusScale*size,new Color(.43f,.27f,.65f),traits);
                     if(detail<1||!a.Alive) {
                         bodies.Opacity=1-detail;
                         // Real residents keep a small internal silhouette at medium distance.
                         if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
                             Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
                             Color pigment=Color.Lerp(new Color(.88f,.61f,.32f),new Color(.4f,.72f,.40f),g.Photosynthesis);
-                            bodies.Add(p+rotation*local,rotation,Vector3.one*size*.14f,pigment,traits);
+                            bodies.Add(p+rotation*Deform(local,cellPose),rotation,Vector3.one*size*.14f,pigment,traits);
                         }
                         bodies.Opacity=1;if(!detailed||!a.Alive)continue;
                     }
                     bodies.Opacity=threads.Opacity=vesicles.Opacity=detail;
-                    present.Add(a.Identity);
-                    float drive=(a.Velocity-world.Current(a.Position)).Length;
-                    if(!states.TryGetValue(a.Identity,out var visual)){visual=new Visual {Phase=phaseId+time*3,Drive=drive};states.Add(a.Identity,visual);}
-                    visual.Drive=Mathf.Lerp(visual.Drive,drive,1-Mathf.Exp(-6*dt));visual.Phase+=(3+visual.Drive*8)*dt;
-                    float phase=(float)(visual.Phase%(Mathf.PI*40));
                     DrawInterior(world,a,form,p,rotation,size,traits,phase);
-                    Color fibre=new Color(.42f,.68f,.81f);
-                    if(g.Speed>.8f||c.Role==CellRole.Movement&&c.Specialization>.1f) {
-                        Vector3 root=CrystalMeshes.Point(form,new Vector3(-.5f,0,0)),last=p+rotation*root*size;
-                        for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*(.65f+.3f*g.Speed)*(1+(c.Role==CellRole.Movement?c.Specialization:0)),
-                            Mathf.Cos(phase-u*8)*u*.035f,Mathf.Sin(phase-u*8)*u*(.015f+visual.Drive*.08f)))*size;
-                            Segment(last,next,.010f*size*(1-u*.65f),fibre);last=next;}
+                    Color fibre=new Color(.55f,.82f,.96f);
+                    if(target.Flagellum||c.Role==CellRole.Movement&&c.Specialization>.1f) {
+                        Vector3 root=Deform(CrystalMeshes.Point(form,new Vector3(-.5f,0,0)),cellPose),last=p+rotation*root*size;
+                        for(int j=1;j<=18;j++) {
+                            float u=j/18f;
+                            MotorCurves.Flagellum(u,phase,cellPose.Drive,cellPose.Activity,cellPose.Turn,out float x,out float z);
+                            Vector3 next=p+rotation*(root+new Vector3((x+.5f)*(1+.25f*g.Speed),Mathf.Cos(phase-u*8)*u*.025f*cellPose.Activity,z))*size;
+                            Segment(last,next,.014f*size*(1-u*.72f),fibre);last=next;
+                        }
                     }
-                    if(g.Uptake>1.05f)DrawCilia(form,p,rotation,size,phase,visual.Drive,fibre);
+                    if(target.Cilia)DrawCilia(form,p,rotation,size,phase,cellPose.Drive,fibre);
                     if(form==CrystalForm.Diatom)DrawDiatomRibs(p,rotation,size);
                     if(form==CrystalForm.Radiolarian||c.Role==CellRole.Defense&&c.Specialization>.3f)for(int j=0;j<14;j++) {
                         Vector3 n=Fibonacci(j,14);Vector3 root=CrystalMeshes.Point(form,n*.5f)*size;
-                        Segment(p+rotation*root,p+rotation*(root+n*.22f*size),.014f*size,new Color(.8f,.9f,1));
+                        Segment(p+rotation*Deform(root/size,cellPose)*size,p+rotation*(Deform(root/size,cellPose)+n*.22f)*size,.014f*size,new Color(.8f,.9f,1));
                     }
                     if(g.Predation>.5f)for(int side=-1;side<=1;side+=2) {
                         var root=CrystalMeshes.Point(form,new Vector3(.45f,0,side*.08f))*size;
-                        Segment(p+rotation*root,p+rotation*(root+new Vector3(.13f,.025f,side*.06f)*size),.035f*size,new Color(1,.67f,.31f));
+                        Segment(p+rotation*Deform(root/size,cellPose)*size,p+rotation*(Deform(root/size,cellPose)+new Vector3(.13f,.025f,side*.06f))*size,.035f*size,new Color(1,.67f,.31f));
                     }
                     float age=(float)(time-a.FedAt);
                     if(age>=0&&age<.8f&&world.FoodCount>0) {
@@ -162,7 +179,7 @@ namespace Evolution.Runtime
             }
             bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
-            for(int form=0;form<6;form++)membranes[form].Fission=farMembranes[form].Fission=cytoplasm[form].Fission=0;
+            for(int form=0;form<6;form++){membranes[form].Fission=farMembranes[form].Fission=cytoplasm[form].Fission=0;membranes[form].Motion=farMembranes[form].Motion=cytoplasm[form].Motion=default;}
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
                 // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
                 var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.10f));
@@ -214,7 +231,7 @@ namespace Evolution.Runtime
         void DrawInterior(VolumeWorld world,VolumeAgent agent,CrystalForm form,Vector3 p,Quaternion rotation,float size,Vector4 traits,float phase)
         {
             var g=agent.Biology.Genes;
-            Vector3 nucleus=CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f))*size;
+            Vector3 nucleus=Deform(CrystalMeshes.Point(form,new Vector3(-.045f,.015f,.015f)),cellPose)*size;
             bodies.Add(p+rotation*(nucleus+Vector3.up*.04f*size),rotation,Vector3.one*.085f*size,new Color(.72f,.43f,.78f));
             Vector3 envelope=form==CrystalForm.Diatom?new Vector3(.44f,.16f,.27f):form==CrystalForm.Spindle?new Vector3(.41f,.23f,.27f):new Vector3(.39f,.32f,.37f);
             vesicles.Add(p+rotation*nucleus,rotation,envelope*size,new Color(.73f,.63f,.91f,.16f));
@@ -222,13 +239,13 @@ namespace Evolution.Runtime
                 float a=j*.43f+band*.4f,b=(j+1)*.43f+band*.4f,r=.17f+band*.025f;
                 Vector3 aa=new Vector3(Mathf.Cos(a)*r,-.08f+band*.055f,Mathf.Sin(a)*r);
                 Vector3 bb=new Vector3(Mathf.Cos(b)*r,-.08f+band*.055f,Mathf.Sin(b)*r);
-                Segment(p+rotation*CrystalMeshes.Point(form,aa)*size,p+rotation*CrystalMeshes.Point(form,bb)*size,.012f*size,new Color(.43f,.64f,.72f));
+                Segment(p+rotation*Deform(CrystalMeshes.Point(form,aa),cellPose)*size,p+rotation*Deform(CrystalMeshes.Point(form,bb),cellPose)*size,.012f*size,new Color(.43f,.64f,.72f));
             }
             // Intracellular granules are anatomy only: never counted or presented as edible resources.
             // A stable, bounded distribution creates internal depth without changing the organism's genes.
             for(int granule=0;granule<36;granule++) {
                 float radius=.22f+.17f*Mathf.Repeat(granule*.381966f,1);
-                Vector3 point=CrystalMeshes.Point(form,Fibonacci(granule,36)*radius)*size;
+                Vector3 point=Deform(CrystalMeshes.Point(form,Fibonacci(granule,36)*radius)+new Vector3(.012f*Mathf.Sin(phase-granule),.008f*Mathf.Cos(phase*.6f+granule),0),cellPose)*size;
                 float grainSize=(.025f+.018f*Mathf.Repeat(granule*.618034f,1))*size;
                 Color tint=Color.Lerp(new Color(.40f,.65f,.70f),new Color(.86f,.70f,.39f),granule%4==0?1:g.OrganicSpecialization);
                 bodies.Add(p+rotation*point,rotation,Vector3.one*grainSize,tint,traits);
@@ -236,14 +253,14 @@ namespace Evolution.Runtime
             int count=8+(int)(g.Photosynthesis*7);
             for(int j=0;j<count;j++) {
                 Vector3 v=Fibonacci(j,count)*.30f+new Vector3(.03f,.012f*Mathf.Sin(phase*.12f+j),0);
-                Vector3 local=CrystalMeshes.Point(form,v)*size;
+                Vector3 local=Deform(CrystalMeshes.Point(form,v),cellPose)*size;
                 bool plastid=g.Photosynthesis>.35f&&j%3!=0;
                 Color color=plastid?Color.Lerp(new Color(.28f,.56f,.31f),new Color(.52f,.78f,.34f),Mathf.Clamp01(agent.Biology.Budget.Light*20)):new Color(.94f,.65f,.32f);
                 Vector3 scale=(plastid?new Vector3(.15f,.095f,.12f):new Vector3(.09f,.1f,.09f))*size;
                 if(form==CrystalForm.Diatom)scale.y*=.65f;
                 bodies.Add(p+rotation*local,rotation*Quaternion.Euler(j*27,j*41,15),scale,color,traits);
                 vesicles.Add(p+rotation*local,rotation,Vector3.one*.19f*size,new Color(.72f,.85f,1,.12f));
-                Vector3 anchor=CrystalMeshes.Point(form,v*.4f)*size;
+                Vector3 anchor=Deform(CrystalMeshes.Point(form,v*.4f),cellPose)*size;
                 Segment(p+rotation*anchor,p+rotation*local,.009f*size,new Color(.62f,.8f,1));
             }
         }
@@ -253,13 +270,17 @@ namespace Evolution.Runtime
             for(int ring=0;ring<rings;ring++)for(int j=0;j<around;j++) {
                 float x=-.75f+1.5f*(ring+.5f)/rings,radial=Mathf.Sqrt(1-x*x),angle=j*Mathf.PI*2/around;
                 Vector3 n=new Vector3(x,Mathf.Cos(angle)*radial,Mathf.Sin(angle)*radial);
-                Vector3 root=CrystalMeshes.Point(form,n*.5f),tip=root+n*(.11f+drive*.07f);
-                Vector3 bend=Vector3.Cross(n,Vector3.right)*Mathf.Sin(phase-ring*.7f-j*.35f)*(.02f+drive*.025f);
+                Vector3 root=Deform(CrystalMeshes.Point(form,n*.5f),cellPose);
+                float wave=phase-ring*.72f-j*.35f;
+                float stroke=Mathf.Sin(wave+.45f*Mathf.Sin(wave));
+                float reach=(.045f+.13f*drive)*cellPose.Activity;
+                Vector3 tip=root+n*(.04f+reach*(.65f+.35f*Mathf.Cos(wave)));
+                Vector3 bend=(Vector3.right-n*n.x)*stroke*reach*(1+cellPose.Turn*n.z*.25f);
                 Vector3 first=Vector3.Lerp(root,tip,.34f)+bend*.25f;
                 Vector3 second=Vector3.Lerp(root,tip,.72f)+bend*.75f;tip+=bend;
-                Segment(p+rotation*root*size,p+rotation*first*size,.004f*size,color);
-                Segment(p+rotation*first*size,p+rotation*second*size,.0026f*size,color);
-                Segment(p+rotation*second*size,p+rotation*tip*size,.0014f*size,color);
+                Segment(p+rotation*root*size,p+rotation*first*size,.007f*size,color);
+                Segment(p+rotation*first*size,p+rotation*second*size,.0045f*size,color);
+                Segment(p+rotation*second*size,p+rotation*tip*size,.0025f*size,color);
             }
         }
         void DrawDiatomRibs(Vector3 p,Quaternion rotation,float size)
@@ -298,12 +319,13 @@ namespace Evolution.Runtime
             int selected=-1;float closest=36;
             for(int i=0;i<world.Count;i++) {
                 var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive)continue;Pose(world,a,interpolation,out var p,out var rotation,out float size);
+                WaterCellPose pose=default;if(states.TryGetValue(a.Identity,out var visual)){rotation=visual.Rotation;pose=visual.Pose;}
                 Vector3 offset=ray.origin-p;
-                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size)))continue;
+                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size*1.4f)))continue;
                 Quaternion inverse=Quaternion.Inverse(rotation);Vector3 origin=inverse*offset/size,direction=inverse*ray.direction;
                 int form=(int)CrystalForms.From(a.Biology.Genes);var vertices=pickVertices[form];var triangles=pickTriangles[form];
                 for(int j=0;j<triangles.Length;j+=3) {
-                    Vector3 v0=vertices[triangles[j]],edge1=vertices[triangles[j+1]]-v0,edge2=vertices[triangles[j+2]]-v0;
+                    Vector3 v0=Deform(vertices[triangles[j]],pose),edge1=Deform(vertices[triangles[j+1]],pose)-v0,edge2=Deform(vertices[triangles[j+2]],pose)-v0;
                     Vector3 h=Vector3.Cross(direction,edge2);float determinant=Vector3.Dot(edge1,h);if(Mathf.Abs(determinant)<.0000001f)continue;
                     float inv=1/determinant;Vector3 s=origin-v0;float u=Vector3.Dot(s,h)*inv;if(u<0||u>1)continue;
                     Vector3 q=Vector3.Cross(s,edge1);float v=Vector3.Dot(direction,q)*inv;if(v<0||u+v>1)continue;
@@ -320,3 +342,4 @@ namespace Evolution.Runtime
         }
     }
 }
+
