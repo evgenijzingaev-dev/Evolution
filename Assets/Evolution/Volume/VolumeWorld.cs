@@ -8,6 +8,8 @@ namespace Evolution.Volume
     public struct VolumeAgent
     {
         public long Order;
+        public string BondIdentity;
+        public BirthConnection PlannedConnection;
         public Cell Biology;
         public V3 Position,Previous,Direction,PreviousDirection,Velocity;
         public bool Alive;
@@ -24,7 +26,7 @@ namespace Evolution.Volume
         public int NaturalMutationMask;
     }
     // Spatial ecology shares Core physiology, inheritance and paid reproduction.
-    public sealed class VolumeWorld
+    public sealed partial class VolumeWorld
     {
         public const float StepSeconds=.05f;
         readonly List<VolumeAgent> agents;
@@ -78,6 +80,7 @@ namespace Evolution.Volume
                 a.Order=i+1;a.Identity="local-agent-"+i;a.RenderDuration=StepSeconds;
                 a.FedAt=a.BitAt=a.DiedAt=double.NegativeInfinity;agents[i]=a;
             }
+            RefreshColonies();
         }
         internal VolumeWorld(VolumeAgent[] agents,FoodCloud[] food,V3[] obstacles,long tick,V3 offset,VolumeDiagnostics diagnostics=null)
         {
@@ -88,6 +91,7 @@ namespace Evolution.Volume
             // Persist competition order: spatial rebucketing during Save must not change who feeds first.
             this.agents.Sort((a,b)=>a.Order.CompareTo(b.Order));Array.Sort(food,(a,b)=>a.Order.CompareTo(b.Order));
             for(int i=0;i<this.agents.Count;i++){var a=this.agents[i];a.FoodCloud=0;if(a.FoodIdentity!=null)for(int k=0;k<food.Length;k++)if(food[k].Identity==a.FoodIdentity){a.FoodCloud=k;break;}this.agents[i]=a;}
+            RefreshColonies();
         }
         public V3 Current(V3 p)=>WaterField.Current(p+FlowOffset,Time);
         public float Temperature(V3 p)=>WaterField.Temperature(p+FlowOffset,Time);
@@ -100,20 +104,21 @@ namespace Evolution.Volume
         public void Step()
         {
             float dt=StepSeconds;string requested=DivisionRequest;DivisionRequest=null;
-            int originalCount=Count;
+            int originalCount=Count;RefreshColonies();
             for(int k=0;k<food.Length;k++) {
                 CloudEcology.Advance(ref food[k],dt,Diagnostics,NutrientSupply);
                 food[k].Position+=Current(food[k].Position)*dt;
             }
             for(int i=0;i<Count;i++) {
                 var a=agents[i];if(!a.Alive) continue;
-                bool detailed=(a.Position-ActiveCenter).Sqr<36*36 || i==Controlled;
+                bool detailed=colonyNear[colonyRoot[i]];
                 if(!detailed&&Tick%20!=0)continue;
                 dt=detailed?StepSeconds:1;
                 a.RenderTime=Time;a.RenderDuration=dt;
                 a.Previous=a.Position;a.PreviousDirection=a.Direction;
                 a.Biology.Budget=new EnergyBudget {Start=a.Biology.Energy};a.Biology.FoodLastStep=0;
                 a.Biology.AttackLastStep=a.Biology.DamageLastStep=0;
+                DevelopColony(ref a.Biology,dt);
                 var target=Steer(i,out int cloud);a.FoodCloud=cloud;
                 float throttle=i==Controlled?Math.Min(1,Input.Length):1;
                 if(i==Controlled && Input.Sqr>.0001f) target=Input.Unit;
@@ -136,7 +141,7 @@ namespace Evolution.Volume
                 c.FoodLastStep=c.Budget.Intake;
                 c.AssimilatedEnergy+=c.FoodLastStep;
                 if(c.Budget.Substrate+c.Budget.Organic>0 && Time-a.FedAt>1.1) a.FedAt=Time;
-                c.Budget.Upkeep=Biology.Cost(c.Genes,sample.Temperature)*dt;
+                c.Budget.Upkeep=Multicellularity.Cost(c,sample.Temperature,Protection(i))*dt;
                 c.AngularVelocity=(float)Math.Acos(Math.Max(-1,Math.Min(1,V3.Dot(a.PreviousDirection,a.Direction))))/dt;
                 c.Boosting=i==Controlled&&Boost;
                 c.Budget.Swimming=CellMotion.SwimmingCost(c)*dt;c.Budget.Turning=CellMotion.TurningCost(c)*dt;
@@ -160,7 +165,7 @@ namespace Evolution.Volume
                     var hunter=agents[i];var prey=agents[j];
                     float before=hunter.Biology.Energy,victim=prey.Biology.Energy;
                     float preyStructure=Biology.StructureEnergy(prey.Biology.Genes);
-                    Ecology.Bite(ref hunter.Biology,ref prey.Biology,0,dt,out float remains);
+                    Ecology.Bite(ref hunter.Biology,ref prey.Biology,Protection(j),dt,out float remains);
                     float cost=(.18f+.3f*hunter.Biology.Genes.Predation)*dt;
                     Diagnostics.PredationDissipation+=Math.Max(0,before+victim+preyStructure-hunter.Biology.Energy-prey.Biology.Energy-(prey.Biology.Consumed?0:preyStructure)-remains-cost);
                     hunter.Biology.Budget.Attack+=cost;
@@ -173,6 +178,7 @@ namespace Evolution.Volume
                     agents[i]=hunter;agents[j]=prey;break;
                 }
             }
+            ExchangeColonies();
             for(int i=0;i<originalCount;i++) {
                 var a=agents[i];if(!a.Alive)continue;
                 if(a.Biology.Energy<=0) {
@@ -184,13 +190,13 @@ namespace Evolution.Volume
                         Diagnostics.RecyclingLoss+=biomass-recycled;
                     }
                     Diagnostics.Unpaid+=Math.Max(0,-a.Biology.Energy);
-                    Diagnostics.Death(a.Biology);a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
+                    Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
                 }
                 if((i!=Controlled||requested==a.Identity)&&DivisionBlock(i)==null)Divide(i);
             }
-            Tick++;
+            RefreshColonies();Tick++;
         }
-        public float DivisionThreshold(int index)=>Biology.Capacity(agents[index].Biology.Genes)*Multicellularity.DivisionThreshold(agents[index].Biology)+CellEvolution.Cost(agents[index].Biology,agents[index].PlannedDevelopment);
+        public float DivisionThreshold(int index)=>Biology.Capacity(agents[index].Biology.Genes)*Multicellularity.DivisionThreshold(agents[index].Biology)+CellEvolution.Cost(agents[index].Biology,agents[index].PlannedDevelopment)+(RetainBirth(index)?2*Multicellularity.BondCost:0);
         public bool PlanDevelopment(DevelopmentDirection direction)
         {
             if(Controlled<0||Controlled>=Count||!agents[Controlled].Alive||!CellEvolution.Available(agents[Controlled].Biology,direction))return false;
@@ -200,6 +206,7 @@ namespace Evolution.Volume
         {
             if(index<0||index>=Count||!agents[index].Alive)return "Выбери живую клетку";
             var a=agents[index];var c=a.Biology;
+            if(a.PlannedConnection==BirthConnection.Retain&&ConnectionBlock(index)!=null)return ConnectionBlock(index);
             if(Count>=PopulationLimit)return "Область заполнена организмами";
             if(a.DivisionAt>0&&Time-a.DivisionAt<DivisionSeconds)return "Деление ещё завершается";
             if(c.Generation>0&&c.Growth<1)return "Потомок ещё растёт: "+(c.Growth*100).ToString("F0")+"%. Нужен запас выше 35%";
@@ -226,8 +233,14 @@ namespace Evolution.Volume
             float developmentCost=CellEvolution.Cost(c,a.PlannedDevelopment);
             var child=new Cell {Id=id,ParentId=c.Id,ParentGenes=c.Genes,Generation=c.Generation+1,
                 LineageId=c.LineageId,Integrity=1,Genes=template.Inherit(ref random,.15f,.06f,true)};
-            c.Energy-=developmentCost;
+            bool retain=RetainBirth(index);
+            V3 bud=BudPosition(index,child);
+            if(retain&&(ConnectionBlock(index)!=null||!Multicellularity.Compatible(c.Genes,child.Genes)||OrganismSize(index)>=Multicellularity.SizeLimit(child.Genes,MaxColonyCells)||!BudFits(index,child,bud)))return;
+            float attachment=retain?2*Multicellularity.BondCost:0;
+            c.Energy-=developmentCost+attachment;
             if(!Biology.TryDivide(ref c,ref child))return;
+            c.Budget.Contact+=attachment;Diagnostics.Contact+=attachment;
+            if(retain){child.BondParentId=c.Id;child.TissueSlot=c.TissueSlot+1+sockets[index];}
             c.Budget.Division=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+child.Energy+developmentCost;
             child.Budget.Start=child.Energy;child.BirthMutationMask=Observation.MutationMask(c.Genes,child.Genes);
             // Division follows the existing body axis; independent steering starts next tick.
@@ -236,14 +249,14 @@ namespace Evolution.Volume
             double at=(Tick+1)*(double)StepSeconds;
             var development=a.PlannedDevelopment;a.PlannedDevelopment=DevelopmentDirection.Natural;
             a.Biology=c;a.DivisionAt=at;a.DivisionOrigin=origin;a.DivisionAxis=axis;a.DivisionChild=false;
-            a.Position=origin-axis*c.Genes.Size*.35f;agents[index]=a;
+            a.Position=retain?origin:origin-axis*c.Genes.Size*.35f;agents[index]=a;
             var daughter=new VolumeAgent {Order=++Diagnostics.NextAgentOrder,Identity=identity,Biology=child,Alive=true,
-                Position=origin+axis*c.Genes.Size*.35f,Previous=origin,Direction=axis,PreviousDirection=axis,
+                BondIdentity=retain?a.Identity:null,Position=retain?bud:origin+axis*c.Genes.Size*.35f,Previous=origin,Direction=axis,PreviousDirection=axis,
                 Velocity=a.Velocity+axis*.15f,RenderTime=at,RenderDuration=StepSeconds,
                 DivisionAt=at,DivisionOrigin=origin,DivisionAxis=axis,DivisionChild=true,
                 InheritedDevelopment=development,DevelopmentPaid=developmentCost,NaturalMutationMask=Observation.MutationMask(template,child.Genes),
                 FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
-            agents.Add(daughter);Births++;Diagnostics.Births++;Diagnostics.MaxGeneration=Math.Max(Diagnostics.MaxGeneration,child.Generation);Diagnostics.BirthOverhead+=Biology.BirthOverhead(child.Genes)+developmentCost;Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+developmentCost;if(index==Controlled)LastOffspringIdentity=identity;
+            agents.Add(daughter);RefreshColonies();Births++;Diagnostics.Births++;Diagnostics.MaxGeneration=Math.Max(Diagnostics.MaxGeneration,child.Generation);Diagnostics.BirthOverhead+=Biology.BirthOverhead(child.Genes)+developmentCost;Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+developmentCost;if(index==Controlled)LastOffspringIdentity=identity;
         }
         V3 Steer(int i,out int cloud)
         {
