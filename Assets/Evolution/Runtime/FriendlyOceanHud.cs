@@ -297,7 +297,7 @@ namespace Evolution.Runtime
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
             Row(r,5,"Свет",readout.Illumination,"Доступность света в этой точке воды; особенно важна для фотосинтеза.");
             int offspring=water.Ocean.Find(water.World.LastOffspringIdentity);
-            if(offspring>=0&&water.World.Get(offspring).Alive&&water.World.Get(offspring).Biology.ParentId==c.Id) {
+            if(offspring>=0&&water.World.Get(offspring).Alive&&water.World.Get(offspring).Identity.StartsWith(a.Identity+"/b",StringComparison.Ordinal)) {
                 if(Button(new Rect(r.x+12,r.y+252,r.width-24,36),"Наблюдать потомка")){water.Select(offspring);return;}
             } else GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":water.World.DivisionBlock(water.SelectedIndex)??"Можно разделиться · R",micro);
         }
