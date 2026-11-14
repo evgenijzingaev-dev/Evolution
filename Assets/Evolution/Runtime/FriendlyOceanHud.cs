@@ -247,8 +247,9 @@ namespace Evolution.Runtime
             if(water.FindFood&&!development)DrawWorldLabels();
             string tip=hoverTip??GUI.tooltip;
             if(!string.IsNullOrEmpty(tip)){
-                float x=Mathf.Clamp(Event.current.mousePosition.x-150,18,W-338),y=Mathf.Clamp(Event.current.mousePosition.y+22,80,H-140);
-                var r=new Rect(x,y,320,70);GUI.Box(r,GUIContent.none,panel);GUI.Label(new Rect(x+12,y+9,296,54),tip,micro);
+                float height=Mathf.Min(H-100,Mathf.Max(54,micro.CalcHeight(new GUIContent(tip),296))+18);
+                float x=Mathf.Clamp(Event.current.mousePosition.x-150,18,W-338),y=Mathf.Clamp(Event.current.mousePosition.y+22,80,H-height-18);
+                var r=new Rect(x,y,320,height);GUI.Box(r,GUIContent.none,panel);GUI.Label(new Rect(x+12,y+9,296,height-18),tip,micro);
             }
             GUI.color=oldColor;GUI.matrix=matrix;GUI.skin=oldSkin;
         }
