@@ -116,5 +116,44 @@ namespace Evolution.Tests
             Assert.IsNotNull(world.DivisionBlock(0));float energy=world.Get(0).Biology.Energy;
             Assert.IsFalse(world.RequestDivision());Assert.AreEqual(energy,world.Get(0).Biology.Energy);Assert.AreEqual(0,world.Life.Latest);
         }
+        [Test] public void HydrothermalSourceIsOnePersistentFinitePhysicalParcel()
+        {
+            var archive=new MemoryRegionArchive();var ocean=new ChunkOcean(42,archive,EcologicalScenario.Natural);
+            string identity=null;V3 position=default;int count=0;
+            for(int k=0;k<ocean.World.FoodCount;k++){var f=ocean.World.GetFood(k);if(!f.Identity.EndsWith("/vent-food"))continue;identity=f.Identity;position=f.Position;count++;}
+            Assert.Greater(count,0);for(int i=0;i<30;i++)ocean.World.Step();
+            int matches=0;for(int k=0;k<ocean.World.FoodCount;k++){var f=ocean.World.GetFood(k);if(f.Identity==identity){matches++;Assert.AreEqual(position,f.Position);Assert.LessOrEqual(f.Substrate,CloudEcology.SubstrateCapacity);}}
+            Assert.AreEqual(1,matches);ocean.Save();ocean.Stream(new V3(120,0,0));ocean.Stream(default);
+            matches=0;for(int k=0;k<ocean.World.FoodCount;k++)if(ocean.World.GetFood(k).Identity==identity)matches++;
+            Assert.AreEqual(1,matches);
+        }
+        [Test] public void HistoryAndEcologicalMapReadRealStocksWithoutChangingBiology()
+        {
+            var store=new MemoryRegionArchive();var ocean=new ChunkOcean(42,store,EcologicalScenario.Natural);
+            for(int i=0;i<20;i++)ocean.World.Step();var before=VolumeSnapshot.Read(ocean.World);var original=ocean.World.Get(0);
+            for(int i=0;i<10;i++)ocean.Survey.Refresh(ocean.World,ocean.LoadedKeys);
+            Assert.AreEqual(before,VolumeSnapshot.Read(ocean.World));Assert.AreEqual(original,ocean.World.Get(0));
+            int count=ocean.Survey.NicheHistory.Count;ocean.Save();var reloaded=new ChunkOcean(42,store);
+            Assert.AreEqual(count,reloaded.Survey.NicheHistory.Count);Assert.IsNotEmpty(NicheReadout.Trend(reloaded.Survey.NicheHistory));
+            foreach(var r in ocean.Survey.Regions)if(r.Loaded){Assert.GreaterOrEqual(r.Nutrients,0);Assert.GreaterOrEqual(r.Oxygen,0);Assert.That(r.Light,Is.InRange(0f,1f));}
+        }
+        [Test] public void FreshRegionsAreCreditedAsInitialStockRatherThanHiddenEnergy()
+        {
+            var ocean=new ChunkOcean(42,new MemoryRegionArchive(),EcologicalScenario.Natural);
+            for(int i=0;i<30;i++)ocean.World.Step();ocean.Stream(new V3(21,0,0));
+            var snapshot=ocean.Snapshot(out _);var d=ocean.World.Diagnostics;
+            double energy=d.InitialEnergy+d.Solar+d.ExternalNutrients+d.ExternalOrganic;
+            Assert.AreEqual(energy-d.Dissipated,snapshot.Stored,energy*.00005);
+            Assert.AreEqual(d.InitialMatter+d.ExternalMatter-d.MatterLost,snapshot.Matter,(d.InitialMatter+d.ExternalMatter)*.0002);
+        }
+        [Test] public void CrowdingActuallyAttenuatesLightInsteadOfOnlyColouringTheMap()
+        {
+            var a=Consumer();a.Identity="shade-1";a.Alive=true;a.Biology.Id=a.Biology.LineageId=1;a.Position=new V3(0,1,0);
+            var b=a;b.Identity="shade-2";b.Biology.Id=b.Biology.LineageId=2;b.Position=new V3(.6f,1,0);
+            var f=new FoodCloud {Identity="shade-food",Position=default,Radius=3,NicheInitialized=true,Nutrients=20,Oxygen=40};
+            var single=new VolumeWorld(new[]{a},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit);
+            var crowded=new VolumeWorld(new[]{a,b},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit);
+            Assert.Less(crowded.Sample(default).Light,single.Sample(default).Light);
+        }
     }
 }

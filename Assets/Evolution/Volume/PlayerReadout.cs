@@ -25,9 +25,9 @@ namespace Evolution.Volume
             var sample = world.Sample(a.Position);
             r.Alive = a.Alive; r.ReadyToDivide=world.DivisionBlock(index)==null; r.Energy = Math.Max(0, Math.Min(1, c.Energy / Biology.Capacity(g)));
             r.Integrity = c.Integrity; r.Light = sample.Light;
-            r.ThermalEfficiency = Biology.Efficiency(g, sample.Temperature);
+            r.ThermalEfficiency = world.Niches?NicheMetabolism.Thermal(g,sample.Temperature):Biology.Efficiency(g, sample.Temperature);
             r.FlowRatio = world.Current(a.Position).Length / Math.Max(.01f, Ecology.Mobility(g));
-            r.Need = Biology.Cost(g, sample.Temperature);
+            r.Need = Biology.Cost(g, sample.Temperature)+(world.Niches?NicheMetabolism.Stress(c,world.EnvironmentAt(a.Position)):0);
             float best = float.NegativeInfinity, sense = Ecology.SenseRadius(g);
             for (int k = 0; k < world.FoodCount; k++) {
                 var f = world.GetFood(k); float distance = (f.Position - a.Position).Length;
@@ -48,3 +48,4 @@ namespace Evolution.Volume
         }
     }
 }
+

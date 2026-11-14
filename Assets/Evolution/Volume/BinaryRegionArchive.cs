@@ -5,7 +5,7 @@ using Evolution.Core;
 namespace Evolution.Volume
 {
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
-    public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive
+    public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive,INicheHistoryArchive
     {
         const int Magic=0x45564f33,Version=6;
         readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
@@ -41,6 +41,8 @@ namespace Evolution.Volume
             foreach(var a in state.Agents)WriteAgent(w,a);w.Write(state.Food.Count);
             foreach(var f in state.Food){w.Write(f.Identity??"");w.Write(f.Pattern);WriteV(w,f.Position);w.Write(f.Radius);w.Write(f.Substrate);w.Write(f.Organic);w.Write(f.Order);w.Write(f.NicheInitialized);w.Write(f.Nutrients);w.Write(f.DetritalMatter);w.Write(f.Oxygen);w.Write(f.Dissolved);}
         });
+        public void ReadNicheHistory(System.Collections.Generic.List<NicheHistoryPoint> destination)=>NicheHistoryStore.Read(Path.Combine(directory,"niches.history"),destination);
+        public void WriteNicheHistory(System.Collections.Generic.IReadOnlyList<NicheHistoryPoint> source)=>NicheHistoryStore.Write(Path.Combine(directory,"niches.history"),source);
         public void ReadSurvey(System.Collections.Generic.List<SurveyRegion> destination)=>SurveyPersistence.Read(Path.Combine(directory,"strategy.survey"),destination);
         public void WriteSurvey(System.Collections.Generic.IReadOnlyList<SurveyRegion> regions)=>SurveyPersistence.Write(Path.Combine(directory,"strategy.survey"),regions);
         static int Count(BinaryReader r) {int n=r.ReadInt32();if(n<0||n>10000)throw new InvalidDataException("Invalid region count");return n;}

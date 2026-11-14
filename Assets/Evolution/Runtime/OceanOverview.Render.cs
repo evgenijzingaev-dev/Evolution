@@ -39,8 +39,12 @@ namespace Evolution.Runtime
             if(Layer==SurveyLayer.Diet)return diets[Dominant(r.Diets)];
             if(Layer==SurveyLayer.Lineage){int id=0,count=-1;foreach(var p in r.Lineages)if(p.Value>count||(p.Value==count&&p.Key<id)){id=p.Key;count=p.Value;}return LineageColour(id);}
             switch(Layer){
+                case SurveyLayer.Nutrients:return Color.Lerp(new Color(.13f,.25f,.3f),new Color(.35f,1,.78f),Mathf.Clamp01(r.Nutrients/96));
+                case SurveyLayer.Oxygen:return Color.Lerp(new Color(.25f,.12f,.35f),new Color(.6f,.9f,1),Mathf.Clamp01(r.Oxygen/160));
+                case SurveyLayer.Chemistry:return Color.Lerp(new Color(.18f,.22f,.35f),new Color(1,.61f,.2f),Mathf.Clamp01(r.Substrate/70));
+                case SurveyLayer.Adaptation:return Color.Lerp(new Color(.3f,.65f,1),new Color(1,.4f,.2f),Mathf.InverseLerp(10,45,r.MeanOptimum));
                 case SurveyLayer.Food:return Color.Lerp(new Color(.14f,.43f,.55f),new Color(1,.82f,.38f),Mathf.Clamp01((r.Substrate+r.Organic)/90));
-                case SurveyLayer.Temperature:return Color.Lerp(new Color(.23f,.54f,1),new Color(1,.4f,.24f),Mathf.InverseLerp(9,35,r.Temperature));
+                case SurveyLayer.Temperature:return Color.Lerp(new Color(.23f,.54f,1),new Color(1,.4f,.24f),Mathf.InverseLerp(9,50,r.Temperature));
                 case SurveyLayer.Light:return Color.Lerp(new Color(.18f,.26f,.55f),new Color(1,.95f,.67f),r.Light);
                 case SurveyLayer.Current:return Color.Lerp(new Color(.29f,.62f,.8f),new Color(.62f,1,1),Mathf.Clamp01(r.Current.Length/.32f));
                 case SurveyLayer.Threat:return r.Attacks>0?new Color(1,.3f,.24f):r.Dead>0?new Color(.81f,.45f,.75f):new Color(.23f,.55f,.65f);
@@ -82,3 +86,4 @@ namespace Evolution.Runtime
         static float WaterOpticsValue(float a,float b,float value)=>Evolution.Presentation.WaterOptics.SmoothRange(a,b,value);
     }
 }
+

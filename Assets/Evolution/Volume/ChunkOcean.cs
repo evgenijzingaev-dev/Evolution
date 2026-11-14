@@ -32,7 +32,7 @@ namespace Evolution.Volume
         bool TryLoad(ChunkKey key,out RegionState state);
         void Save(RegionState state);
     }
-    public sealed class MemoryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive
+    public sealed class MemoryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive,INicheHistoryArchive
     {
         readonly Dictionary<ChunkKey,RegionState> saved=new Dictionary<ChunkKey,RegionState>();
         public EcologicalScenario Scenario {get;set;}
@@ -41,6 +41,9 @@ namespace Evolution.Volume
         public IEnumerable<ChunkKey> Keys=>new List<ChunkKey>(saved.Keys);
         public bool TryLoad(ChunkKey key,out RegionState state) {if(saved.TryGetValue(key,out var s)){state=s.Clone();return true;}state=null;return false;}
         public void Save(RegionState state)=>saved[state.Key]=state.Clone();
+        readonly List<NicheHistoryPoint> nicheHistory=new List<NicheHistoryPoint>();
+        public void ReadNicheHistory(List<NicheHistoryPoint> destination)=>destination.AddRange(nicheHistory);
+        public void WriteNicheHistory(IReadOnlyList<NicheHistoryPoint> source){nicheHistory.Clear();for(int i=0;i<source.Count;i++)nicheHistory.Add(source[i]);}
         readonly List<SurveyRegion> survey=new List<SurveyRegion>();
         public void ReadSurvey(List<SurveyRegion> destination){foreach(var r in survey)destination.Add(r.Clone());}
         public void WriteSurvey(IReadOnlyList<SurveyRegion> regions){survey.Clear();foreach(var r in regions)survey.Add(r.Clone());}
@@ -65,6 +68,7 @@ namespace Evolution.Volume
             this.seed=seed;this.archive=archive;diagnostics=archive.Diagnostics.Clone();
             var rng=new RandomSource(seed^0x718197u);offset=new V3(rng.Range(-100,100),rng.Range(-100,100),rng.Range(-100,100));
             if(archive is ISurveyArchive store){var records=new List<SurveyRegion>();store.ReadSurvey(records);Survey.Restore(records);}
+            if(archive is INicheHistoryArchive ecological)ecological.ReadNicheHistory(Survey.NicheHistory);
             Stream(default);
         }
         public bool Stream(V3 camera)
@@ -91,20 +95,20 @@ namespace Evolution.Volume
             var keys=new List<ChunkKey>(loaded.Keys);keys.Sort((a,b)=>a.X!=b.X?a.X.CompareTo(b.X):a.Y!=b.Y?a.Y.CompareTo(b.Y):a.Z.CompareTo(b.Z));
             var agents=new List<VolumeAgent>();var food=new List<FoodCloud>();var obstacles=new List<V3>();
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
-                obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
+                obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));if(scenario!=EcologicalScenario.Legacy&&NicheEnvironment.TryVent(key,offset,out var vent))obstacles.Add(vent);}
 
             World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics,scenario) {Life=life,NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,ControlColony=controlColony,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();for(int i=0;i<World.Count;i++)agentOwners[World.Get(i).Identity]=World.OwnerChunk(i);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Diagnostics=diagnostics.Clone();archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
-            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);return true;
+            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);if(archive is INicheHistoryArchive ecological)ecological.WriteNicheHistory(Survey.NicheHistory);return true;
         }
         public int Find(string identity)
         {for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==identity)return i;return -1;}
         public int Nearest(V3 point)
         {int index=-1;float distance=float.MaxValue;for(int i=0;i<World.Count;i++){var a=World.Get(i);if(!a.Alive)continue;float d=(a.Position-point).Sqr;if(d<distance){distance=d;index=i;}}return index;}
         public void Save() {if(archive is INicheArchive niche)niche.Scenario=scenario;Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Diagnostics=diagnostics.Clone();archive.Clock=World.Tick;
-            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);}
+            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);if(archive is INicheHistoryArchive ecological)ecological.WriteNicheHistory(Survey.NicheHistory);}
         // Advances known unloaded regions lazily before a global diagnostic snapshot.
         // Unvisited regions do not exist in this accounting. Loading founders is never a birth.
         public VolumeSnapshot Snapshot(out VolumeSnapshot archived)
@@ -166,6 +170,7 @@ namespace Evolution.Volume
                     RenderDuration=VolumeWorld.StepSeconds,RenderTime=tick*VolumeWorld.StepSeconds,
                     Biology=new Cell {Id=id,LineageId=id,Genes=g,Energy=Biology.Capacity(g)*.65f,Age=6,Growth=1,Integrity=1}});
             }
+            if(scenario!=EcologicalScenario.Legacy&&NicheEnvironment.TryVent(key,offset,out var vent))r.Food.Add(new FoodCloud {Identity=key+"/vent-food",Pattern=key.GetHashCode(),Position=vent+new V3(0,1.8f,0),Radius=3.5f,Substrate=25});
             return r;
         }
         void CatchUp(RegionState region,long tick)
@@ -175,7 +180,8 @@ namespace Evolution.Volume
             // Archived regions are isolated until loaded; no neighbours or new regions are generated.
             var rng=new RandomSource(region.Key.Seed(seed)^0x3817u);
             var obstacle=region.Key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17));
-            var replay=new VolumeWorld(region.Agents.ToArray(),region.Food.ToArray(),new[] {obstacle},region.LastTick,offset,diagnostics,scenario) {
+            var collisions=scenario!=EcologicalScenario.Legacy&&NicheEnvironment.TryVent(region.Key,offset,out var vent)?new[]{obstacle,vent}:new[]{obstacle};
+            var replay=new VolumeWorld(region.Agents.ToArray(),region.Food.ToArray(),collisions,region.LastTick,offset,diagnostics,scenario) {
                 NutrientSupply=World?.NutrientSupply??true,ActiveCenter=new V3(1e10f,1e10f,1e10f)};
             while(replay.Tick<tick){replay.Step();replay.CompactArchived();}
             region.Agents.Clear();region.Food.Clear();

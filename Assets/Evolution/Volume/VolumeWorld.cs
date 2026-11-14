@@ -4,7 +4,7 @@ using Evolution.Core;
 
 namespace Evolution.Volume
 {
-    public struct FoodCloud { public bool NicheInitialized;public float Nutrients,DetritalMatter,Oxygen,Dissolved; public long Order;public string Identity;public int Pattern;public V3 Position; public float Radius,Substrate,Organic; public float Concentration=>(Substrate*Biology.SubstrateEnergy+Organic)/(4.18879f*Radius*Radius*Radius); }
+    public struct FoodCloud { public bool NicheInitialized;public float Nutrients,DetritalMatter,Oxygen,Dissolved; public long Order;public string Identity;public int Pattern;public V3 Position; public float Radius,Substrate,Organic; public float Concentration=>(Substrate*Biology.SubstrateEnergy+Organic+Dissolved)/(4.18879f*Radius*Radius*Radius); }
     public struct VolumeAgent
     {
         public bool NicheInitialized;public float Matter,MineralReserve;
@@ -116,7 +116,7 @@ namespace Evolution.Volume
             for(int k=0;k<food.Length;k++) {
                 if(Niches)NicheResources.Advance(ref food[k],NicheEnvironment.Sample(food[k].Position,Time,FlowOffset,Scenario),dt,Diagnostics,NutrientSupply);
                 else CloudEcology.Advance(ref food[k],dt,Diagnostics,NutrientSupply);
-                food[k].Position+=Current(food[k].Position)*dt;
+                if(!Niches||food[k].Identity?.EndsWith("/vent-food",StringComparison.Ordinal)!=true)food[k].Position+=Current(food[k].Position)*dt;
             }
             if(Niches){for(int i=0;i<food.Length;i++)for(int j=i+1;j<food.Length;j++)NicheResources.Mix(ref food[i],ref food[j],dt);CacheNiches();}
             for(int i=0;i<Count;i++) {
@@ -133,6 +133,7 @@ namespace Evolution.Volume
                 int root=colonyRoot[i],members=colonySize[root];
                 bool driven=Controlled>=0&&colonyRoot[Controlled]==root;
                 float throttle=i==Controlled?Math.Min(1,Input.Length):1;
+                if(Niches&&i!=Controlled&&cloud>=0)throttle=Math.Min(1,Math.Max(.12f,(a.Position-food[cloud].Position).Length/food[cloud].Radius));
                 float speed;
                 if(members>1) {
                     if(i==root) {
@@ -150,7 +151,7 @@ namespace Evolution.Volume
                     } else {a.Velocity=colonyVelocity[root];a.Direction=colonyDirection[root];}
                     // Every cell pays its own propulsion effort; passive mass contributes drag.
                     speed=Ecology.Mobility(a.Biology.Genes)*Multicellularity.Motor(a.Biology);
-                    speed*=driven?(ControlColony?Math.Min(1,Input.Length):1):1;
+                    speed*=driven?(ControlColony?Math.Min(1,Input.Length):1):(Niches?throttle:1);
                     if(driven&&Boost)speed*=1.65f;
                 } else {
                     if(i==Controlled && Input.Sqr>.0001f) target=Input.Unit;
@@ -316,6 +317,7 @@ namespace Evolution.Volume
         {
             var a=agents[i];cloud=-1;float score=float.NegativeInfinity;var target=a.Direction;
             for(int k=0;k<food.Length;k++) {
+                if(Niches) {float senseRange=Ecology.SenseRadius(a.Biology.Genes)+food[k].Radius+2;if((food[k].Position-a.Position).Sqr>senseRange*senseRange)continue;}
                 float potential;
                 if(Niches)potential=NichePotential(k,a);
                 else {var copy=a.Biology;copy.Energy=0;copy.Budget=default;float substrate=food[k].Substrate,organic=food[k].Organic;

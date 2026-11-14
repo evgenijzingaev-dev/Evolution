@@ -11,12 +11,13 @@ namespace Evolution.Volume
             f.NicheInitialized=true;f.Nutrients=24*forcing.Nutrients;f.Oxygen=OxygenCapacity*forcing.Oxygen;
             // Partition existing organic energy. Migration adds no organic/chemical energy.
             f.Dissolved=f.Organic*.45f;f.Organic-=f.Dissolved;
-            ledger.InitialMatter+=f.Nutrients;ledger.InitialOxygen+=f.Oxygen;
+            ledger.InitialEnergy+=f.Substrate*2+f.Organic+f.Dissolved;ledger.InitialMatter+=f.Nutrients;ledger.InitialOxygen+=f.Oxygen;
         }
         public static void Initialize(ref VolumeAgent a,VolumeDiagnostics ledger)
         {
             if(a.NicheInitialized)return;a.NicheInitialized=true;
             if(a.Alive) {a.Matter=a.Biology.Genes.Size*(a.Biology.Generation==0?1:.4f+.6f*a.Biology.Growth);a.MineralReserve=a.Biology.Genes.Size*.5f;}
+            if(a.Alive)ledger.InitialEnergy+=Math.Max(0,a.Biology.Energy)+Biology.StructureEnergy(a.Biology.Genes);
             ledger.InitialMatter+=a.Matter+a.MineralReserve;
         }
         public static void Advance(ref FoodCloud f,NicheSample forcing,float dt,VolumeDiagnostics d,bool supply)
