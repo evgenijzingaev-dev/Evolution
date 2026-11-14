@@ -5,9 +5,9 @@ using Evolution.Core;
 namespace Evolution.Volume
 {
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
-    public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive
+    public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive
     {
-        const int Magic=0x45564f33,Version=5;
+        const int Magic=0x45564f33,Version=6;
         readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         public BinaryRegionArchive(string directory)
         {
@@ -15,6 +15,7 @@ namespace Evolution.Volume
             if(File.Exists(path))using(var r=new BinaryReader(File.OpenRead(path)))clock=r.ReadInt64();
             path=Path.Combine(directory,"ecology.bin");if(File.Exists(path))using(var r=new BinaryReader(File.OpenRead(path)))diagnostics=VolumeDiagnostics.Read(r);
         }
+        public EcologicalScenario Scenario {get {string p=Path.Combine(directory,"niches.bin");if(!File.Exists(p))return EcologicalScenario.Legacy;using(var r=new BinaryReader(File.OpenRead(p))){int value=r.ReadInt32();if(value<0||value>(int)EcologicalScenario.Organic)throw new InvalidDataException("Invalid niche profile");return (EcologicalScenario)value;}}set {if(value<EcologicalScenario.Legacy||value>EcologicalScenario.Organic)throw new ArgumentOutOfRangeException(nameof(value));Atomic(Path.Combine(directory,"niches.bin"),w=>w.Write((int)value));}}
         public long Clock {get=>clock;set {clock=value;Atomic(Path.Combine(directory,"clock.bin"),w=>w.Write(value));}}
         public VolumeDiagnostics Diagnostics {get=>diagnostics.Clone();set {diagnostics=value.Clone();Atomic(Path.Combine(directory,"ecology.bin"),w=>diagnostics.Write(w));}}
         public System.Collections.Generic.IEnumerable<ChunkKey> Keys {
@@ -31,14 +32,14 @@ namespace Evolution.Volume
                 if(magic!=Magic||version<1||version>Version)throw new InvalidDataException("Unsupported EVOLUTION water region; original file retained.");
                 state=new RegionState {Key=key,LastTick=r.ReadInt64()};int count=Count(r);
                 for(int i=0;i<count;i++)state.Agents.Add(ReadAgent(r,version));count=Count(r);
-                for(int i=0;i<count;i++){var f=new FoodCloud {Identity=r.ReadString(),Pattern=r.ReadInt32(),Position=ReadV(r),Radius=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle()};if(version>=3)f.Order=r.ReadInt64();state.Food.Add(f);}
+                for(int i=0;i<count;i++){var f=new FoodCloud {Identity=r.ReadString(),Pattern=r.ReadInt32(),Position=ReadV(r),Radius=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle()};if(version>=3)f.Order=r.ReadInt64();if(version>=6){f.NicheInitialized=r.ReadBoolean();f.Nutrients=Stock(r);f.DetritalMatter=Stock(r);f.Oxygen=Stock(r);f.Dissolved=Stock(r);}state.Food.Add(f);}
             }
             return true;
         }
         public void Save(RegionState state)=>Atomic(Path.Combine(directory,state.Key+".region"),w=>{
             w.Write(Magic);w.Write(Version);w.Write(state.LastTick);w.Write(state.Agents.Count);
             foreach(var a in state.Agents)WriteAgent(w,a);w.Write(state.Food.Count);
-            foreach(var f in state.Food){w.Write(f.Identity??"");w.Write(f.Pattern);WriteV(w,f.Position);w.Write(f.Radius);w.Write(f.Substrate);w.Write(f.Organic);w.Write(f.Order);}
+            foreach(var f in state.Food){w.Write(f.Identity??"");w.Write(f.Pattern);WriteV(w,f.Position);w.Write(f.Radius);w.Write(f.Substrate);w.Write(f.Organic);w.Write(f.Order);w.Write(f.NicheInitialized);w.Write(f.Nutrients);w.Write(f.DetritalMatter);w.Write(f.Oxygen);w.Write(f.Dissolved);}
         });
         public void ReadSurvey(System.Collections.Generic.List<SurveyRegion> destination)=>SurveyPersistence.Read(Path.Combine(directory,"strategy.survey"),destination);
         public void WriteSurvey(System.Collections.Generic.IReadOnlyList<SurveyRegion> regions)=>SurveyPersistence.Write(Path.Combine(directory,"strategy.survey"),regions);
@@ -64,6 +65,7 @@ namespace Evolution.Volume
             w.Write(a.Order);w.Write((int)a.PlannedDevelopment);w.Write((int)a.InheritedDevelopment);w.Write(a.DevelopmentPaid);w.Write(a.NaturalMutationMask);
             w.Write(a.BondIdentity??"");w.Write((int)a.PlannedConnection);
             w.Write(c.BondParentId);w.Write(c.ColonyId);w.Write(c.TissueSlot);w.Write((int)c.Role);w.Write(c.Specialization);w.Write(c.TransportLastStep);
+            w.Write(a.NicheInitialized);w.Write(a.Matter);w.Write(a.MineralReserve);
         }
         static void WriteGenome(BinaryWriter w,Genome g)
         {
@@ -93,11 +95,14 @@ namespace Evolution.Volume
                 if(a.PlannedConnection<BirthConnection.Natural||a.PlannedConnection>BirthConnection.Retain||a.Biology.Role<CellRole.Generalist||a.Biology.Role>CellRole.Reproduction
                     ||!(a.Biology.Specialization>=0&&a.Biology.Specialization<=1)||a.BondIdentity!=null&&a.BondIdentity!=CellEvolution.ParentIdentity(a))throw new InvalidDataException("Invalid colony record");
             }
+            if(version>=6){a.NicheInitialized=r.ReadBoolean();a.Matter=Stock(r);a.MineralReserve=Stock(r);}
             return a;
         }
         static Genome ReadGenome(BinaryReader r)=>new Genome {Speed=r.ReadSingle(),Size=r.ReadSingle(),Uptake=r.ReadSingle(),PreferredTemperature=r.ReadSingle(),OrganicSpecialization=r.ReadSingle(),
             Adhesion=r.ReadSingle(),ColonySize=r.ReadSingle(),Branching=r.ReadSingle(),Differentiation=r.ReadSingle(),Transport=r.ReadSingle(),RolePattern=r.ReadSingle(),
             Photosynthesis=r.ReadSingle(),Predation=r.ReadSingle(),Membrane=r.ReadSingle(),Sensitivity=r.ReadSingle(),ThermalTolerance=r.ReadSingle(),ToxinResistance=r.ReadSingle(),EnergyEfficiency=r.ReadSingle()};
+        static float Stock(BinaryReader r){float value=r.ReadSingle();if(float.IsNaN(value)||float.IsInfinity(value)||value<0)throw new InvalidDataException("Invalid niche stock");return value;}
         static string ReadOptional(BinaryReader r) {string s=r.ReadString();return s.Length==0?null:s;}
     }
 }
+

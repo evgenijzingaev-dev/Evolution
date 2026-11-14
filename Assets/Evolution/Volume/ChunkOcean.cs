@@ -32,9 +32,10 @@ namespace Evolution.Volume
         bool TryLoad(ChunkKey key,out RegionState state);
         void Save(RegionState state);
     }
-    public sealed class MemoryRegionArchive : IRegionArchive,ISurveyArchive
+    public sealed class MemoryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive
     {
         readonly Dictionary<ChunkKey,RegionState> saved=new Dictionary<ChunkKey,RegionState>();
+        public EcologicalScenario Scenario {get;set;}
         public long Clock {get;set;}
         public VolumeDiagnostics Diagnostics {get;set;}=new VolumeDiagnostics();
         public IEnumerable<ChunkKey> Keys=>new List<ChunkKey>(saved.Keys);
@@ -48,7 +49,7 @@ namespace Evolution.Volume
     // Archived regions replay the same far-LOD biology and bounded resource flux.
     public sealed class ChunkOcean
     {
-        readonly uint seed;readonly IRegionArchive archive;
+        readonly uint seed;readonly IRegionArchive archive;readonly EcologicalScenario scenario;
         readonly Dictionary<ChunkKey,RegionState> loaded=new Dictionary<ChunkKey,RegionState>();
         readonly Dictionary<string,ChunkKey> agentOwners=new Dictionary<string,ChunkKey>(),foodOwners=new Dictionary<string,ChunkKey>();
         readonly VolumeDiagnostics diagnostics;
@@ -57,8 +58,9 @@ namespace Evolution.Volume
         public OceanSurvey Survey {get;}=new OceanSurvey();
         public IEnumerable<ChunkKey> LoadedKeys=>loaded.Keys;
         public int LoadedCount=>loaded.Count;
-        public ChunkOcean(uint seed,IRegionArchive archive)
+        public ChunkOcean(uint seed,IRegionArchive archive,EcologicalScenario scenario=EcologicalScenario.Legacy)
         {
+            this.scenario=scenario==EcologicalScenario.Legacy&&archive is INicheArchive niche?niche.Scenario:scenario;
             this.seed=seed;this.archive=archive;diagnostics=archive.Diagnostics.Clone();
             var rng=new RandomSource(seed^0x718197u);offset=new V3(rng.Range(-100,100),rng.Range(-100,100),rng.Range(-100,100));
             if(archive is ISurveyArchive store){var records=new List<SurveyRegion>();store.ReadSurvey(records);Survey.Restore(records);}
@@ -90,7 +92,7 @@ namespace Evolution.Volume
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
 
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics) {Life=life,NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,ControlColony=controlColony,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics,scenario) {Life=life,NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,ControlColony=controlColony,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();for(int i=0;i<World.Count;i++)agentOwners[World.Get(i).Identity]=World.OwnerChunk(i);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Diagnostics=diagnostics.Clone();archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
@@ -100,7 +102,7 @@ namespace Evolution.Volume
         {for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==identity)return i;return -1;}
         public int Nearest(V3 point)
         {int index=-1;float distance=float.MaxValue;for(int i=0;i<World.Count;i++){var a=World.Get(i);if(!a.Alive)continue;float d=(a.Position-point).Sqr;if(d<distance){distance=d;index=i;}}return index;}
-        public void Save() {Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Diagnostics=diagnostics.Clone();archive.Clock=World.Tick;
+        public void Save() {if(archive is INicheArchive niche)niche.Scenario=scenario;Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Diagnostics=diagnostics.Clone();archive.Clock=World.Tick;
             if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);}
         // Advances known unloaded regions lazily before a global diagnostic snapshot.
         // Unvisited regions do not exist in this accounting. Loading founders is never a birth.
@@ -118,7 +120,7 @@ namespace Evolution.Volume
                 var residentFood=r.Food.FindAll(f=>activeFood.Contains(f.Identity));
                 r.Agents.RemoveAll(a=>activeAgents.Contains(a.Identity));r.Food.RemoveAll(f=>activeFood.Contains(f.Identity));
                 CatchUp(r,World.Tick);
-                var w=new VolumeWorld(r.Agents.ToArray(),r.Food.ToArray(),Array.Empty<V3>(),r.LastTick,offset);
+                var w=new VolumeWorld(r.Agents.ToArray(),r.Food.ToArray(),Array.Empty<V3>(),r.LastTick,offset,scenario:scenario);
                 archived.Add(VolumeSnapshot.Read(w));
                 r.Agents.AddRange(residentAgents);r.Food.AddRange(residentFood);archive.Save(r);
             }
@@ -172,7 +174,7 @@ namespace Evolution.Volume
             // Archived regions are isolated until loaded; no neighbours or new regions are generated.
             var rng=new RandomSource(region.Key.Seed(seed)^0x3817u);
             var obstacle=region.Key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17));
-            var replay=new VolumeWorld(region.Agents.ToArray(),region.Food.ToArray(),new[] {obstacle},region.LastTick,offset,diagnostics) {
+            var replay=new VolumeWorld(region.Agents.ToArray(),region.Food.ToArray(),new[] {obstacle},region.LastTick,offset,diagnostics,scenario) {
                 NutrientSupply=World?.NutrientSupply??true,ActiveCenter=new V3(1e10f,1e10f,1e10f)};
             while(replay.Tick<tick){replay.Step();replay.CompactArchived();}
             region.Agents.Clear();region.Food.Clear();
