@@ -275,7 +275,9 @@ namespace Evolution.Runtime
             Require(candidate>=0,"no feeding resident for paid division");water.Select(candidate);water.PlaySelected();
             string parent=water.World.Get(candidate).Identity;
             int ticks=0;
-            while(water.World.DivisionBlock(candidate)!=null&&ticks++<2400) {
+            while(ticks++<2400) {
+                candidate=water.Ocean.Find(parent);Require(candidate>=0,"division resident streamed away");
+                if(water.World.DivisionBlock(candidate)==null)break;
                 var a=water.World.Get(candidate);Require(a.Alive,"division resident died before provisioning");
                 var read=PlayerReadout.Read(water.World,candidate);
                 Require(read.Food>=0,"division resident has no sensed edible resources");
@@ -287,12 +289,13 @@ namespace Evolution.Runtime
             water.World.Input=default;
             var before=water.World.Get(candidate);var focus=ToVector(before.Position);
             float heading=Mathf.Atan2(before.Direction.X,before.Direction.Z)*Mathf.Rad2Deg+90;
-            SetView(focus,4.5f,heading,12,false,false,false,true);water.Hud.RefreshNow();
+            SetView(focus,4.5f,heading,12,false,false,false,true);water.HudVisible=true;water.Hud.RefreshNow();
             yield return Capture("division-before",false);
+            candidate=water.Ocean.Find(parent);Require(candidate>=0,"division parent missing after camera move");
             Require(water.World.RequestDivision(),"paid division request rejected");water.World.Step();
             int childIndex=water.Ocean.Find(water.World.LastOffspringIdentity);
             Require(childIndex>=0,"model did not create a daughter");
-            var daughter=water.World.Get(childIndex);var after=water.World.Get(candidate);
+            var daughter=water.World.Get(childIndex);string childIdentity=daughter.Identity;var after=water.World.Get(candidate);
             var evidence=new DivisionEvidence {unity=Application.unityVersion,pipeline=GraphicsSettings.currentRenderPipeline.GetType().Name,
                 revision=Context(new Shot[0],true).revision,parent=parent,child=daughter.Identity,birthTick=water.World.Tick,
                 lineage=daughter.Biology.LineageId,generation=daughter.Biology.Generation,mutationMask=daughter.Biology.BirthMutationMask,
@@ -308,6 +311,7 @@ namespace Evolution.Runtime
                 yield return Capture("division-"+frame.ToString("D3"),false);
                 water.World.Step();
             }
+            childIndex=water.Ocean.Find(childIdentity);Require(childIndex>=0,"daughter missing after capture");
             evidence.independent=(water.World.Get(childIndex).Position-childStart).Length>.01f;
             Require(evidence.independent&&water.World.Get(childIndex).Alive,"daughter did not begin independent life");
             File.WriteAllText(Path.Combine(destination,"division.json"),JsonUtility.ToJson(evidence,true));

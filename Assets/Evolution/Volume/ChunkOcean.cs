@@ -64,7 +64,7 @@ namespace Evolution.Volume
             var next=ChunkKey.At(camera);
             if(initialized&&next.Equals(center)&&!World.NeedsCompaction) {World.ActiveCenter=camera;return false;}
             string controlled=World!=null&&World.Controlled>=0?World.Get(World.Controlled).Identity:null;
-            string divisionRequest=World?.DivisionRequest;
+            string divisionRequest=World?.DivisionRequest,offspring=World?.LastOffspringIdentity;
             V3 input=World?.Input??default;bool boost=World?.Boost??false,attack=World?.Attack??false;
             long tick=World?.Tick??archive.Clock;
             if(initialized){Survey.Refresh(World,loaded.Keys);Synchronize();}
@@ -82,7 +82,7 @@ namespace Evolution.Volume
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
             for(int i=0;i<agents.Count;i++){var a=agents[i];a.FoodCloud=0;if(a.FoodIdentity!=null)for(int k=0;k<food.Count;k++)if(food[k].Identity==a.FoodIdentity){a.FoodCloud=k;break;}agents[i]=a;}
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest};
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);

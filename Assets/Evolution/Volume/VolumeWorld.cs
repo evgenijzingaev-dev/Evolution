@@ -27,7 +27,7 @@ namespace Evolution.Volume
         public const int PopulationLimit=2048;
         public const float DivisionSeconds=2;
         internal string DivisionRequest;
-        public string LastOffspringIdentity {get;private set;}
+        public string LastOffspringIdentity {get;internal set;}
         public int Births {get;private set;}
         readonly FoodCloud[] food;
         public readonly V3[] Obstacles;
@@ -205,7 +205,7 @@ namespace Evolution.Volume
                 Velocity=a.Velocity+axis*.15f,RenderTime=at,RenderDuration=StepSeconds,
                 DivisionAt=at,DivisionOrigin=origin,DivisionAxis=axis,DivisionChild=true,
                 FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
-            agents.Add(daughter);Births++;LastOffspringIdentity=identity;
+            agents.Add(daughter);Births++;if(index==Controlled)LastOffspringIdentity=identity;
         }
         V3 Steer(int i,out int cloud)
         {

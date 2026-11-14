@@ -30,6 +30,13 @@ namespace Evolution.Tests
             Assert.That(c.Energy+child.Energy,Is.EqualTo(c.Budget.Start+c.Budget.Intake-c.Budget.Upkeep-c.Budget.Movement-Biology.StructureEnergy(child.Genes)-Biology.BirthOverhead(child.Genes)).Within(.00002));
             Assert.IsFalse(w.RequestDivision());var position=d.Position;w.Step();Assert.Greater((w.Get(1).Position-position).Length,0);
         }
+        [Test] public void SimultaneousAutonomousBirthDoesNotReplacePlayersOffspring()
+        {
+            var a=Ready().Get(0);var b=a;b.Position+=new V3(5,0,0);
+            var w=new VolumeWorld(2,42,new[] {a,b}) {Controlled=0};w.RequestDivision();w.Step();
+            Assert.AreEqual(2,w.Births);Assert.AreEqual(w.Get(2).Identity,w.LastOffspringIdentity);
+            Assert.AreEqual(w.Get(0).Biology.Id,w.Get(2).Biology.ParentId);
+        }
         [Test] public void AutonomousResidentsDivideButResourcesPreventUnboundedBirths()
         {
             var founder=Ready().Get(0);founder.Position=new V3(200,200,200);
