@@ -333,12 +333,12 @@ namespace Evolution.Runtime
             string blocked=water.World.DivisionBlock(water.SelectedIndex);
             if(water.Paused)blocked="Продолжи симуляцию";
             else if(water.World.Controlled!=water.SelectedIndex)blocked="Сначала возьми управление";
-            string divisionTip=blocked??"Создать самостоятельного потомка с наследуемым геномом";
+            string divisionTip=blocked??"Рождение самостоятельного потомка";
             if(water.SelectedIndex>=0) {
                 var c=water.World.Get(water.SelectedIndex).Biology;
                 float construction=Biology.StructureEnergy(c.Genes)+Biology.BirthOverhead(c.Genes);
                 float cost=construction+Mathf.Min((c.Energy-construction)*.5f,Biology.Capacity(c.Genes)*.5f);
-                divisionTip+=". Расход ≈ "+cost.ToString("F1")+" энергии: структура + запас потомка. Мутация может слегка изменить стоимость.";
+                divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка.";
             }
             if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
             if(water.SelectedIndex>=0)GUI.Label(new Rect(r.x+70,r.y-36,r.width-140,32),
