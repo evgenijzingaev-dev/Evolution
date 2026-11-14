@@ -160,7 +160,7 @@ namespace Evolution.Runtime
                     bodies.Opacity=threads.Opacity=vesicles.Opacity=anatomyWeight;
                     // A paid pair shares one continuous envelope before the two real shells separate.
                     membranes[(int)form].Fission=farMembranes[(int)form].Fission=cytoplasm[(int)form].Fission=0;
-                    if(dividing)DrawDivisionBridge(world,a,division,t,divisionAge,p,size,traits);
+                    if(dividing)DrawDivisionBridge(world,a,division,t,divisionAge,p,size,traits,detailed,membrane,rotation);
                     if(detail>0){membranes[(int)form].Opacity=detail*shellWeight;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     if(detail<1){farMembranes[(int)form].Opacity=(1-detail)*shellWeight;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     membranes[(int)form].Opacity=farMembranes[(int)form].Opacity=1;
@@ -290,7 +290,7 @@ namespace Evolution.Runtime
             }
             bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
         }
-        void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,LifeEvent division,float interpolation,float age,Vector3 p,float size,Vector4 traits)
+        void DrawDivisionBridge(VolumeWorld world,VolumeAgent parent,LifeEvent division,float interpolation,float age,Vector3 p,float size,Vector4 traits,bool detailed,Color membrane,Quaternion parentRotation)
         {
             if(!parent.Alive||parent.DivisionChild||!indices.TryGetValue(division.Child.Identity,out int childIndex))return;
             var child=world.Get(childIndex);if(!child.Alive)return;
@@ -299,11 +299,17 @@ namespace Evolution.Runtime
             float merge=1-WaterCellPose.ShellSeparation(age);
             // The shared envelope starts as the parent's body, forms two lobes, then a narrow neck.
             // Its endpoints follow the true pair. Permanent connections are drawn by BondParent.
-            vesicles.Opacity=merge;vesicles.Fission=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.82f,age));
-            vesicles.Add((p+q)*.5f,Quaternion.FromToRotation(Vector3.right,delta),
-                new Vector3((delta.magnitude+Mathf.Max(size,childSize))/(1+vesicles.Fission*.38f),Mathf.Max(size,childSize)*.9f,Mathf.Max(size,childSize)*.9f),
-                new Color(.66f,.86f,1,.34f),traits);
-            vesicles.Fission=0;vesicles.Opacity=1;
+            int form=(int)CrystalForms.From(parent.Biology.Genes);
+            var envelope=detailed?membranes[form]:farMembranes[form];
+            float pinch=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.82f,age));
+            var scale=new Vector3((delta.magnitude+Mathf.Max(size,childSize))/(1+pinch*.38f),Mathf.Max(size,childSize),Mathf.Max(size,childSize));
+            var facing=Quaternion.Slerp(parentRotation,Quaternion.FromToRotation(Vector3.right,delta),Mathf.SmoothStep(0,1,Mathf.InverseLerp(.15f,.6f,age)));
+            // Preserve the parent's inherited outline at onset instead of replacing an amoeba by a sphere.
+            envelope.Opacity=merge;envelope.Fission=pinch;
+            envelope.Add((p+q)*.5f,facing,scale,membrane,traits);
+            cytoplasm[form].Opacity=merge;cytoplasm[form].Fission=pinch;
+            cytoplasm[form].Add((p+q)*.5f,facing,scale*.84f,new Color(.16f,.30f,.38f,.20f),new Vector4(0,0,0,-2));
+            envelope.Fission=cytoplasm[form].Fission=0;envelope.Opacity=cytoplasm[form].Opacity=1;
         }
         static Vector3 Fibonacci(int i,int count)
         {float y=1-2*(i+.5f)/count,r=Mathf.Sqrt(1-y*y),angle=i*2.39996f;return new Vector3(Mathf.Cos(angle)*r,y,Mathf.Sin(angle)*r);}
