@@ -10,7 +10,9 @@ if [[ -z "$player" ]]; then
   echo '::error::No built Linux player executable found.'
   exit 1
 fi
-chmod +x "$player"
+# GameCI creates the Linux build as root; chmod as runner fails with EPERM.
+# Change only the built executable mode, leaving checkout ownership untouched.
+sudo chmod +x "$player"
 export EVOLUTION_CAPTURE_PLAYER="$player"
 xvfb-run -a -s '-screen 0 2560x1440x24 +extension GLX' bash <<'CAPTURE'
 set -euo pipefail
