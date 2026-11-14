@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Evolution.Volume;
+using Evolution.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -245,7 +246,71 @@ namespace Evolution.Runtime
             yield return Capture("21-development-ui");
             Require(!failed&&shots.Count==20,"incomplete friendly HUD capture");
             File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
+            yield return CaptureDivision();
             Application.Quit(0);
+        }
+        [Serializable] sealed class DivisionEvidence
+        {
+            public string unity,pipeline,parent,child,revision;
+            public long birthTick;
+            public int lineage,generation,mutationMask;
+            public float parentBefore,parentAfter,childEnergy,divisionCost,construction;
+            public bool paid,inheritance,independent;
+        }
+        IEnumerator CaptureDivision()
+        {
+            water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;
+            water.OrganismsVisible=true;water.Paused=true;
+            // Find an existing resident able to earn a surplus at its real food cloud.
+            // No fixtures, teleports, genome edits or energy/resource injection.
+            int candidate=-1;float best=-1;
+            for(int i=0;i<water.World.Count;i++) {
+                var a=water.World.Get(i);if(!a.Alive||a.Biology.Generation>0)continue;
+                for(int k=0;k<water.World.FoodCount;k++) {
+                    var f=water.World.GetFood(k);float d=(f.Position-a.Position).Length;
+                    float gain=water.World.FoodPotential(k,a.Biology)-Biology.Cost(a.Biology.Genes,water.World.Temperature(a.Position));
+                    float score=gain/(1+d);if(score>best){best=score;candidate=i;}
+                }
+            }
+            Require(candidate>=0,"no feeding resident for paid division");water.Select(candidate);water.PlaySelected();
+            string parent=water.World.Get(candidate).Identity;
+            int ticks=0;
+            while(water.World.DivisionBlock(candidate)!=null&&ticks++<2400) {
+                var a=water.World.Get(candidate);Require(a.Alive,"division resident died before provisioning");
+                var read=PlayerReadout.Read(water.World,candidate);
+                Require(read.Food>=0,"division resident has no sensed edible resources");
+                var food=water.World.GetFood(read.Food);V3 delta=food.Position-a.Position;
+                water.World.Input=delta.Length>food.Radius*.45f?delta.Unit:default;
+                water.World.Step();if(ticks%20==0)yield return null;
+            }
+            Require(water.World.DivisionBlock(candidate)==null,"resident did not earn division energy");
+            water.World.Input=default;
+            var before=water.World.Get(candidate);var focus=ToVector(before.Position);
+            float heading=Mathf.Atan2(before.Direction.X,before.Direction.Z)*Mathf.Rad2Deg+90;
+            SetView(focus,4.5f,heading,12,false,false,false,true);water.Hud.RefreshNow();
+            yield return Capture("division-before",false);
+            Require(water.World.RequestDivision(),"paid division request rejected");water.World.Step();
+            int childIndex=water.Ocean.Find(water.World.LastOffspringIdentity);
+            Require(childIndex>=0,"model did not create a daughter");
+            var daughter=water.World.Get(childIndex);var after=water.World.Get(candidate);
+            var evidence=new DivisionEvidence {unity=Application.unityVersion,pipeline=GraphicsSettings.currentRenderPipeline.GetType().Name,
+                revision=Context(new Shot[0],true).revision,parent=parent,child=daughter.Identity,birthTick=water.World.Tick,
+                lineage=daughter.Biology.LineageId,generation=daughter.Biology.Generation,mutationMask=daughter.Biology.BirthMutationMask,
+                parentBefore=after.Biology.Budget.Start,parentAfter=after.Biology.Energy,childEnergy=daughter.Biology.Energy,
+                divisionCost=after.Biology.Budget.Division,construction=Biology.StructureEnergy(daughter.Biology.Genes)+Biology.BirthOverhead(daughter.Biology.Genes),
+                paid=after.Biology.Budget.Division>daughter.Biology.Energy,
+                inheritance=daughter.Biology.ParentId==after.Biology.Id&&daughter.Biology.LineageId==after.Biology.LineageId&&daughter.Biology.ParentGenes.Equals(after.Biology.Genes)};
+            Require(evidence.paid&&evidence.inheritance,"division model accounting/inheritance failed");
+            V3 childStart=daughter.Position;
+            // Every PNG is an ordinary rendered frame after exactly one real fixed model tick.
+            for(int frame=0;frame<49;frame++) {
+                water.Hud.RefreshNow();
+                yield return Capture("division-"+frame.ToString("D3"),false);
+                water.World.Step();
+            }
+            evidence.independent=(water.World.Get(childIndex).Position-childStart).Length>.01f;
+            Require(evidence.independent&&water.World.Get(childIndex).Alive,"daughter did not begin independent life");
+            File.WriteAllText(Path.Combine(destination,"division.json"),JsonUtility.ToJson(evidence,true));
         }
         int FindThreat()
         {

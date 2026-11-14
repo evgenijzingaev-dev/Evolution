@@ -142,7 +142,7 @@ jobs:
         if: ${{ success() && steps.images.outputs.build_supported == 'true' }}
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool imagemagick mesa-utils libgl1-mesa-dri libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libasound2t64
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool imagemagick mesa-utils libgl1-mesa-dri libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libasound2t64 ffmpeg
           bash Tools/ci/capture_player.sh
         env:
           EVOLUTION_PREVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

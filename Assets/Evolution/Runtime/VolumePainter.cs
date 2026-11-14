@@ -13,12 +13,12 @@ namespace Evolution.Runtime
         internal static V3 V(Vector3 p)=>new V3(p.x,p.y,p.z);
         sealed class Batch
         {
-            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits;
+            readonly Mesh mesh;readonly Material material;readonly Matrix4x4[] matrices;readonly Vector4[] colors,traits;readonly float[] fissions;public float Fission;
             readonly MaterialPropertyBlock block=new MaterialPropertyBlock();readonly float[] visibility;int used;public float Opacity=1;
-            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];visibility=new float[count];}
+            public Batch(Mesh mesh,Material material,int count) {this.mesh=mesh;this.material=material;matrices=new Matrix4x4[count];colors=new Vector4[count];traits=new Vector4[count];visibility=new float[count];fissions=new float[count];}
             public void Add(Vector3 p,Quaternion r,Vector3 s,Color c,Vector4 phenotype=default)
-            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
-            public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);block.SetFloatArray("_Visibility",visibility);
+            {matrices[used]=Matrix4x4.TRS(p,r,s);colors[used]=c;traits[used]=phenotype;fissions[used]=Fission;visibility[used]=Opacity;if(++used==matrices.Length) Flush();}
+            public void Flush() {if(used==0)return;block.SetVectorArray("_InstanceColor",colors);block.SetVectorArray("_Phenotype",traits);block.SetFloatArray("_Visibility",visibility);block.SetFloatArray("_Fission",fissions);
                 Graphics.DrawMeshInstanced(mesh,0,material,matrices,used,block,ShadowCastingMode.Off,false);used=0;}
         }
         readonly Mesh sphere,thread,quad;readonly Material solid,shell,dust,backdrop;
@@ -39,6 +39,7 @@ namespace Evolution.Runtime
             bodies=new Batch(sphere,solid,128);threads=new Batch(thread,solid,128);vesicles=new Batch(sphere,shell,128);particles=new Batch(quad,dust,256);
             for(int i=0;i<6;i++) {
                 high[i]=CrystalMeshes.Create((CrystalForm)i,24,48);low[i]=CrystalMeshes.Create((CrystalForm)i,8,16);
+                foreach(var mesh in new[] {high[i],low[i]}){var bounds=mesh.bounds;bounds.extents*=1.38f;mesh.bounds=bounds;}
                 membranes[i]=new Batch(high[i],shell,128);farMembranes[i]=new Batch(low[i],shell,128);
                 cytoplasm[i]=new Batch(low[i],shell,128);
                 pickVertices[i]=high[i].vertices;pickTriangles[i]=high[i].triangles;
@@ -96,6 +97,9 @@ namespace Evolution.Runtime
                     var traits=new Vector4(g.Photosynthesis,g.Predation,g.Membrane,Mathf.Repeat(phaseId*.618f,1));
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
+                    float divisionAge=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
+                    float fission=divisionAge>=0&&divisionAge<1?Mathf.Sin(Mathf.Clamp01(divisionAge)*Mathf.PI):0;
+                    membranes[(int)form].Fission=farMembranes[(int)form].Fission=cytoplasm[(int)form].Fission=fission;
                     if(detail>0){membranes[(int)form].Opacity=detail;membranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     if(detail<1){farMembranes[(int)form].Opacity=1-detail;farMembranes[(int)form].Add(p,rotation,Vector3.one*size,membrane,traits);}
                     membranes[(int)form].Opacity=farMembranes[(int)form].Opacity=1;
@@ -247,20 +251,36 @@ namespace Evolution.Runtime
             p=V(V3.Lerp(a.Previous,a.Position,blend));Vector3 forward=V(V3.Lerp(a.PreviousDirection,a.Direction,blend)).normalized;
             rotation=Quaternion.LookRotation(forward,Mathf.Abs(forward.y)>.98f?Vector3.forward:Vector3.up)*Quaternion.Euler(0,-90,0);
             double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+t*VolumeWorld.StepSeconds);
-            size=a.Biology.Genes.Size*(1+.008f*Mathf.Sin((float)time*1.8f+a.Biology.Id%997));
+            size=a.Biology.Genes.Size*(a.Biology.Generation==0?1:Mathf.Lerp(.72f,1,Mathf.Clamp01(a.Biology.Growth)))*(1+.008f*Mathf.Sin((float)time*1.8f+a.Biology.Id%997));
+            if(a.DivisionAt>0&&time-a.DivisionAt<VolumeWorld.DivisionSeconds) {
+                float age=Mathf.Clamp01((float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds));
+                float emerge=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.16f,.86f,age));
+                p=Vector3.Lerp(V(a.DivisionOrigin),p,emerge);
+                size*=a.DivisionChild?Mathf.Lerp(.025f,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.72f,age))):1+.12f*Mathf.Sin(age*Mathf.PI);
+                var divisionRotation=Quaternion.FromToRotation(Vector3.right,V(a.DivisionAxis));
+                rotation=Quaternion.Slerp(divisionRotation,rotation,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,age)));
+            }
             if(!a.Alive)size*=Mathf.Max(.02f,1-(float)(world.Time-a.DiedAt)/1.6f);
+        }
+        static Vector3 FissionPoint(Vector3 p,float amount)
+        {
+            float waist=1-amount*.62f*Mathf.Exp(-p.x*p.x*45);
+            return new Vector3(p.x*(1+amount*.38f),p.y*waist,p.z*waist);
         }
         public int Pick(VolumeWorld world,Ray ray,float interpolation,int slice=int.MinValue)
         {
             int selected=-1;float closest=36;
             for(int i=0;i<world.Count;i++) {
                 var a=world.Get(i);if(slice!=int.MinValue&&ChunkKey.At(a.Position).Y!=slice)continue;if(!a.Alive)continue;Pose(world,a,interpolation,out var p,out var rotation,out float size);
+                double time=System.Math.Max(0,world.Time-VolumeWorld.StepSeconds+interpolation*VolumeWorld.StepSeconds);
+                float age=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
+                float fission=age>=0&&age<1?Mathf.Sin(age*Mathf.PI):0;
                 Vector3 offset=ray.origin-p;
-                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size)))continue;
+                if(float.IsPositiveInfinity(Observation.RaySphere(offset.x,offset.y,offset.z,ray.direction.x,ray.direction.y,ray.direction.z,CrystalForms.BoundingRadius*size*1.38f)))continue;
                 Quaternion inverse=Quaternion.Inverse(rotation);Vector3 origin=inverse*offset/size,direction=inverse*ray.direction;
                 int form=(int)CrystalForms.From(a.Biology.Genes);var vertices=pickVertices[form];var triangles=pickTriangles[form];
                 for(int j=0;j<triangles.Length;j+=3) {
-                    Vector3 v0=vertices[triangles[j]],edge1=vertices[triangles[j+1]]-v0,edge2=vertices[triangles[j+2]]-v0;
+                    Vector3 v0=FissionPoint(vertices[triangles[j]],fission),edge1=FissionPoint(vertices[triangles[j+1]],fission)-v0,edge2=FissionPoint(vertices[triangles[j+2]],fission)-v0;
                     Vector3 h=Vector3.Cross(direction,edge2);float determinant=Vector3.Dot(edge1,h);if(Mathf.Abs(determinant)<.0000001f)continue;
                     float inv=1/determinant;Vector3 s=origin-v0;float u=Vector3.Dot(s,h)*inv;if(u<0||u>1)continue;
                     Vector3 q=Vector3.Cross(s,edge1);float v=Vector3.Dot(direction,q)*inv;if(v<0||u+v>1)continue;

@@ -294,7 +294,10 @@ namespace Evolution.Runtime
             Row(r,3,"Температура",readout.Temperature,"Комфорт определяется эффективностью обмена с учётом любимой температуры и устойчивости клетки.");
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
             Row(r,5,"Свет",readout.Illumination,"Доступность света в этой точке воды; особенно важна для фотосинтеза.");
-            GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":"Деление в 3D пока недоступно",micro);
+            int offspring=water.Ocean.Find(water.World.LastOffspringIdentity);
+            if(offspring>=0&&water.World.Get(offspring).Alive&&water.World.Get(offspring).Biology.ParentId==c.Id) {
+                if(Button(new Rect(r.x+12,r.y+252,r.width-24,36),"Наблюдать потомка")){water.Select(offspring);return;}
+            } else GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":water.World.DivisionBlock(water.SelectedIndex)??"Можно разделиться · R",micro);
         }
         void DrawScience(Rect r,VolumeAgent a)
         {
@@ -309,7 +312,7 @@ namespace Evolution.Runtime
             b.AppendLine($"Current {v.X:F3} / {v.Y:F3} / {v.Z:F3}");
             b.AppendLine($"Budget dt {a.RenderDuration:F3}: intake {c.Budget.Intake:F4} · net {c.Budget.Net:F4}");
             b.AppendLine($"Substrate {c.Budget.Substrate:F4} · Organic {c.Budget.Organic:F4} · Light {c.Budget.Light:F4} · Prey {c.Budget.Prey:F4}");
-            b.AppendLine($"Upkeep {c.Budget.Upkeep:F4} · Movement {c.Budget.Movement:F4} · Attack {c.Budget.Attack:F4} · Loss {c.Budget.PredationLoss:F4}");
+            b.AppendLine($"Division {c.Budget.Division:F4} · Growth {c.Budget.Growth:F4} · Movement {c.Budget.Movement:F4} · Attack {c.Budget.Attack:F4} · Loss {c.Budget.PredationLoss:F4}");
             b.AppendLine("Геном (только чтение):");
             foreach(var f in typeof(Genome).GetFields())b.AppendLine(f.Name+": "+((float)f.GetValue(g)).ToString("F3"));
             if(readout.Food>=0){var f=water.World.GetFood(readout.Food);b.AppendLine($"Food {f.Identity}: S {f.Substrate:F3} · O {f.Organic:F3} · concentration {f.Concentration:F4}");}
@@ -325,7 +328,19 @@ namespace Evolution.Runtime
             bool canAttack=readout.Alive&&water.World.Controlled>=0&&water.World.Get(water.SelectedIndex).Biology.Genes.Predation>.2f&&water.World.Get(water.SelectedIndex).Biology.Energy>.5f;
             string why=!readout.Alive?"Выбери живую клетку":water.World.Controlled<0?"Сначала возьми управление":water.World.Get(water.SelectedIndex).Biology.Genes.Predation<=.2f?"Эта способность отсутствует":"Недостаточно энергии";
             if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Разрешить укусы в пределах досягаемости. Также можно удерживать Space":why,AttackRequested,canAttack))AttackRequested=!AttackRequested;
-            Action(new Rect(r.x+312,r.y,cell,76),3,"Деление","Деление пока реализовано только в 2D",false,false);
+            string blocked=water.World.DivisionBlock(water.SelectedIndex);
+            if(water.Paused)blocked="Продолжи симуляцию";
+            else if(water.World.Controlled!=water.SelectedIndex)blocked="Сначала возьми управление";
+            string divisionTip=blocked??"Создать самостоятельного потомка с наследуемым геномом";
+            if(water.SelectedIndex>=0) {
+                var c=water.World.Get(water.SelectedIndex).Biology;
+                float construction=Biology.StructureEnergy(c.Genes)+Biology.BirthOverhead(c.Genes);
+                float cost=construction+Mathf.Min((c.Energy-construction)*.5f,Biology.Capacity(c.Genes)*.5f);
+                divisionTip+=". Расход ≈ "+cost.ToString("F1")+" энергии: структура + запас потомка. Мутация может слегка изменить стоимость.";
+            }
+            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
+            if(water.SelectedIndex>=0)GUI.Label(new Rect(r.x+70,r.y-36,r.width-140,32),
+                "Деление: порог "+water.World.DivisionThreshold(water.SelectedIndex).ToString("F1")+" · "+(blocked??"Готово · R"),muted);
             if(Action(new Rect(r.x+416,r.y,cell,76),4,"Развитие","Просмотреть наследуемые черты",development))SetPage(HudPage.Development);
         }
         void DrawFooter()
@@ -372,7 +387,7 @@ namespace Evolution.Runtime
         {
             var r=DevelopmentBox;Box(r,"Развитие твоего организма");
             if(water.SelectedIndex<0)return;var c=water.World.Get(water.SelectedIndex).Biology;var g=c.Genes;
-            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nДеление, новые мутации и редактор пока недоступны.",text);
+            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nПотомки наследуют геном; возможны небольшие мутации.",text);
             Row(r,2,"Линия",c.LineageId.ToString(),"Генетическая линия выбранного организма");
             Row(r,3,"Питание",g.Photosynthesis>.5f?"Фотосинтез":g.Predation>.5f?"Хищничество":"Смешанное","Преобладающая стратегия существующего генома");
             Row(r,4,"Оболочка",g.Membrane>.7f?"Плотная":"Гибкая","Мембрана пассивно участвует в защите. Отдельная активная защита в 3D отсутствует.");

@@ -78,7 +78,7 @@ jobs:
         if: runner.environment == 'github-hosted'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth mesa-utils libgl1-mesa-dri libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libasound2t64
+          sudo apt-get install -y --no-install-recommends xvfb xauth mesa-utils libgl1-mesa-dri libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libasound2t64 ffmpeg
 
       - name: Probe actual OpenGL context before downloading Unity
         run: bash Tools/ci/visual_preview.sh --probe
@@ -173,6 +173,9 @@ jobs:
             artifacts/visual-preview/20-ui-2560x1440.png
             artifacts/visual-preview/21-development-ui.png
             artifacts/visual-preview/manifest.json
+            artifacts/visual-preview/division*.png
+            artifacts/visual-preview/division.json
+            artifacts/visual-preview/division.mp4
           if-no-files-found: error
           retention-days: 14
 
@@ -200,6 +203,9 @@ jobs:
             artifacts/visual-preview/20-ui-2560x1440.png
             artifacts/visual-preview/21-development-ui.png
             artifacts/visual-preview/manifest.json
+            artifacts/visual-preview/division*.png
+            artifacts/visual-preview/division.json
+            artifacts/visual-preview/division.mp4
             artifacts/visual-preview/diagnostics/*.png
             artifacts/visual-preview/diagnostics/*.json
           if-no-files-found: error

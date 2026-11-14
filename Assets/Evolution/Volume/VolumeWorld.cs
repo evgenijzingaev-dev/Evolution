@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Evolution.Core;
 
 namespace Evolution.Volume
@@ -14,18 +15,26 @@ namespace Evolution.Volume
         public string Identity;
         public string FoodIdentity;
         public double RenderTime,RenderDuration;
+        public double DivisionAt;
+        public V3 DivisionOrigin,DivisionAxis;
+        public bool DivisionChild;
     }
-    // Separate bounded laboratory. No writes to Simulation, its PRNG, lineage or colony layout.
+    // Spatial ecology shares Core physiology, inheritance and paid reproduction.
     public sealed class VolumeWorld
     {
         public const float StepSeconds=.05f;
-        readonly VolumeAgent[] agents;
+        readonly List<VolumeAgent> agents;
+        public const int PopulationLimit=2048;
+        public const float DivisionSeconds=2;
+        bool divisionRequested;
+        public string LastOffspringIdentity {get;private set;}
+        public int Births {get;private set;}
         readonly FoodCloud[] food;
         public readonly V3[] Obstacles;
         public V3 FlowOffset {get;private set;}
         public V3 ActiveCenter;
         public const float ObstacleRadius=1.3f;
-        public int Count=>agents.Length;
+        public int Count=>agents.Count;
         public int FoodCount=>food.Length;
         public long Tick {get;private set;}
         public double Time=>Tick*(double)StepSeconds;
@@ -39,7 +48,7 @@ namespace Evolution.Volume
             if(count<1||count>96) throw new ArgumentOutOfRangeException(nameof(count));
             if(founders!=null) count=founders.Length;
             if(count<1||count>96) throw new ArgumentException("Invalid volume founders");
-            agents=new VolumeAgent[count];food=new FoodCloud[12];var rng=new RandomSource(seed);
+            agents=new List<VolumeAgent>(new VolumeAgent[count]);food=new FoodCloud[12];var rng=new RandomSource(seed);
             Obstacles=new[] {new V3(-4,0,2),new V3(5,-4,-3),new V3(1,7,4)};
             for(int i=0;i<food.Length;i++) {
                 float angle=i*2.39996f;
@@ -59,7 +68,7 @@ namespace Evolution.Volume
             }
         }
         internal VolumeWorld(VolumeAgent[] agents,FoodCloud[] food,V3[] obstacles,long tick,V3 offset)
-        {this.agents=agents;this.food=food;Obstacles=obstacles;Tick=tick;FlowOffset=offset;}
+        {this.agents=new List<VolumeAgent>(agents);this.food=food;Obstacles=obstacles;Tick=tick;FlowOffset=offset;}
         public V3 Current(V3 p)=>WaterField.Current(p+FlowOffset,Time);
         public float Temperature(V3 p)=>WaterField.Temperature(p+FlowOffset,Time);
         public float FoodPotential(int index,Cell organism)
@@ -70,7 +79,8 @@ namespace Evolution.Volume
         }
         public void Step()
         {
-            float dt=StepSeconds;
+            float dt=StepSeconds;bool requested=divisionRequested;divisionRequested=false;
+            int originalCount=Count;
             for(int k=0;k<food.Length;k++) {
                 food[k].Position+=Current(food[k].Position)*dt;
             }
@@ -111,7 +121,12 @@ namespace Evolution.Volume
                 c.Boosting=i==Controlled&&Boost;
                 c.Budget.Swimming=CellMotion.SwimmingCost(c)*dt;c.Budget.Turning=CellMotion.TurningCost(c)*dt;
                 c.Budget.Movement=CellMotion.Cost(c)*dt;c.Budget.Boost=Math.Max(0,c.Budget.Movement-c.Budget.Swimming-c.Budget.Turning);
-                c.Energy-=c.Budget.Upkeep+c.Budget.Movement;a.Biology=c;agents[i]=a;
+                c.Energy-=c.Budget.Upkeep+c.Budget.Movement;
+                if(c.Growth<1&&c.Energy>Biology.Capacity(c.Genes)*.35f) {
+                    float growth=Math.Min(1-c.Growth,.15f*dt);c.Growth+=growth;
+                    c.Budget.Growth=growth*c.Genes.Size*.8f;c.Energy-=c.Budget.Growth;
+                }
+                a.Biology=c;agents[i]=a;
             }
             for(int i=0;i<Count;i++) {
                 if(!agents[i].Alive || (i==Controlled&&!Attack)) continue;
@@ -121,23 +136,73 @@ namespace Evolution.Volume
                     if(!agents[j].Alive||!Ecology.CanHunt(agents[i].Biology,agents[j].Biology)) continue;
                     float reach=.32f*(agents[i].Biology.Genes.Size+agents[j].Biology.Genes.Size);
                     if((agents[i].Position-agents[j].Position).Sqr>reach*reach || agents[i].Biology.Energy>=Biology.Capacity(agents[i].Biology.Genes)*.97f) continue;
-                    float before=agents[i].Biology.Energy,victim=agents[j].Biology.Energy;
-                    Ecology.Bite(ref agents[i].Biology,ref agents[j].Biology,0,dt,out float remains);
-                    float cost=(.18f+.3f*agents[i].Biology.Genes.Predation)*dt;
-                    agents[i].Biology.Budget.Attack+=cost;
-                    agents[i].Biology.Budget.Prey+=Math.Max(0,agents[i].Biology.Energy-before+cost);
-                    agents[i].Biology.AssimilatedEnergy+=Math.Max(0,agents[i].Biology.Energy-before+cost);
-                    agents[j].Biology.Budget.PredationLoss+=Math.Max(0,victim-agents[j].Biology.Energy);
-                    agents[i].Biology.AttackLastStep=agents[j].Biology.DamageLastStep=1;
-                    agents[i].BitAt=Time;int remnant=NearestFood(agents[j].Position);if(remnant>=0)food[remnant].Organic+=remains;break;
+                    var hunter=agents[i];var prey=agents[j];
+                    float before=hunter.Biology.Energy,victim=prey.Biology.Energy;
+                    Ecology.Bite(ref hunter.Biology,ref prey.Biology,0,dt,out float remains);
+                    float cost=(.18f+.3f*hunter.Biology.Genes.Predation)*dt;
+                    hunter.Biology.Budget.Attack+=cost;
+                    hunter.Biology.Budget.Prey+=Math.Max(0,hunter.Biology.Energy-before+cost);
+                    hunter.Biology.AssimilatedEnergy+=Math.Max(0,hunter.Biology.Energy-before+cost);
+                    prey.Biology.Budget.PredationLoss+=Math.Max(0,victim-prey.Biology.Energy);
+                    hunter.Biology.AttackLastStep=prey.Biology.DamageLastStep=1;
+                    hunter.BitAt=Time;int remnant=NearestFood(prey.Position);if(remnant>=0)food[remnant].Organic+=remains;
+                    agents[i]=hunter;agents[j]=prey;break;
                 }
             }
-            for(int i=0;i<Count;i++) if(agents[i].Alive&&agents[i].Biology.Energy<=0) {
-                int remnant=NearestFood(agents[i].Position);
-                if(!agents[i].Biology.Consumed&&remnant>=0) food[remnant].Organic+=Biology.CarcassEnergy(agents[i].Biology);
-                agents[i].Alive=false;agents[i].DiedAt=Time;if(Controlled==i) Controlled=-1;
+            for(int i=0;i<originalCount;i++) {
+                var a=agents[i];if(!a.Alive)continue;
+                if(a.Biology.Energy<=0) {
+                    int remnant=NearestFood(a.Position);
+                    if(!a.Biology.Consumed&&remnant>=0)food[remnant].Organic+=Biology.CarcassEnergy(a.Biology);
+                    a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
+                }
+                if((i!=Controlled||requested)&&DivisionBlock(i)==null)Divide(i);
             }
             Tick++;
+        }
+        public float DivisionThreshold(int index)=>Biology.Capacity(agents[index].Biology.Genes)*Multicellularity.DivisionThreshold(agents[index].Biology);
+        public string DivisionBlock(int index)
+        {
+            if(index<0||index>=Count||!agents[index].Alive)return "Выбери живую клетку";
+            var a=agents[index];var c=a.Biology;
+            if(Count>=PopulationLimit)return "Область заполнена организмами";
+            if(a.DivisionAt>0&&Time-a.DivisionAt<DivisionSeconds)return "Деление ещё завершается";
+            if(c.Generation>0&&c.Growth<1)return "Потомок ещё растёт";
+            if(c.Age<Multicellularity.MaturityAge(c))return "Клетка ещё не созрела";
+            if(!Biology.CanDivide(c))return "Накопи энергию: "+c.Energy.ToString("F1")+" / "+DivisionThreshold(index).ToString("F1");
+            return null;
+        }
+        public bool RequestDivision()
+        {
+            if(DivisionBlock(Controlled)!=null)return false;
+            divisionRequested=true;return true;
+        }
+        void Divide(int index)
+        {
+            var a=agents[index];var c=a.Biology;
+            // Derive a stable per-birth random stream; no unsaved global PRNG state.
+            uint seed=2166136261;foreach(char ch in a.Identity)seed=unchecked((seed^ch)*16777619);
+            var random=new RandomSource(seed^unchecked((uint)Tick)^0x6d2b79f5u);
+            string identity=a.Identity+"/b"+(Tick+1);
+            random.Next();int id=(int)(random.State&0x7fffffffu);if(id==0)id=1;
+            bool collision;
+            do {collision=false;for(int i=0;i<Count;i++)if(agents[i].Biology.Id==id){id=id==int.MaxValue?1:id+1;collision=true;break;}}while(collision);
+            var child=new Cell {Id=id,ParentId=c.Id,ParentGenes=c.Genes,Generation=c.Generation+1,
+                LineageId=c.LineageId,Integrity=1,Genes=c.Genes.Inherit(ref random,.15f,.06f,true)};
+            if(!Biology.TryDivide(ref c,ref child))return;
+            c.Budget.Division=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+child.Energy;
+            child.Budget.Start=child.Energy;child.BirthMutationMask=Observation.MutationMask(c.Genes,child.Genes);
+            V3 axis=new V3(random.Range(-1,1),random.Range(-1,1),random.Range(-1,1)).Unit;
+            V3 origin=a.Position;
+            double at=(Tick+1)*(double)StepSeconds;
+            a.Biology=c;a.DivisionAt=at;a.DivisionOrigin=origin;a.DivisionAxis=axis;a.DivisionChild=false;
+            a.Position=origin-axis*c.Genes.Size*.35f;agents[index]=a;
+            var daughter=new VolumeAgent {Identity=identity,Biology=child,Alive=true,
+                Position=origin+axis*c.Genes.Size*.35f,Previous=origin,Direction=axis,PreviousDirection=axis,
+                Velocity=a.Velocity+axis*.15f,RenderTime=at,RenderDuration=StepSeconds,
+                DivisionAt=at,DivisionOrigin=origin,DivisionAxis=axis,DivisionChild=true,
+                FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
+            agents.Add(daughter);Births++;LastOffspringIdentity=identity;
         }
         V3 Steer(int i,out int cloud)
         {

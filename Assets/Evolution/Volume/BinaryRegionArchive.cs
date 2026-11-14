@@ -7,7 +7,7 @@ namespace Evolution.Volume
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
     public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive
     {
-        const int Magic=0x45564f33,Version=1;
+        const int Magic=0x45564f33,Version=2;
         readonly string directory;long clock;
         public BinaryRegionArchive(string directory)
         {
@@ -19,9 +19,10 @@ namespace Evolution.Volume
         {
             string path=Path.Combine(directory,key+".region");if(!File.Exists(path)){state=null;return false;}
             using(var r=new BinaryReader(File.OpenRead(path))) {
-                if(r.ReadInt32()!=Magic||r.ReadInt32()!=Version)throw new InvalidDataException("Unsupported EVOLUTION water region; original file retained.");
+                int magic=r.ReadInt32(),version=r.ReadInt32();
+                if(magic!=Magic||version<1||version>Version)throw new InvalidDataException("Unsupported EVOLUTION water region; original file retained.");
                 state=new RegionState {Key=key,LastTick=r.ReadInt64()};int count=Count(r);
-                for(int i=0;i<count;i++)state.Agents.Add(ReadAgent(r));count=Count(r);
+                for(int i=0;i<count;i++)state.Agents.Add(ReadAgent(r,version));count=Count(r);
                 for(int i=0;i<count;i++)state.Food.Add(new FoodCloud {Identity=r.ReadString(),Pattern=r.ReadInt32(),Position=ReadV(r),Radius=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle()});
             }
             return true;
@@ -45,6 +46,7 @@ namespace Evolution.Volume
         {
             w.Write(a.Identity??"");w.Write(a.FoodIdentity??"");WriteV(w,a.Position);WriteV(w,a.Previous);WriteV(w,a.Direction);WriteV(w,a.PreviousDirection);WriteV(w,a.Velocity);
             w.Write(a.Alive);w.Write(a.FedAt);w.Write(a.BitAt);w.Write(a.DiedAt);w.Write(a.RenderTime);w.Write(a.RenderDuration);w.Write(a.FoodCloud);
+            w.Write(a.DivisionAt);WriteV(w,a.DivisionOrigin);WriteV(w,a.DivisionAxis);w.Write(a.DivisionChild);
             var c=a.Biology;w.Write(c.Id);w.Write(c.LineageId);w.Write(c.ParentId);w.Write(c.Generation);w.Write(c.BirthMutationMask);
             w.Write(c.Energy);w.Write(c.Age);w.Write(c.Growth);w.Write(c.Integrity);w.Write(c.AssimilatedEnergy);
             w.Write(c.FoodLastStep);w.Write(c.AttackLastStep);w.Write(c.DamageLastStep);w.Write(c.SwimSpeed);w.Write(c.AngularVelocity);w.Write(c.Boosting);w.Write(c.Consumed);
@@ -57,10 +59,11 @@ namespace Evolution.Volume
             foreach(float f in new[] {g.Speed,g.Size,g.Uptake,g.PreferredTemperature,g.OrganicSpecialization,g.Adhesion,g.ColonySize,g.Branching,g.Differentiation,
                 g.Transport,g.RolePattern,g.Photosynthesis,g.Predation,g.Membrane,g.Sensitivity,g.ThermalTolerance,g.ToxinResistance,g.EnergyEfficiency})w.Write(f);
         }
-        static VolumeAgent ReadAgent(BinaryReader r)
+        static VolumeAgent ReadAgent(BinaryReader r,int version)
         {
             var a=new VolumeAgent {Identity=r.ReadString(),FoodIdentity=ReadOptional(r),Position=ReadV(r),Previous=ReadV(r),Direction=ReadV(r),PreviousDirection=ReadV(r),Velocity=ReadV(r),
                 Alive=r.ReadBoolean(),FedAt=r.ReadDouble(),BitAt=r.ReadDouble(),DiedAt=r.ReadDouble(),RenderTime=r.ReadDouble(),RenderDuration=r.ReadDouble(),FoodCloud=r.ReadInt32()};
+            if(version>=2){a.DivisionAt=r.ReadDouble();a.DivisionOrigin=ReadV(r);a.DivisionAxis=ReadV(r);a.DivisionChild=r.ReadBoolean();}
             a.Biology=new Cell {Id=r.ReadInt32(),LineageId=r.ReadInt32(),ParentId=r.ReadInt32(),Generation=r.ReadInt32(),BirthMutationMask=r.ReadInt32(),
                 Energy=r.ReadSingle(),Age=r.ReadSingle(),Growth=r.ReadSingle(),Integrity=r.ReadSingle(),AssimilatedEnergy=r.ReadSingle(),
                 FoodLastStep=r.ReadSingle(),AttackLastStep=r.ReadSingle(),DamageLastStep=r.ReadSingle(),SwimSpeed=r.ReadSingle(),AngularVelocity=r.ReadSingle(),Boosting=r.ReadBoolean(),Consumed=r.ReadBoolean()};
