@@ -126,5 +126,26 @@ namespace Evolution.Tests
             Ecology.Bite(ref hunter,ref plain,0,1,out _);Ecology.Bite(ref other,ref armored,0,1,out _);
             Assert.Greater(armored.Integrity,plain.Integrity);Assert.Greater(Multicellularity.Cost(armored,22),Multicellularity.Cost(plain,22));
         }
+        [TestCase(2)] [TestCase(3)] [TestCase(4)]
+        public void ReadsPreviousWireSchemasAsSolitaryCells(int version)
+        {
+            string dir=Path.Combine(Path.GetTempPath(),"colony-old-"+Guid.NewGuid());
+            try {
+                var archive=new BinaryRegionArchive(dir);var region=new RegionState {Key=default};region.Agents.Add(Ready().Get(0));archive.Save(region);
+                string file=Path.Combine(dir,"0_0_0.region");var bytes=File.ReadAllBytes(file);
+                // One empty bond string + seven scalar v5 fields. v4 adds four development scalars; v3 adds order.
+                int remove=29+(version<4?16:0)+(version<3?8:0);var legacy=new byte[bytes.Length-remove];
+                Array.Copy(bytes,legacy,legacy.Length-4);Array.Copy(BitConverter.GetBytes(version),0,legacy,4,4);File.WriteAllBytes(file,legacy);
+                Assert.IsTrue(archive.TryLoad(default,out var loaded));var a=loaded.Agents[0];Assert.IsNull(a.BondIdentity);Assert.AreEqual(CellRole.Generalist,a.Biology.Role);
+                Assert.AreEqual(region.Agents[0].Biology.Genes,a.Biology.Genes);Assert.AreEqual(region.Agents[0].Biology.Energy,a.Biology.Energy);
+            } finally {Directory.Delete(dir,true);}
+        }
+        [Test] public void CompactionKeepsStableEdgesAfterDeadSlotsAreRemoved()
+        {
+            var pair=Pair();var cells=new VolumeAgent[VolumeWorld.PopulationLimit];cells[0]=pair.Get(0);cells[1]=pair.Get(1);
+            for(int i=2;i<cells.Length;i++)cells[i]=new VolumeAgent {Identity="dead-"+i,Order=i+1,Alive=false,DiedAt=0};
+            var w=new VolumeWorld(cells,Array.Empty<FoodCloud>(),Array.Empty<V3>(),100,default);w.CompactArchived();
+            Assert.AreEqual(2,w.Count);Assert.AreEqual(2,w.OrganismSize(1));Assert.AreEqual(0,w.BondParent(1));Assert.AreEqual(pair.Get(0).Identity,w.Get(1).BondIdentity);
+        }
     }
 }

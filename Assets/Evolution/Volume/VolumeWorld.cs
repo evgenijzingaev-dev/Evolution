@@ -47,7 +47,7 @@ namespace Evolution.Volume
             get {if(Count<PopulationLimit)return false;foreach(var a in agents)if(!a.Alive&&Time-a.DiedAt>DivisionSeconds)return true;return false;}
         }
         internal void CompactArchived()
-        {if(NeedsCompaction)agents.RemoveAll(a=>!a.Alive&&Time-a.DiedAt>DivisionSeconds);}
+        {if(NeedsCompaction){agents.RemoveAll(a=>!a.Alive&&Time-a.DiedAt>DivisionSeconds);RefreshColonies();}}
         public int FoodCount=>food.Length;
         public long Tick {get;private set;}
         public double Time=>Tick*(double)StepSeconds;
@@ -215,7 +215,7 @@ namespace Evolution.Volume
                     Diagnostics.Unpaid+=Math.Max(0,-a.Biology.Energy);
                     Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
                 }
-                if((i!=Controlled||requested==a.Identity)&&DivisionBlock(i)==null)Divide(i);
+                if((i!=Controlled||requested==a.Identity)&&Biology.CanDivide(a.Biology)&&a.Biology.Energy>=DivisionThreshold(i)&&DivisionBlock(i)==null)Divide(i);
             }
             RefreshColonies();Tick++;
         }
