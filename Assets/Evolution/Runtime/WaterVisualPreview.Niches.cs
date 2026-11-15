@@ -17,6 +17,7 @@ namespace Evolution.Runtime
             public double energyResidual,matterResidual,oxygenResidual;
             public List<NicheHistoryPoint> history;
             public string[] frames;
+            public Report render;
         }
         // Dormant without both preview opt-ins. No altered genomes, resources, births or positions.
         IEnumerator CaptureNicheEcology()
@@ -42,6 +43,7 @@ namespace Evolution.Runtime
             evidence.oxygenResidual=d.InitialOxygen+d.OxygenIn+d.OxygenProduced-d.OxygenOut-d.OxygenUsed-total.Oxygen;
             evidence.history=new List<NicheHistoryPoint>(water.Overview.Survey.NicheHistory);
             evidence.frames=new[]{names[0]+".png",names[1]+".png",names[2]+".png",names[3]+".png",names[4]+".png",names[5]+".png",names[6]+".png","ecology-after-600s.png"};
+            evidence.render=Context(biologicalShots.ToArray(),!failed);
             File.WriteAllText(Path.Combine(destination,"ecology.json"),JsonUtility.ToJson(evidence,true));
         }
     }

@@ -21,6 +21,8 @@ namespace Evolution.Runtime
         RenderTexture target;
         int renderedFrames;
         readonly List<Shot> shots = new List<Shot>();
+        readonly List<Shot> biologicalShots = new List<Shot>();
+        bool biologicalCapture;
 
         [Serializable] public sealed class Shot
         {
@@ -136,9 +138,11 @@ namespace Evolution.Runtime
             Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-evolution-ecology")>=0) {
+                biologicalCapture=true;
                 yield return CaptureNicheEcology();Application.Quit(failed?1:0);yield break;
             }
             if(Array.IndexOf(Environment.GetCommandLineArgs(),"-evolution-living-cells")>=0) {
+                biologicalCapture=true;
                 yield return CaptureLivingCells();Application.Quit(failed?1:0);yield break;
             }
             int selected = water.ScenicSelection(); float nearest;
@@ -497,6 +501,7 @@ namespace Evolution.Runtime
             }
             File.WriteAllBytes(Path.Combine(destination, shot.file), image.EncodeToPNG());
             Destroy(image); if(record)shots.Add(shot);
+            if(biologicalCapture)biologicalShots.Add(shot);
             Debug.Log("Visual Preview phase: saved " + name);
         }
     }
