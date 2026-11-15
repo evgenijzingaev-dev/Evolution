@@ -1,0 +1,89 @@
+{
+  "unity": "6000.6.9f1",
+  "revision": "448949b27148076267d08eb17bb35e371eb2a830",
+  "run": 43695937746,
+  "artifact": 14156590111,
+  "zip_sha256": "e434dc227d99775d7acbcf0946b13bf467f67a1b744ac77ae9dfde58106c25d0",
+  "build": "NOT RUN — test gate failed",
+  "real_visual_frames": false,
+  "results": [
+    {
+      "file": "editmode-results.xml",
+      "summary": {
+        "id": "2",
+        "testcasecount": "315",
+        "result": "Failed(Child)",
+        "total": "315",
+        "passed": "310",
+        "failed": "5",
+        "inconclusive": "0",
+        "skipped": "0",
+        "asserts": "0",
+        "engine-version": "3.5.0.0",
+        "clr-version": "4.0.30319.42000",
+        "start-time": "2026-11-15 08:59:17Z",
+        "end-time": "2026-11-15 09:39:25Z",
+        "duration": "2407.5006742"
+      },
+      "failures": [
+        {
+          "name": "Evolution.Tests.VolumeBalanceTests.FixedSeedsContinuePaidLifecycleFor600SecondsAndBalanceEnergy(42)",
+          "duration": "384.795423",
+          "message": "Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.",
+          "stack": ""
+        },
+        {
+          "name": "Evolution.Tests.VolumeBalanceTests.FixedSeedsContinuePaidLifecycleFor600SecondsAndBalanceEnergy(7)",
+          "duration": "347.740401",
+          "message": "Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.",
+          "stack": ""
+        },
+        {
+          "name": "Evolution.Tests.VolumeBalanceTests.FixedSeedsContinuePaidLifecycleFor600SecondsAndBalanceEnergy(123)",
+          "duration": "313.975220",
+          "message": "Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.",
+          "stack": ""
+        },
+        {
+          "name": "Evolution.Tests.VolumeBalanceTests.FixedSeedsContinuePaidLifecycleFor600SecondsAndBalanceEnergy(2026)",
+          "duration": "291.514189",
+          "message": "Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.",
+          "stack": ""
+        },
+        {
+          "name": "Evolution.Tests.VolumeBalanceTests.FullReplayIsDeterministicIncludingArchivesAndDiagnostics",
+          "duration": "758.943986",
+          "message": "Timeout value of 180000 ms was exceeded. If this is intended, increase the timeout value using a TimeoutAttribute.",
+          "stack": ""
+        }
+      ]
+    },
+    {
+      "file": "playmode-results.xml",
+      "summary": {
+        "id": "2",
+        "testcasecount": "21",
+        "result": "Failed(Child)",
+        "total": "21",
+        "passed": "20",
+        "failed": "1",
+        "inconclusive": "0",
+        "skipped": "0",
+        "asserts": "0",
+        "engine-version": "3.5.0.0",
+        "clr-version": "4.0.30319.42000",
+        "start-time": "2026-11-15 09:40:47Z",
+        "end-time": "2026-11-15 09:40:59Z",
+        "duration": "11.8118588"
+      },
+      "failures": [
+        {
+          "name": "Evolution.Tests.VolumePrototypeTests.HudThreatProjectionAndDivisionReasonFollowTheRealPausedWorld",
+          "duration": "0.680866",
+          "message": "  Expected: Evolution.Volume.VolumeAgent\n  But was:  Evolution.Volume.VolumeAgent\n",
+          "stack": "at Evolution.Tests.VolumePrototypeTests+<HudThreatProjectionAndDivisionReasonFollowTheRealPausedWorld>d__3.MoveNext () [0x0052d] in /github/workspace/Assets/Evolution/Tests/PlayMode/VolumePrototypeTests.cs:83\nat UnityEngine.TestTools.TestEnumerator+<Execute>d__8.MoveNext () [0x0004e] in ./Library/PackageCache/com.unity.test-framework@60031fc92218/UnityEngine.TestRunner/NUnitExtensions/Attributes/TestEnumerator.cs:52\n"
+        }
+      ]
+    }
+  ]
+}
