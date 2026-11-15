@@ -205,6 +205,17 @@ namespace Evolution.Tests
                 Assert.AreEqual(baseline.Diagnostics.Solar,observed.Diagnostics.Solar);Assert.AreEqual(baseline.Life.Latest,observed.Life.Latest);
             }
         }
+        [Test] public void PausedStreamingChangesSlotsButRestoresTheSameCompleteOrganismByIdentity()
+        {
+            var ocean=new ChunkOcean(42,new MemoryRegionArchive(),EcologicalScenario.Natural);
+            var before=ocean.World.Get(0);long tick=ocean.World.Tick;
+            Assert.IsTrue(ocean.Stream(new V3(35,0,35)));
+            Assert.AreNotEqual(before.Identity,ocean.World.Get(0).Identity,"A slot is not a persistent organism identity");
+            Assert.Less(ocean.Find(before.Identity),0,"The original region must actually unload for this regression");
+            Assert.IsTrue(ocean.Stream(before.Position));
+            int restored=ocean.Find(before.Identity);Assert.GreaterOrEqual(restored,0);
+            Assert.AreEqual(tick,ocean.World.Tick);Assert.AreEqual(before,ocean.World.Get(restored));
+        }
         [Test] public void EveryNpcColonyMotorPaysTheSameActualOrganismThrottle()
         {
             var pair=VolumeColonyTests.Pair();var a=pair.Get(0);var b=pair.Get(1);
