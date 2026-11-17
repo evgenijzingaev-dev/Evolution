@@ -35,6 +35,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void OnlyBirthsAfterStartCountEvenWhenDivisionChildPersists()
+        {
+            var child = new VolumeAgent { DivisionChild = true, DivisionAt = 2.0 };
+            Assert.IsFalse(LineageChallenge.BornDuringChallenge(child, 2.0, 2.05),
+                "A child born before challenge start cannot be counted as a new birth.");
+            Assert.IsFalse(LineageChallenge.BornDuringChallenge(child, 1.0, 1.95),
+                "Future births cannot be counted.");
+            Assert.IsTrue(LineageChallenge.BornDuringChallenge(child, 1.0, 2.05));
+            child.DivisionChild = false;
+            Assert.IsFalse(LineageChallenge.BornDuringChallenge(child, 1.0, 2.05));
+        }
+
+        [Test]
         public void VerifiedChildRequiresRealDivisionAndExactGenealogy()
         {
             var parent = new VolumeAgent {
