@@ -119,6 +119,15 @@ namespace Evolution.Volume
         public double BestNicheSeconds { get; private set; }
         // Current uninterrupted progress, not a historic peak from a failed attempt.
         public double CurrentNicheSeconds { get; private set; }
+        // Last verified obstacle, shown as advice rather than an invented cause of death.
+        public string SettlementHint { get; private set; }
+        public static string SettlementAdvice(bool inNewNiche, float energyFraction, bool sustainable)
+        {
+            if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
+            if (energyFraction < .35f) return "Потомок голодает: найди доступный источник энергии";
+            if (!sustainable) return "Энергия убывает: попробуй другую пищу или нишу";
+            return null;
+        }
         public static int NicheKind(NicheSample sample)
         {
             if (sample.Vent >= .4f) return 3; // Hydrothermal
@@ -167,6 +176,7 @@ namespace Evolution.Volume
             nicheResidenceKind.Clear();
             nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
+            SettlementHint = null;
             founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
                 Id = a.Biology.Id, LineageId = a.Biology.LineageId,
@@ -189,6 +199,7 @@ namespace Evolution.Volume
             nicheResidenceKind.Clear();
             nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
+            SettlementHint = null;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
             State = LineageChallengeState.Inactive;
@@ -292,6 +303,7 @@ namespace Evolution.Volume
             foreach (var key in new List<string>(nicheResidence.Keys))
                 if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); nicheEntryEnergy.Remove(key); }
             CurrentNicheSeconds = 0;
+            SettlementHint = null;
             foreach (var key in eligible) {
                 // Use the same identity-validated observation for both energy and niche.
                 // A stale/reused identity elsewhere in the loaded world must not
@@ -305,6 +317,7 @@ namespace Evolution.Volume
                     nicheResidence.Remove(key);
                     nicheResidenceKind.Remove(key);
                     nicheEntryEnergy.Remove(key);
+                    SettlementHint = SettlementAdvice(true, energyFraction, false);
                     continue;
                 }
                 nicheEntryEnergy[key] = entryFraction;
