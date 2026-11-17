@@ -48,6 +48,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void ConfirmedDeadMemberCannotBeResurrectedByStaleStreamedSnapshot()
+        {
+            Assert.IsTrue(LineageChallenge.CountsAsLiving(true, false));
+            Assert.IsFalse(LineageChallenge.CountsAsLiving(false, false));
+            Assert.IsFalse(LineageChallenge.CountsAsLiving(false, true));
+            Assert.IsFalse(LineageChallenge.CountsAsLiving(true, true),
+                "A stale live snapshot must not restore a confirmed dead identity.");
+        }
+
+        [Test]
         public void VerifiedChildRequiresRealDivisionAndExactGenealogy()
         {
             var parent = new VolumeAgent {
