@@ -351,6 +351,8 @@ namespace Evolution.Runtime
                     if (ticks % 20 == 0) yield return null;
                 }
             }
+            // Clear movement even when no viable survivor remains.
+            water.World.Input = default;
             Require(ready && candidate >= 0 && water.World.Get(candidate).Alive &&
                 water.World.DivisionBlock(candidate) == null,
                 "no real resident survived to paid division within capture budget");
