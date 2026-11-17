@@ -284,10 +284,10 @@ namespace Evolution.Runtime
                 string task=readout.Goal;
                 string hint=water.World.Controlled>=0?"WASD — плыть · Q / E — глубина":"Выбери живую клетку";
                 if(challenge.Active) {
-                    task=challenge.State==LineageChallengeState.Extinct?"Линия вымерла":challenge.State==LineageChallengeState.Unobserved?
+                    task=challenge.State==LineageChallengeState.Won?"Победа! Потомок освоил новую среду":challenge.State==LineageChallengeState.Extinct?"Линия вымерла":challenge.State==LineageChallengeState.Unobserved?
                         "Линия вне наблюдения":challenge.State==LineageChallengeState.OffspringAlive?
                         "Потомок жив! Продолжай род":"Создай живого потомка";
-                    hint="Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nF6 — закончить испытание";
+                    hint="Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nНовая ниша: "+Math.Min(15,challenge.BestNicheSeconds).ToString("F0")+" / 15 сек · F6 — выход";
                 } else hint="F5 — испытание «Сохрани линию»\n"+hint;
                 GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,54),task,title);
                 GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),hint,micro);
