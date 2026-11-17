@@ -89,6 +89,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void NicheSettlementRequiresSustainableEnergyNotJustStoredReserves()
+        {
+            Assert.IsTrue(LineageChallenge.SustainableResidence(.75f, .70f),
+                "Small energy losses from movement are acceptable.");
+            Assert.IsTrue(LineageChallenge.SustainableResidence(.75f, .80f),
+                "A well-adapted descendant can gain energy in its new habitat.");
+            Assert.IsFalse(LineageChallenge.SustainableResidence(.75f, .60f),
+                "A descendant draining inherited reserves must not win by waiting.");
+            Assert.IsTrue(LineageChallenge.SustainableResidence(.50f, .40f),
+                "The energy-loss budget is relative to the start of this residence.");
+        }
+
+        [Test]
         public void NicheResidenceRequiresAnUninterruptedEligibleStreak()
         {
             double seconds = LineageChallenge.AdvanceNicheResidence(0, true, .1);
