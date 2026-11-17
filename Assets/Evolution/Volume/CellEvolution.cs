@@ -124,6 +124,8 @@ namespace Evolution.Volume
             if (sample.Light >= .55f) return 1; // Sunlit
             return 0; // Transitional water
         }
+        public static double AdvanceNicheResidence(double previous, bool eligible, double stepSeconds)
+            => eligible ? Math.Max(0, previous) + Math.Max(0, stepSeconds) : 0;
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
             => isDescendant && alive && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
@@ -241,7 +243,7 @@ namespace Evolution.Volume
                 if (!eligible.Contains(key)) nicheResidence.Remove(key);
             CurrentNicheSeconds = 0;
             foreach (var key in eligible) {
-                double elapsed = nicheResidence.TryGetValue(key, out var previous) ? previous + dt : dt;
+                double elapsed = AdvanceNicheResidence(nicheResidence.TryGetValue(key, out var previous) ? previous : 0, true, dt);
                 nicheResidence[key] = elapsed;
                 CurrentNicheSeconds = Math.Max(CurrentNicheSeconds, elapsed);
             }
