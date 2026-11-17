@@ -131,7 +131,8 @@ namespace Evolution.Volume
         // foreign niches is migration, not uninterrupted settlement.
         public static double AdvanceNicheResidenceInKind(double previous, int previousKind, int currentKind, bool eligible, double stepSeconds)
             => AdvanceNicheResidence(previousKind == currentKind ? previous : 0, eligible, stepSeconds);
-        // Transitional water is not a distinct ecological niche and cannot award settlement.\n        public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
+        // Transitional water is not a distinct ecological niche and cannot award settlement.
+        public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
             => isDescendant && alive && currentKind != 0 && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
         double startedAt;
