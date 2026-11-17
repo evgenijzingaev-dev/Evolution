@@ -112,6 +112,7 @@ namespace Evolution.Volume
         }
         readonly Dictionary<string, Member> members = new Dictionary<string, Member>(StringComparer.Ordinal);
         readonly Dictionary<string, double> nicheResidence = new Dictionary<string, double>(StringComparer.Ordinal);
+        readonly Dictionary<string, int> nicheResidenceKind = new Dictionary<string, int>(StringComparer.Ordinal);
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
         public double BestNicheSeconds { get; private set; }
@@ -126,6 +127,10 @@ namespace Evolution.Volume
         }
         public static double AdvanceNicheResidence(double previous, bool eligible, double stepSeconds)
             => eligible ? Math.Max(0, previous) + Math.Max(0, stepSeconds) : 0;
+        // A lineage must establish itself in ONE niche; alternating between two different
+        // foreign niches is migration, not uninterrupted settlement.
+        public static double AdvanceNicheResidenceInKind(double previous, int previousKind, int currentKind, bool eligible, double stepSeconds)
+            => AdvanceNicheResidence(previousKind == currentKind ? previous : 0, eligible, stepSeconds);
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
             => isDescendant && alive && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
@@ -142,6 +147,7 @@ namespace Evolution.Volume
             if (!a.Alive || string.IsNullOrEmpty(a.Identity)) return false;
             members.Clear();
             nicheResidence.Clear();
+            nicheResidenceKind.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
@@ -162,6 +168,7 @@ namespace Evolution.Volume
             Active = false;
             members.Clear();
             nicheResidence.Clear();
+            nicheResidenceKind.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
@@ -240,11 +247,21 @@ namespace Evolution.Volume
             LivingKnown = live;
             // Only continuous, actually observed residence counts; unloading or low energy resets progress.
             foreach (var key in new List<string>(nicheResidence.Keys))
-                if (!eligible.Contains(key)) nicheResidence.Remove(key);
+                if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); }
             CurrentNicheSeconds = 0;
             foreach (var key in eligible) {
-                double elapsed = AdvanceNicheResidence(nicheResidence.TryGetValue(key, out var previous) ? previous : 0, true, dt);
+                int kind = -1;
+                for (int i = 0; i < world.Count; i++) {
+                    var agent = world.Get(i);
+                    if (agent.Identity == key) { kind = NicheKind(world.EnvironmentAt(agent.Position)); break; }
+                }
+                if (kind < 0) continue;
+                double elapsed = AdvanceNicheResidenceInKind(
+                    nicheResidence.TryGetValue(key, out var previous) ? previous : 0,
+                    nicheResidenceKind.TryGetValue(key, out var previousKind) ? previousKind : -1,
+                    kind, true, dt);
                 nicheResidence[key] = elapsed;
+                nicheResidenceKind[key] = kind;
                 CurrentNicheSeconds = Math.Max(CurrentNicheSeconds, elapsed);
             }
             BestNicheSeconds = Math.Max(BestNicheSeconds, CurrentNicheSeconds);
