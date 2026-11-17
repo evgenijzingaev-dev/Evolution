@@ -286,7 +286,7 @@ namespace Evolution.Runtime
                 if(challenge.Active) {
                     task=challenge.State==LineageChallengeState.Won?"Победа! Потомок освоил новую среду":challenge.State==LineageChallengeState.Extinct?"Линия вымерла":challenge.State==LineageChallengeState.Unobserved?
                         "Линия вне наблюдения":challenge.State==LineageChallengeState.OffspringAlive?
-                        "Переведи потомка в другую нишу":"Создай живого потомка";
+                        (challenge.SettlementHint ?? "Переведи потомка в другую нишу"):"Создай живого потомка";
                     string outcome=LineageChallenge.OutcomeSummary(challenge.State,challenge.VerifiedBirths,challenge.LivingKnown);
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nНовая ниша: "+Math.Min(15,challenge.CurrentNicheSeconds).ToString("F0")+" / 15 сек · F6 — выход";
