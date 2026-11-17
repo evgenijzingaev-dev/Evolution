@@ -153,6 +153,11 @@ namespace Evolution.Volume
                 && child.Biology.LineageId == parent.Biology.LineageId
                 && child.Biology.Generation == parent.Biology.Generation + 1;
         }
+        // Once a member has died, later stale live snapshots cannot revive it.
+        public static bool CountsAsLiving(bool snapshotAlive, bool confirmedDead)
+        {
+            return snapshotAlive && !confirmedDead;
+        }
         // DivisionChild is persistent; only births after the challenge began count.
         public static bool BornDuringChallenge(VolumeAgent child, double startedAt, double now)
         {
@@ -198,7 +203,7 @@ namespace Evolution.Volume
                 if (!a.Alive) {
                     member.Dead = true;
                     members[a.Identity] = member;
-                } else if (!member.Dead) {
+                } else if (CountsAsLiving(a.Alive, member.Dead)) {
                     live++;
                     if (a.Identity != FounderIdentity) liveDescendants++;
                 }
