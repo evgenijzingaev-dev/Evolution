@@ -195,6 +195,9 @@ namespace Evolution.Volume
         {
             return snapshotAlive && !confirmedDead;
         }
+        // A streamed biological identity must contribute at most one observation per tick.
+        public static bool FirstObservation(HashSet<string> observed, string identity)
+            => observed.Add(identity);
         // DivisionChild is persistent; only births after the challenge began count.
         public static bool BornDuringChallenge(VolumeAgent child, double startedAt, double now)
         {
@@ -250,7 +253,7 @@ namespace Evolution.Volume
                     || member.Generation != a.Biology.Generation) continue;
                 // A biological identity can appear more than once during streaming.
                 // Count its observation only once, with confirmed death taking precedence.
-                if (!observed.Add(a.Identity)) continue;
+                if (!FirstObservation(observed, a.Identity)) continue;
                 // A confirmed death is terminal for this biological identity. A stale
                 // streamed snapshot must never resurrect a dead member or fake success.
                 if (!a.Alive) {
