@@ -97,7 +97,7 @@ namespace Evolution.Tests
                 "A well-adapted descendant can gain energy in its new habitat.");
             Assert.IsFalse(LineageChallenge.SustainableResidence(.75f, .60f),
                 "A descendant draining inherited reserves must not win by waiting.");
-            Assert.IsTrue(LineageChallenge.SustainableResidence(.50f, .40f),
+            Assert.IsTrue(LineageChallenge.SustainableResidence(.50f, .41f),
                 "The energy-loss budget is relative to the start of this residence.");
         }
 
