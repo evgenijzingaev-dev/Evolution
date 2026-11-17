@@ -121,6 +121,11 @@ namespace Evolution.Volume
         public double CurrentNicheSeconds { get; private set; }
         // Last verified obstacle, shown as advice rather than an invented cause of death.
         public string SettlementHint { get; private set; }
+        // Show a useful next action once settlement is already underway.
+        public static string SettlementProgressGoal(double currentSeconds, string obstacle)
+            => obstacle ?? (currentSeconds > 0
+                ? "Закрепляйся в новой нише: сохраняй энергию и не покидай её"
+                : "Переведи потомка в другую нишу");
         public static string SettlementAdvice(bool inNewNiche, float energyFraction, bool sustainable)
         {
             if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
