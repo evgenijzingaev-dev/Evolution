@@ -110,6 +110,14 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void SettlementGoalChangesWhenMigrationBecomesActiveResidence()
+        {
+            StringAssert.Contains("Переведи", LineageChallenge.SettlementProgressGoal(0, null));
+            StringAssert.Contains("Закрепляйся", LineageChallenge.SettlementProgressGoal(3, null));
+            StringAssert.Contains("Энергия", LineageChallenge.SettlementProgressGoal(3, "Энергия убывает"));
+        }
+
+        [Test]
         public void SettlementAdviceExplainsRealEnergyRiskWithoutInventingRewards()
         {
             StringAssert.Contains("Переведи", LineageChallenge.SettlementAdvice(false, .8f, true));
