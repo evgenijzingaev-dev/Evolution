@@ -307,22 +307,32 @@ namespace Evolution.Runtime
             {
                 int bestIndex = -1;
                 float bestScore = float.NegativeInfinity;
+                bool bestReady = false;
                 for (int i = 0; i < water.World.Count; i++)
                 {
                     var a = water.World.Get(i);
                     if (!a.Alive || attempted.Contains(a.Identity)) continue;
+                    // A cell may already be able to divide without a sensed food cloud.
+                    // Light and dissolved resources can also sustain a real organism.
+                    bool divisionReady = water.World.DivisionBlock(i) == null;
                     var read = PlayerReadout.Read(water.World, i);
-                    if (read.Food < 0 || read.Food >= water.World.FoodCount) continue;
-                    var food = water.World.GetFood(read.Food);
-                    float distance = (food.Position - a.Position).Length;
-                    float surplus = water.World.FoodPotential(read.Food, a.Biology)
-                        - Biology.Cost(a.Biology.Genes, water.World.Temperature(a.Position));
-                    float score = a.Biology.Energy + surplus / (1f + distance);
-                    if (score > bestScore ||
-                        (score == bestScore && bestIndex >= 0 &&
-                         string.CompareOrdinal(a.Identity, water.World.Get(bestIndex).Identity) < 0))
+                    float score = a.Biology.Energy;
+                    if (read.Food >= 0 && read.Food < water.World.FoodCount)
+                    {
+                        var food = water.World.GetFood(read.Food);
+                        float distance = (food.Position - a.Position).Length;
+                        float surplus = water.World.FoodPotential(read.Food, a.Biology)
+                            - Biology.Cost(a.Biology.Genes, water.World.Temperature(a.Position));
+                        score += surplus / (1f + distance);
+                    }
+                    if (bestIndex < 0 || (divisionReady && !bestReady) ||
+                        (divisionReady == bestReady &&
+                         (score > bestScore ||
+                          (score == bestScore &&
+                           string.CompareOrdinal(a.Identity, water.World.Get(bestIndex).Identity) < 0))))
                     {
                         bestScore = score;
+                        bestReady = divisionReady;
                         bestIndex = i;
                     }
                 }
@@ -349,28 +359,45 @@ namespace Evolution.Runtime
                         break;
                     }
                     var read = PlayerReadout.Read(water.World, candidate);
-                    if (read.Food < 0 || read.Food >= water.World.FoodCount) break;
                     var a = water.World.Get(candidate);
-                    var food = water.World.GetFood(read.Food);
-                    V3 delta = food.Position - a.Position;
-                    float distance = delta.Length;
-                    if (read.Food != trackedFood)
+                    bool hasFood = read.Food >= 0 && read.Food < water.World.FoodCount;
+                    V3 delta = default;
+                    float distance = float.PositiveInfinity;
+                    float foodRadius = 0f;
+                    if (hasFood)
                     {
-                        trackedFood = read.Food;
-                        bestDistance = distance;
+                        var food = water.World.GetFood(read.Food);
+                        delta = food.Position - a.Position;
+                        distance = delta.Length;
+                        foodRadius = food.Radius;
+                        if (read.Food != trackedFood)
+                        {
+                            trackedFood = read.Food;
+                            bestDistance = distance;
+                            lastProgressTick = ticks;
+                        }
+                    }
+                    else
+                    {
+                        // No food target is not an automatic failure: photosynthetic
+                        // or resource-fed cells can accumulate energy in place.
+                        trackedFood = -1;
+                        bestDistance = float.PositiveInfinity;
+                    }
+                    if (a.Biology.Energy > bestEnergy + .05f)
+                    {
+                        bestEnergy = a.Biology.Energy;
                         lastProgressTick = ticks;
                     }
-                    if (a.Biology.Energy > bestEnergy + .05f ||
-                        distance < bestDistance - .1f)
+                    if (hasFood && distance < bestDistance - .1f)
                     {
-                        bestEnergy = Math.Max(bestEnergy, a.Biology.Energy);
-                        bestDistance = Math.Min(bestDistance, distance);
+                        bestDistance = distance;
                         lastProgressTick = ticks;
                     }
                     // Six seconds of model time without meaningful feeding or
                     // approach is a stall; try another existing resident.
                     if (ticks - lastProgressTick >= 360) break;
-                    water.World.Input = distance > food.Radius * .45f ? delta.Unit : default;
+                    water.World.Input = hasFood && distance > foodRadius * .45f ? delta.Unit : default;
                     water.World.Step();
                     ticks++;
                     if (ticks % 20 == 0) yield return null;
