@@ -48,6 +48,17 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void DuplicateStreamedIdentityCountsOnlyOncePerTick()
+        {
+            var observed = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+            Assert.IsTrue(LineageChallenge.FirstObservation(observed, "lineage/b1"));
+            Assert.IsFalse(LineageChallenge.FirstObservation(observed, "lineage/b1"),
+                "A duplicate streamed snapshot must not inflate the living count.");
+            Assert.IsTrue(LineageChallenge.FirstObservation(observed, "lineage/b2"),
+                "Different descendants must remain independently countable.");
+        }
+
+        [Test]
         public void ConfirmedDeadMemberCannotBeResurrectedByStaleStreamedSnapshot()
         {
             Assert.IsTrue(LineageChallenge.CountsAsLiving(true, false));
