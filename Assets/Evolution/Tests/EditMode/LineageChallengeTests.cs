@@ -58,6 +58,17 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void SwitchingBetweenForeignNichesResetsContinuousSettlement()
+        {
+            // A descendant cannot accumulate 15 seconds by alternating between dark
+            // water and a hydrothermal vent, even if both differ from its origin.
+            Assert.AreEqual(5, LineageChallenge.AdvanceNicheResidenceInKind(4, 2, 2, true, 1));
+            Assert.AreEqual(1, LineageChallenge.AdvanceNicheResidenceInKind(14, 2, 3, true, 1));
+            Assert.AreEqual(0, LineageChallenge.AdvanceNicheResidenceInKind(14, 2, 2, false, 1));
+            Assert.AreEqual(1, LineageChallenge.AdvanceNicheResidenceInKind(14, -1, 2, true, 1));
+        }
+
+        [Test]
         public void NicheVictoryRequiresLivingDescendantWithEnergyInDifferentEnvironment()
         {
             var sun = new NicheSample { Light = .8f, Temperature = 23 };
