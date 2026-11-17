@@ -78,6 +78,10 @@ namespace Evolution.Tests
             Assert.AreEqual(2, LineageChallenge.NicheKind(dark));
             Assert.AreEqual(3, LineageChallenge.NicheKind(vent));
             Assert.IsFalse(LineageChallenge.EligibleNiche(1, 1, true, true, .8f));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 0, true, true, .8f),
+                "Transitional water cannot count as a conquered niche merely because its light differs.");
+            Assert.IsTrue(LineageChallenge.EligibleNiche(0, 1, true, true, .8f),
+                "A founder from transitional water can settle a real sunlit niche.");
             Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, false, true, .8f));
             Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, false, .8f));
             Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, .34f));
