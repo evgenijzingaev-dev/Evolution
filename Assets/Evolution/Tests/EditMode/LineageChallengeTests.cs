@@ -7,6 +7,16 @@ namespace Evolution.Tests
     public sealed class LineageChallengeTests
     {
         [Test]
+        public void ChallengeOutcomeExplainsVerifiedResultWithoutInventingDeathCause()
+        {
+            StringAssert.Contains("закрепился", LineageChallenge.OutcomeSummary(LineageChallengeState.Won, 2, 1));
+            StringAssert.Contains("Рождений: 2", LineageChallenge.OutcomeSummary(LineageChallengeState.Extinct, 2, 0));
+            StringAssert.Contains("неизвестен", LineageChallenge.OutcomeSummary(LineageChallengeState.Unobserved, 1, 0));
+            Assert.IsNull(LineageChallenge.OutcomeSummary(LineageChallengeState.Growing, 0, 1));
+            Assert.IsNull(LineageChallenge.OutcomeSummary(LineageChallengeState.OffspringAlive, 1, 2));
+        }
+
+        [Test]
         public void ChallengeIsOptionalAndCanRestart()
         {
             var world = new VolumeWorld(1, 123);
