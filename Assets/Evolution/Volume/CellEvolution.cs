@@ -99,4 +99,105 @@ namespace Evolution.Volume
             return TakeControl(world,index);
         }
     }
+    // First gameplay milestone for #38: observe one real lineage without changing biology.
+    // Missing streamed agents are UNKNOWN, never silently dead or replaced by strangers.
+    public enum LineageChallengeState { Inactive, Growing, OffspringAlive, Unobserved, Extinct }
+
+    public sealed class LineageChallenge
+    {
+        struct Member
+        {
+            public int Id, LineageId, Generation;
+            public bool Dead;
+        }
+        readonly Dictionary<string, Member> members = new Dictionary<string, Member>(StringComparer.Ordinal);
+        long recordedTick;
+        public bool Active { get; private set; }
+        public string FounderIdentity { get; private set; }
+        public int VerifiedBirths { get; private set; }
+        public int LivingKnown { get; private set; }
+        public LineageChallengeState State { get; private set; }
+        public bool Begin(VolumeWorld world, int index)
+        {
+            if (world == null || index < 0 || index >= world.Count) return false;
+            var a = world.Get(index);
+            if (!a.Alive || string.IsNullOrEmpty(a.Identity)) return false;
+            members.Clear();
+            members.Add(a.Identity, new Member {
+                Id = a.Biology.Id, LineageId = a.Biology.LineageId,
+                Generation = a.Biology.Generation
+            });
+            FounderIdentity = a.Identity;
+            Active = true;
+            VerifiedBirths = 0;
+            LivingKnown = 1;
+            State = LineageChallengeState.Growing;
+            recordedTick = world.Tick;
+            return true;
+        }
+        public void Stop()
+        {
+            Active = false;
+            members.Clear();
+            FounderIdentity = null;
+            VerifiedBirths = LivingKnown = 0;
+            State = LineageChallengeState.Inactive;
+        }
+        public static bool VerifiedChild(VolumeAgent parent, VolumeAgent child)
+        {
+            return child.DivisionChild && !string.IsNullOrEmpty(parent.Identity)
+                && CellEvolution.ParentIdentity(child) == parent.Identity
+                && child.Biology.ParentId == parent.Biology.Id
+                && child.Biology.LineageId == parent.Biology.LineageId
+                && child.Biology.Generation == parent.Biology.Generation + 1;
+        }
+        public void RecordStep(VolumeWorld world)
+        {
+            if (!Active || world == null || world.Tick <= recordedTick
+                || State == LineageChallengeState.Extinct) return;
+            recordedTick = world.Tick;
+            // Multi-generation births can be observed in one tick after streaming.
+            bool added;
+            do {
+                added = false;
+                for (int i = 0; i < world.Count; i++) {
+                    var child = world.Get(i);
+                    if (string.IsNullOrEmpty(child.Identity) || members.ContainsKey(child.Identity)
+                        || !child.DivisionChild) continue;
+                    string parentIdentity = CellEvolution.ParentIdentity(child);
+                    if (parentIdentity == null || !members.TryGetValue(parentIdentity, out var parent)) continue;
+                    if (child.Biology.ParentId != parent.Id
+                        || child.Biology.LineageId != parent.LineageId
+                        || child.Biology.Generation != parent.Generation + 1) continue;
+                    members.Add(child.Identity, new Member {
+                        Id = child.Biology.Id, LineageId = child.Biology.LineageId,
+                        Generation = child.Biology.Generation
+                    });
+                    VerifiedBirths++;
+                    added = true;
+                }
+            } while (added);
+            int live = 0, missing = 0;
+            var observed = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < world.Count; i++) {
+                var a = world.Get(i);
+                if (a.Identity == null || !members.TryGetValue(a.Identity, out var member)) continue;
+                // Reused names with incompatible biological identity are not our lineage.
+                if (member.Id != a.Biology.Id || member.LineageId != a.Biology.LineageId
+                    || member.Generation != a.Biology.Generation) continue;
+                observed.Add(a.Identity);
+                if (a.Alive) live++;
+                else {
+                    member.Dead = true;
+                    members[a.Identity] = member;
+                }
+            }
+            foreach (var pair in members)
+                if (!pair.Value.Dead && !observed.Contains(pair.Key)) missing++;
+            LivingKnown = live;
+            State = live > 0 ? VerifiedBirths > 0 ? LineageChallengeState.OffspringAlive : LineageChallengeState.Growing
+                : missing > 0 ? LineageChallengeState.Unobserved : LineageChallengeState.Extinct;
+        }
+    }
+
 }
