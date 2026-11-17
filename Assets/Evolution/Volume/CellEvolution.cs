@@ -232,13 +232,25 @@ namespace Evolution.Volume
             var eligibleEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
             var eligibleKind = new Dictionary<string, int>(StringComparer.Ordinal);
             var observed = new HashSet<string>(StringComparer.Ordinal);
+            // Resolve confirmed deaths first. Duplicate streamed snapshots of the same
+            // biological identity must not inflate living counts or override a death.
+            for (int i = 0; i < world.Count; i++) {
+                var a = world.Get(i);
+                if (a.Alive || a.Identity == null || !members.TryGetValue(a.Identity, out var member)) continue;
+                if (member.Id != a.Biology.Id || member.LineageId != a.Biology.LineageId
+                    || member.Generation != a.Biology.Generation) continue;
+                member.Dead = true;
+                members[a.Identity] = member;
+            }
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
                 if (a.Identity == null || !members.TryGetValue(a.Identity, out var member)) continue;
                 // Reused names with incompatible biological identity are not our lineage.
                 if (member.Id != a.Biology.Id || member.LineageId != a.Biology.LineageId
                     || member.Generation != a.Biology.Generation) continue;
-                observed.Add(a.Identity);
+                // A biological identity can appear more than once during streaming.
+                // Count its observation only once, with confirmed death taking precedence.
+                if (!observed.Add(a.Identity)) continue;
                 // A confirmed death is terminal for this biological identity. A stale
                 // streamed snapshot must never resurrect a dead member or fake success.
                 if (!a.Alive) {
