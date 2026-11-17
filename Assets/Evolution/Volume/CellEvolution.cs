@@ -141,6 +141,17 @@ namespace Evolution.Volume
             => isDescendant && alive && currentKind != 0 && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
         double startedAt;
+        // Player-facing outcome uses only verified observations, never guessed death causes.
+        public static string OutcomeSummary(LineageChallengeState state, int births, int living)
+        {
+            if (state == LineageChallengeState.Won)
+                return "Успех: потомок закрепился в новой нише. Рождений: " + births + " · Живых: " + living;
+            if (state == LineageChallengeState.Extinct)
+                return "Поражение: все подтверждённые члены линии погибли. Рождений: " + births;
+            if (state == LineageChallengeState.Unobserved)
+                return "Исход неизвестен: линия вне наблюдения. Вернись к её области.";
+            return null;
+        }
         public bool Active { get; private set; }
         public string FounderIdentity { get; private set; }
         public int VerifiedBirths { get; private set; }
