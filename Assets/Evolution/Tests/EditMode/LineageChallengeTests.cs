@@ -74,6 +74,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void NicheResidenceRequiresAnUninterruptedEligibleStreak()
+        {
+            double seconds = LineageChallenge.AdvanceNicheResidence(0, true, .1);
+            Assert.AreEqual(.1, seconds, 1e-9);
+            seconds = LineageChallenge.AdvanceNicheResidence(seconds, true, .1);
+            Assert.AreEqual(.2, seconds, 1e-9);
+            seconds = LineageChallenge.AdvanceNicheResidence(seconds, false, .1);
+            Assert.AreEqual(0, seconds, 1e-9, "Leaving the niche or dropping below the energy threshold must reset progress.");
+            seconds = LineageChallenge.AdvanceNicheResidence(seconds, true, .1);
+            Assert.AreEqual(.1, seconds, 1e-9, "A new streak must not reuse historic best time.");
+        }
+
+        [Test]
         public void VerifiedChildRequiresRealDivisionAndExactGenealogy()
         {
             var parent = new VolumeAgent {
