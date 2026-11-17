@@ -115,6 +115,8 @@ namespace Evolution.Volume
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
         public double BestNicheSeconds { get; private set; }
+        // Current uninterrupted progress, not a historic peak from a failed attempt.
+        public double CurrentNicheSeconds { get; private set; }
         public static int NicheKind(NicheSample sample)
         {
             if (sample.Vent >= .4f) return 3; // Hydrothermal
@@ -138,7 +140,7 @@ namespace Evolution.Volume
             if (!a.Alive || string.IsNullOrEmpty(a.Identity)) return false;
             members.Clear();
             nicheResidence.Clear();
-            BestNicheSeconds = 0;
+            BestNicheSeconds = CurrentNicheSeconds = 0;
             founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
                 Id = a.Biology.Id, LineageId = a.Biology.LineageId,
@@ -158,7 +160,7 @@ namespace Evolution.Volume
             Active = false;
             members.Clear();
             nicheResidence.Clear();
-            BestNicheSeconds = 0;
+            BestNicheSeconds = CurrentNicheSeconds = 0;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
             State = LineageChallengeState.Inactive;
@@ -237,12 +239,14 @@ namespace Evolution.Volume
             // Only continuous, actually observed residence counts; unloading or low energy resets progress.
             foreach (var key in new List<string>(nicheResidence.Keys))
                 if (!eligible.Contains(key)) nicheResidence.Remove(key);
+            CurrentNicheSeconds = 0;
             foreach (var key in eligible) {
                 double elapsed = nicheResidence.TryGetValue(key, out var previous) ? previous + dt : dt;
                 nicheResidence[key] = elapsed;
-                BestNicheSeconds = Math.Max(BestNicheSeconds, elapsed);
+                CurrentNicheSeconds = Math.Max(CurrentNicheSeconds, elapsed);
             }
-            if (VerifiedBirths > 0 && BestNicheSeconds >= RequiredNicheSeconds) {
+            BestNicheSeconds = Math.Max(BestNicheSeconds, CurrentNicheSeconds);
+            if (VerifiedBirths > 0 && CurrentNicheSeconds >= RequiredNicheSeconds) {
                 State = LineageChallengeState.Won;
                 return;
             }
