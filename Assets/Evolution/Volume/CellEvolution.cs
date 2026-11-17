@@ -112,6 +112,7 @@ namespace Evolution.Volume
         }
         readonly Dictionary<string, Member> members = new Dictionary<string, Member>(StringComparer.Ordinal);
         long recordedTick;
+        double startedAt;
         public bool Active { get; private set; }
         public string FounderIdentity { get; private set; }
         public int VerifiedBirths { get; private set; }
@@ -133,6 +134,7 @@ namespace Evolution.Volume
             LivingKnown = 1;
             State = LineageChallengeState.Growing;
             recordedTick = world.Tick;
+            startedAt = world.Time;
             return true;
         }
         public void Stop()
@@ -151,6 +153,11 @@ namespace Evolution.Volume
                 && child.Biology.LineageId == parent.Biology.LineageId
                 && child.Biology.Generation == parent.Biology.Generation + 1;
         }
+        // DivisionChild is persistent; only births after the challenge began count.
+        public static bool BornDuringChallenge(VolumeAgent child, double startedAt, double now)
+        {
+            return child.DivisionChild && child.DivisionAt > startedAt && child.DivisionAt <= now;
+        }
         public void RecordStep(VolumeWorld world)
         {
             if (!Active || world == null || world.Tick <= recordedTick
@@ -163,7 +170,7 @@ namespace Evolution.Volume
                 for (int i = 0; i < world.Count; i++) {
                     var child = world.Get(i);
                     if (string.IsNullOrEmpty(child.Identity) || members.ContainsKey(child.Identity)
-                        || !child.DivisionChild) continue;
+                        || !BornDuringChallenge(child, startedAt, world.Time)) continue;
                     string parentIdentity = CellEvolution.ParentIdentity(child);
                     if (parentIdentity == null || !members.TryGetValue(parentIdentity, out var parent)) continue;
                     if (child.Biology.ParentId != parent.Id
