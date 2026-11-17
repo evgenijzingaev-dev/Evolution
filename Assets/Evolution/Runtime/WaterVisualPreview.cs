@@ -331,6 +331,14 @@ namespace Evolution.Runtime
                 attempted.Add(parent);
                 water.Select(bestIndex);
                 water.PlaySelected();
+                // Give a real resident time to travel and feed, but do not let a
+                // living, stalled resident monopolize the shared capture budget.
+                // Progress is measured against the best observed energy and
+                // distance to food, not against elapsed time alone.
+                int lastProgressTick = ticks;
+                float bestEnergy = water.World.Get(bestIndex).Biology.Energy;
+                float bestDistance = float.PositiveInfinity;
+                int trackedFood = -1;
                 while (ticks < 2400)
                 {
                     candidate = water.Ocean.Find(parent);
@@ -345,7 +353,24 @@ namespace Evolution.Runtime
                     var a = water.World.Get(candidate);
                     var food = water.World.GetFood(read.Food);
                     V3 delta = food.Position - a.Position;
-                    water.World.Input = delta.Length > food.Radius * .45f ? delta.Unit : default;
+                    float distance = delta.Length;
+                    if (read.Food != trackedFood)
+                    {
+                        trackedFood = read.Food;
+                        bestDistance = distance;
+                        lastProgressTick = ticks;
+                    }
+                    if (a.Biology.Energy > bestEnergy + .05f ||
+                        distance < bestDistance - .1f)
+                    {
+                        bestEnergy = Math.Max(bestEnergy, a.Biology.Energy);
+                        bestDistance = Math.Min(bestDistance, distance);
+                        lastProgressTick = ticks;
+                    }
+                    // Six seconds of model time without meaningful feeding or
+                    // approach is a stall; try another existing resident.
+                    if (ticks - lastProgressTick >= 360) break;
+                    water.World.Input = distance > food.Radius * .45f ? delta.Unit : default;
                     water.World.Step();
                     ticks++;
                     if (ticks % 20 == 0) yield return null;
