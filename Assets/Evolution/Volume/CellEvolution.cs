@@ -101,7 +101,7 @@ namespace Evolution.Volume
     }
     // First gameplay milestone for #38: observe one real lineage without changing biology.
     // Missing streamed agents are UNKNOWN, never silently dead or replaced by strangers.
-    public enum LineageChallengeState { Inactive, Growing, OffspringAlive, Unobserved, Extinct }
+    public enum LineageChallengeState { Inactive, Growing, OffspringAlive, Unobserved, Extinct, Won }
 
     public sealed class LineageChallenge
     {
@@ -111,6 +111,19 @@ namespace Evolution.Volume
             public bool Dead;
         }
         readonly Dictionary<string, Member> members = new Dictionary<string, Member>(StringComparer.Ordinal);
+        readonly Dictionary<string, double> nicheResidence = new Dictionary<string, double>(StringComparer.Ordinal);
+        int founderNiche;
+        public const double RequiredNicheSeconds = 15;
+        public double BestNicheSeconds { get; private set; }
+        public static int NicheKind(NicheSample sample)
+        {
+            if (sample.Vent >= .4f) return 3; // Hydrothermal
+            if (sample.Light < .12f) return 2; // Dark
+            if (sample.Light >= .55f) return 1; // Sunlit
+            return 0; // Transitional water
+        }
+        public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
+            => isDescendant && alive && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
         double startedAt;
         public bool Active { get; private set; }
@@ -124,6 +137,9 @@ namespace Evolution.Volume
             var a = world.Get(index);
             if (!a.Alive || string.IsNullOrEmpty(a.Identity)) return false;
             members.Clear();
+            nicheResidence.Clear();
+            BestNicheSeconds = 0;
+            founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
                 Id = a.Biology.Id, LineageId = a.Biology.LineageId,
                 Generation = a.Biology.Generation
@@ -141,6 +157,8 @@ namespace Evolution.Volume
         {
             Active = false;
             members.Clear();
+            nicheResidence.Clear();
+            BestNicheSeconds = 0;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
             State = LineageChallengeState.Inactive;
@@ -166,7 +184,7 @@ namespace Evolution.Volume
         public void RecordStep(VolumeWorld world)
         {
             if (!Active || world == null || world.Tick <= recordedTick
-                || State == LineageChallengeState.Extinct) return;
+                || State == LineageChallengeState.Extinct || State == LineageChallengeState.Won) return;
             recordedTick = world.Tick;
             // Multi-generation births can be observed in one tick after streaming.
             bool added;
@@ -190,6 +208,8 @@ namespace Evolution.Volume
                 }
             } while (added);
             int live = 0, liveDescendants = 0, missing = 0;
+            double dt = VolumeWorld.StepSeconds;
+            var eligible = new HashSet<string>(StringComparer.Ordinal);
             var observed = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
@@ -206,11 +226,26 @@ namespace Evolution.Volume
                 } else if (CountsAsLiving(a.Alive, member.Dead)) {
                     live++;
                     if (a.Identity != FounderIdentity) liveDescendants++;
+                    if (world.Niches && EligibleNiche(founderNiche, NicheKind(world.EnvironmentAt(a.Position)),
+                        a.Identity != FounderIdentity, true, a.Biology.Energy / Math.Max(.001f, Biology.Capacity(a.Biology.Genes))))
+                        eligible.Add(a.Identity);
                 }
             }
             foreach (var pair in members)
                 if (!pair.Value.Dead && !observed.Contains(pair.Key)) missing++;
             LivingKnown = live;
+            // Only continuous, actually observed residence counts; unloading or low energy resets progress.
+            foreach (var key in new List<string>(nicheResidence.Keys))
+                if (!eligible.Contains(key)) nicheResidence.Remove(key);
+            foreach (var key in eligible) {
+                double elapsed = nicheResidence.TryGetValue(key, out var previous) ? previous + dt : dt;
+                nicheResidence[key] = elapsed;
+                BestNicheSeconds = Math.Max(BestNicheSeconds, elapsed);
+            }
+            if (VerifiedBirths > 0 && BestNicheSeconds >= RequiredNicheSeconds) {
+                State = LineageChallengeState.Won;
+                return;
+            }
             State = live > 0 ? liveDescendants > 0 ? LineageChallengeState.OffspringAlive : LineageChallengeState.Growing
                 : missing > 0 ? LineageChallengeState.Unobserved : LineageChallengeState.Extinct;
         }
