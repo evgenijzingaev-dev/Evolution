@@ -230,6 +230,7 @@ namespace Evolution.Volume
             double dt = VolumeWorld.StepSeconds;
             var eligible = new HashSet<string>(StringComparer.Ordinal);
             var eligibleEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
+            var eligibleKind = new Dictionary<string, int>(StringComparer.Ordinal);
             var observed = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
@@ -248,10 +249,12 @@ namespace Evolution.Volume
                     if (a.Identity != FounderIdentity) liveDescendants++;
                     if (world.Niches) {
                         float energyFraction = a.Biology.Energy / Math.Max(.001f, Biology.Capacity(a.Biology.Genes));
-                        if (EligibleNiche(founderNiche, NicheKind(world.EnvironmentAt(a.Position)),
+                        int kind = NicheKind(world.EnvironmentAt(a.Position));
+                        if (EligibleNiche(founderNiche, kind,
                             a.Identity != FounderIdentity, true, energyFraction)) {
                             eligible.Add(a.Identity);
                             eligibleEnergy[a.Identity] = energyFraction;
+                            eligibleKind[a.Identity] = kind;
                         }
                     }
                 }
@@ -264,12 +267,10 @@ namespace Evolution.Volume
                 if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); nicheEntryEnergy.Remove(key); }
             CurrentNicheSeconds = 0;
             foreach (var key in eligible) {
-                int kind = -1;
-                for (int i = 0; i < world.Count; i++) {
-                    var agent = world.Get(i);
-                    if (agent.Identity == key) { kind = NicheKind(world.EnvironmentAt(agent.Position)); break; }
-                }
-                if (kind < 0) continue;
+                // Use the same identity-validated observation for both energy and niche.
+                // A stale/reused identity elsewhere in the loaded world must not
+                // contribute a different niche to this descendant's residence.
+                int kind = eligibleKind[key];
                 float energyFraction = eligibleEnergy[key];
                 bool sameKind = nicheResidenceKind.TryGetValue(key, out var oldKind) && oldKind == kind;
                 float entryFraction = sameKind && nicheEntryEnergy.TryGetValue(key, out var entry)
