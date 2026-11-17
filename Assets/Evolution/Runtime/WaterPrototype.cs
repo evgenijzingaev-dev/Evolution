@@ -21,6 +21,7 @@ namespace Evolution.Runtime
         Vector3? moveTarget;
         public int SelectedIndex=>selected;
         public CellLineagePlay EvolutionPlay {get;}=new CellLineagePlay();
+        public LineageChallenge Challenge {get;}=new LineageChallenge();
         public bool Paused {get;set;}
         public Camera Lens {get;private set;}
         public ChunkOcean Ocean {get;private set;}
@@ -79,6 +80,9 @@ namespace Evolution.Runtime
             bool over=HudVisible&&Hud!=null&&Hud.OverUi(Input.mousePosition);
             if(Input.GetKeyDown(KeyCode.F1))Hud.HelpVisible=!Hud.HelpVisible;
             if(Input.GetKeyDown(KeyCode.F2))Hud.CycleDetail();
+            // Optional gameplay challenge. F5 starts with the currently selected living cell; F6 exits.
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5))Challenge.Begin(World,selected);
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6))Challenge.Stop();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
             if(Input.GetKeyDown(KeyCode.Escape)){if(Hud.CloseOverlay()){}else if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
@@ -109,7 +113,7 @@ namespace Evolution.Runtime
             if(!Paused)accumulator+=Time.unscaledDeltaTime;
             int steps=0;
             while(!Paused&&accumulator>=VolumeWorld.StepSeconds&&steps++<8) {
-                World.Step();EvolutionPlay.RecordStep(World);int count=OrganismsVisible?NearestFlows():0;
+                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);int count=OrganismsVisible?NearestFlows():0;
                 Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);accumulator-=VolumeWorld.StepSeconds;
             }
             if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
