@@ -177,7 +177,7 @@ namespace Evolution.Volume
                     added = true;
                 }
             } while (added);
-            int live = 0, missing = 0;
+            int live = 0, liveDescendants = 0, missing = 0;
             var observed = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
@@ -186,7 +186,7 @@ namespace Evolution.Volume
                 if (member.Id != a.Biology.Id || member.LineageId != a.Biology.LineageId
                     || member.Generation != a.Biology.Generation) continue;
                 observed.Add(a.Identity);
-                if (a.Alive) live++;
+                if (a.Alive) { live++; if (a.Identity != FounderIdentity) liveDescendants++; }
                 else {
                     member.Dead = true;
                     members[a.Identity] = member;
@@ -195,7 +195,7 @@ namespace Evolution.Volume
             foreach (var pair in members)
                 if (!pair.Value.Dead && !observed.Contains(pair.Key)) missing++;
             LivingKnown = live;
-            State = live > 0 ? VerifiedBirths > 0 ? LineageChallengeState.OffspringAlive : LineageChallengeState.Growing
+            State = live > 0 ? liveDescendants > 0 ? LineageChallengeState.OffspringAlive : LineageChallengeState.Growing
                 : missing > 0 ? LineageChallengeState.Unobserved : LineageChallengeState.Extinct;
         }
     }
