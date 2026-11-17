@@ -193,10 +193,14 @@ namespace Evolution.Volume
                 if (member.Id != a.Biology.Id || member.LineageId != a.Biology.LineageId
                     || member.Generation != a.Biology.Generation) continue;
                 observed.Add(a.Identity);
-                if (a.Alive) { live++; if (a.Identity != FounderIdentity) liveDescendants++; }
-                else {
+                // A confirmed death is terminal for this biological identity. A stale
+                // streamed snapshot must never resurrect a dead member or fake success.
+                if (!a.Alive) {
                     member.Dead = true;
                     members[a.Identity] = member;
+                } else if (!member.Dead) {
+                    live++;
+                    if (a.Identity != FounderIdentity) liveDescendants++;
                 }
             }
             foreach (var pair in members)
