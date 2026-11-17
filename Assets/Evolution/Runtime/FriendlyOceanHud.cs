@@ -280,8 +280,17 @@ namespace Evolution.Runtime
         {
             var r=Left;Box(r,Page==HudPage.Overview?"Жизнь вокруг":"Твоя следующая цель");
             if(Page!=HudPage.Overview){
-                GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,54),readout.Goal,title);
-                GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),water.World.Controlled>=0?"WASD — плыть · Q / E — глубина\nИли щёлкни по свободной воде":"Выбери клетку и нажми «Движение»",micro);
+                var challenge=water.Challenge;
+                string task=readout.Goal;
+                string hint=water.World.Controlled>=0?"WASD — плыть · Q / E — глубина":"Выбери живую клетку";
+                if(challenge.Active) {
+                    task=challenge.State==LineageChallengeState.Extinct?"Линия вымерла":challenge.State==LineageChallengeState.Unobserved?
+                        "Линия вне наблюдения":challenge.State==LineageChallengeState.OffspringAlive?
+                        "Потомок жив! Продолжай род":"Создай живого потомка";
+                    hint="Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nF6 — закончить испытание";
+                } else hint="F5 — испытание «Сохрани линию»\n"+hint;
+                GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,54),task,title);
+                GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),hint,micro);
                 return;
             }
             Label(r.x+16,r.y+58,r.width-32,"Организмов: "+living,title);
