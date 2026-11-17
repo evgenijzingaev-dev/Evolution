@@ -58,6 +58,22 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void NicheVictoryRequiresLivingDescendantWithEnergyInDifferentEnvironment()
+        {
+            var sun = new NicheSample { Light = .8f, Temperature = 23 };
+            var dark = new NicheSample { Light = .05f, Temperature = 14 };
+            var vent = new NicheSample { Light = .01f, Vent = .9f, Temperature = 43 };
+            Assert.AreEqual(1, LineageChallenge.NicheKind(sun));
+            Assert.AreEqual(2, LineageChallenge.NicheKind(dark));
+            Assert.AreEqual(3, LineageChallenge.NicheKind(vent));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 1, true, true, .8f));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, false, true, .8f));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, false, .8f));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, .34f));
+            Assert.IsTrue(LineageChallenge.EligibleNiche(1, 2, true, true, .35f));
+        }
+
+        [Test]
         public void VerifiedChildRequiresRealDivisionAndExactGenealogy()
         {
             var parent = new VolumeAgent {
