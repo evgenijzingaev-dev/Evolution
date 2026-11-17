@@ -113,6 +113,7 @@ namespace Evolution.Volume
         readonly Dictionary<string, Member> members = new Dictionary<string, Member>(StringComparer.Ordinal);
         readonly Dictionary<string, double> nicheResidence = new Dictionary<string, double>(StringComparer.Ordinal);
         readonly Dictionary<string, int> nicheResidenceKind = new Dictionary<string, int>(StringComparer.Ordinal);
+        readonly Dictionary<string, float> nicheEntryEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
         public double BestNicheSeconds { get; private set; }
@@ -132,6 +133,10 @@ namespace Evolution.Volume
         public static double AdvanceNicheResidenceInKind(double previous, int previousKind, int currentKind, bool eligible, double stepSeconds)
             => AdvanceNicheResidence(previousKind == currentKind ? previous : 0, eligible, stepSeconds);
         // Transitional water is not a distinct ecological niche and cannot award settlement.
+        // Settlement must be supported by local nutrition, not just inherited reserves.
+        // A small loss is tolerated for movement and short resource fluctuations.
+        public static bool SustainableResidence(float entryFraction, float currentFraction)
+            => currentFraction >= entryFraction - .10f;
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
             => isDescendant && alive && currentKind != 0 && currentKind != founderKind && energyFraction >= .35f;
         long recordedTick;
@@ -149,6 +154,7 @@ namespace Evolution.Volume
             members.Clear();
             nicheResidence.Clear();
             nicheResidenceKind.Clear();
+            nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
@@ -170,6 +176,7 @@ namespace Evolution.Volume
             members.Clear();
             nicheResidence.Clear();
             nicheResidenceKind.Clear();
+            nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
@@ -222,6 +229,7 @@ namespace Evolution.Volume
             int live = 0, liveDescendants = 0, missing = 0;
             double dt = VolumeWorld.StepSeconds;
             var eligible = new HashSet<string>(StringComparer.Ordinal);
+            var eligibleEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
             var observed = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
@@ -238,9 +246,14 @@ namespace Evolution.Volume
                 } else if (CountsAsLiving(a.Alive, member.Dead)) {
                     live++;
                     if (a.Identity != FounderIdentity) liveDescendants++;
-                    if (world.Niches && EligibleNiche(founderNiche, NicheKind(world.EnvironmentAt(a.Position)),
-                        a.Identity != FounderIdentity, true, a.Biology.Energy / Math.Max(.001f, Biology.Capacity(a.Biology.Genes))))
-                        eligible.Add(a.Identity);
+                    if (world.Niches) {
+                        float energyFraction = a.Biology.Energy / Math.Max(.001f, Biology.Capacity(a.Biology.Genes));
+                        if (EligibleNiche(founderNiche, NicheKind(world.EnvironmentAt(a.Position)),
+                            a.Identity != FounderIdentity, true, energyFraction)) {
+                            eligible.Add(a.Identity);
+                            eligibleEnergy[a.Identity] = energyFraction;
+                        }
+                    }
                 }
             }
             foreach (var pair in members)
@@ -248,7 +261,7 @@ namespace Evolution.Volume
             LivingKnown = live;
             // Only continuous, actually observed residence counts; unloading or low energy resets progress.
             foreach (var key in new List<string>(nicheResidence.Keys))
-                if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); }
+                if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); nicheEntryEnergy.Remove(key); }
             CurrentNicheSeconds = 0;
             foreach (var key in eligible) {
                 int kind = -1;
@@ -257,6 +270,17 @@ namespace Evolution.Volume
                     if (agent.Identity == key) { kind = NicheKind(world.EnvironmentAt(agent.Position)); break; }
                 }
                 if (kind < 0) continue;
+                float energyFraction = eligibleEnergy[key];
+                bool sameKind = nicheResidenceKind.TryGetValue(key, out var oldKind) && oldKind == kind;
+                float entryFraction = sameKind && nicheEntryEnergy.TryGetValue(key, out var entry)
+                    ? entry : energyFraction;
+                if (!SustainableResidence(entryFraction, energyFraction)) {
+                    nicheResidence.Remove(key);
+                    nicheResidenceKind.Remove(key);
+                    nicheEntryEnergy.Remove(key);
+                    continue;
+                }
+                nicheEntryEnergy[key] = entryFraction;
                 double elapsed = AdvanceNicheResidenceInKind(
                     nicheResidence.TryGetValue(key, out var previous) ? previous : 0,
                     nicheResidenceKind.TryGetValue(key, out var previousKind) ? previousKind : -1,
