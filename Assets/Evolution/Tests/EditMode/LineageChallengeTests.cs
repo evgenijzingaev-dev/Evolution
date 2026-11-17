@@ -110,6 +110,15 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void SettlementAdviceExplainsRealEnergyRiskWithoutInventingRewards()
+        {
+            StringAssert.Contains("Переведи", LineageChallenge.SettlementAdvice(false, .8f, true));
+            StringAssert.Contains("голодает", LineageChallenge.SettlementAdvice(true, .30f, true));
+            StringAssert.Contains("Энергия убывает", LineageChallenge.SettlementAdvice(true, .60f, false));
+            Assert.IsNull(LineageChallenge.SettlementAdvice(true, .60f, true));
+        }
+
+        [Test]
         public void NicheSettlementRequiresSustainableEnergyNotJustStoredReserves()
         {
             Assert.IsTrue(LineageChallenge.SustainableResidence(.75f, .70f),
