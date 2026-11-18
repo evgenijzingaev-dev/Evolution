@@ -126,10 +126,21 @@ namespace Evolution.Volume
         // Last verified obstacle, shown as advice rather than an invented cause of death.
         public string SettlementHint { get; private set; }
         // Show a useful next action once settlement is already underway.
-        public static string SettlementProgressGoal(double currentSeconds, string obstacle)
+        public static string SettlementProgressGoal(double currentSeconds, string obstacle, int founderKind = -1)
             => obstacle ?? (currentSeconds > 0
                 ? "Закрепляйся в новой нише: сохраняй энергию и не покидай её"
-                : "Переведи потомка в другую нишу");
+                : founderKind < 0 ? "Переведи потомка в другую нишу"
+                : "Выбери среду для потомка: " + MigrationChoices(founderKind));
+        // Offer only genuinely different target habitats. This is guidance, not a
+        // teleport or resource grant: the player must still migrate and survive.
+        public static string MigrationChoices(int founderKind)
+        {
+            if (founderKind == 1) return "темнота или термальный источник";
+            if (founderKind == 2) return "светлая вода или термальный источник";
+            if (founderKind == 3) return "светлая вода или темнота";
+            return "светлая вода, темнота или термальный источник";
+        }
+        public int FounderNicheKind => founderNiche;
         public static string SettlementAdvice(bool inNewNiche, float energyFraction, bool sustainable)
         {
             if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
@@ -173,7 +184,9 @@ namespace Evolution.Volume
         public static bool SustainableResidence(float entryFraction, float currentFraction)
             => currentFraction >= entryFraction - .10f;
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
-            => isDescendant && alive && currentKind != 0 && currentKind != founderKind && energyFraction >= .35f;
+            => isDescendant && alive && currentKind != 0 && currentKind != founderKind
+                && !float.IsNaN(energyFraction) && !float.IsInfinity(energyFraction)
+                && energyFraction >= .35f && energyFraction <= 1f;
         long recordedTick;
         double startedAt;
         // Player-facing outcome uses only verified observations, never guessed death causes.
@@ -182,7 +195,9 @@ namespace Evolution.Volume
             if (state == LineageChallengeState.Won)
                 return "Успех: потомок закрепился в новой нише. Рождений: " + births + " · Живых: " + living;
             if (state == LineageChallengeState.Extinct)
-                return "Поражение: все подтверждённые члены линии погибли. Рождений: " + births;
+                return births == 0
+                    ? "Поражение: основатель погиб до первого деления. Найди пищу и накопи энергию перед размножением."
+                    : "Поражение: потомки не выжили. Рождений: " + births + ". Попробуй другую нишу или источник питания.";
             if (state == LineageChallengeState.Unobserved)
                 return "Исход неизвестен: линия вне наблюдения. Вернись к её области.";
             return null;

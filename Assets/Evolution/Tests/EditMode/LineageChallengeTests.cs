@@ -119,6 +119,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void CorruptEnergyCannotGrantFreeNicheVictory()
+        {
+            // The challenge must not reward invalid energy snapshots as survival.
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, float.NaN));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, float.PositiveInfinity));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, 1.1f));
+            Assert.IsTrue(LineageChallenge.EligibleNiche(1, 2, true, true, .75f));
+        }
+
+        [Test]
         public void HudNeverDisplaysCompletedSettlementBeforeActualVictory()
         {
             Assert.AreEqual(0, LineageChallenge.DisplayNicheSeconds(0));
@@ -134,6 +144,32 @@ namespace Evolution.Tests
             StringAssert.Contains("Переведи", LineageChallenge.SettlementProgressGoal(0, null));
             StringAssert.Contains("Закрепляйся", LineageChallenge.SettlementProgressGoal(3, null));
             StringAssert.Contains("Энергия", LineageChallenge.SettlementProgressGoal(3, "Энергия убывает"));
+        }
+
+        [Test]
+        public void MigrationGoalOffersOnlyDifferentHabitatsAndPreservesUrgentWarnings()
+        {
+            StringAssert.Contains("темнота", LineageChallenge.SettlementProgressGoal(0, null, 1));
+            StringAssert.DoesNotContain("светлая вода", LineageChallenge.MigrationChoices(1));
+            StringAssert.Contains("светлая вода", LineageChallenge.MigrationChoices(2));
+            StringAssert.DoesNotContain("темнота", LineageChallenge.MigrationChoices(2));
+            StringAssert.DoesNotContain("термальный источник", LineageChallenge.MigrationChoices(3));
+            StringAssert.Contains("термальный источник", LineageChallenge.MigrationChoices(0));
+            StringAssert.Contains("Закрепляйся", LineageChallenge.SettlementProgressGoal(2, null, 1));
+            Assert.AreEqual("Потомок голодает", LineageChallenge.SettlementProgressGoal(0, "Потомок голодает", 1));
+        }
+
+        [Test]
+        public void ExtinctionSummaryExplainsDifferentNextDecisionsBeforeAndAfterDivision()
+        {
+            string before = LineageChallenge.OutcomeSummary(LineageChallengeState.Extinct, 0, 0);
+            StringAssert.Contains("до первого деления", before);
+            StringAssert.Contains("накопи энергию", before);
+            string after = LineageChallenge.OutcomeSummary(LineageChallengeState.Extinct, 2, 0);
+            StringAssert.Contains("потомки не выжили", after);
+            StringAssert.Contains("Рождений: 2", after);
+            StringAssert.Contains("другую нишу", after);
+            Assert.IsNull(LineageChallenge.OutcomeSummary(LineageChallengeState.Growing, 0, 1));
         }
 
         [Test]

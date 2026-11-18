@@ -21,6 +21,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void InGameHelpExplainsHowToStartAndStopOptionalLineageChallenge()
+        {
+            var type = Type.GetType("Evolution.Runtime.FriendlyOceanHud, Evolution.Runtime");
+            Assert.IsNotNull(type, "Production HUD must be available in Unity EditMode");
+            var field = type.GetField("ChallengeHelp", BindingFlags.Public | BindingFlags.Static);
+            Assert.IsNotNull(field, "Production HUD must expose challenge help");
+            var help = (string)field.GetValue(null);
+            StringAssert.Contains("F5", help);
+            StringAssert.Contains("F6", help);
+            StringAssert.Contains("испытание", help);
+        }
+
+        [Test]
         public void NoNoticeLeavesOceanClickable()
         {
             Assert.IsFalse(NoticeHit(new Vector2(1150, 100), Toast, 0, false, false));
