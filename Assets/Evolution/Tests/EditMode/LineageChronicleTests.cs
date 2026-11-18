@@ -147,8 +147,12 @@ namespace Evolution.Tests
             chronicle.Record(world, 0);
             var founder = world.Get(0);
             founder.Biology.AttackLastStep = 1;
-            chronicle.Record(world, 0);
-            chronicle.Record(world, 0);
+            // VolumeAgent is a value type: Get returns a copy. Rebuild the observed
+            // snapshot with the modified agent instead of mutating a detached copy.
+            var observed = new VolumeWorld(new[] { founder },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(observed, 0);
+            chronicle.Record(observed, 0);
             Assert.AreEqual(1, chronicle.Hunts,
                 "Reading the same simulation tick twice must not manufacture hunts.");
             var rebound = new VolumeWorld(new[] { founder },
