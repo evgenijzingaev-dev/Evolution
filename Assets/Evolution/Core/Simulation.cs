@@ -26,6 +26,8 @@ namespace Evolution.Core
     public struct Cell
     {
         public int Id, ParentId, Generation, LineageId, TargetId;
+        // Observational contact IDs for the last committed tick; never used by gameplay.
+        public int AttackTargetId, DamageSourceId;
         public float Integrity, AttackLastStep, DamageLastStep, TransportLastStep;
         public bool Consumed;
         public CellActivity Activity;
@@ -62,6 +64,8 @@ namespace Evolution.Core
         public float Temperature { get; private set; }
         public float NutrientRegeneration { get; private set; }
         public SimulationConfig Config => config.Copy();
+        public float StepSeconds => config.StepSeconds;
+        public float WorldSize => config.WorldSize;
         public uint RandomState => random.State;
         public LineageHistory History { get; } = new LineageHistory();
         public Cell GetCell(int i) { if (i < 0 || i >= Count) throw new ArgumentOutOfRangeException(nameof(i)); return cells[i]; }
@@ -88,6 +92,7 @@ namespace Evolution.Core
                 if (founders != null) {
                     Cell f = founders[i];
                     if (!Multicellularity.ValidFounder(f, config)) throw new ArgumentException("Invalid founder");
+                    f.AttackTargetId = f.DamageSourceId = 0;
                     f.Id = ++nextId; f.LineageId = f.Id; f.Integrity = 1; f.Consumed = false; f.TargetId = 0; f.AttackLastStep = f.DamageLastStep = f.TransportLastStep = 0; f.Activity = CellActivity.Wandering; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
                     f.TargetHeading = f.Heading; f.AngularVelocity = f.VelocityX = f.VelocityZ = f.SwimSpeed = 0; f.Growth = 1; f.Digestion = 0; f.Budget = default;
                     f.BirthMutationMask = 0; f.AssimilatedEnergy = f.FoodLastStep = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
@@ -131,6 +136,7 @@ namespace Evolution.Core
             for (int n = 0; n < Count; n++) {
                 int i = config.Ecosystem ? (int)((n + Tick) % Count) : n;
                 Cell c = cells[i]; c.Age += dt; c.AttackLastStep = c.DamageLastStep = c.TransportLastStep = 0;
+                c.AttackTargetId = c.DamageSourceId = 0;
                 colonies.Develop(ref c, dt);
                 int tile = Tile(c);
                 var local = EnvironmentAt(c.X, c.Z);

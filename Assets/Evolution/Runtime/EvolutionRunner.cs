@@ -151,19 +151,23 @@ namespace Evolution.Runtime
                 if (input && Input.GetKeyDown(KeyCode.R)) simulation.RequestDivision();
                 if (input && Input.GetKeyDown(KeyCode.T)) PlayOffspring();
             }
-            if (!paused) { accumulator += Time.unscaledDeltaTime * speed; visualTime += Time.unscaledDeltaTime * speed; }
+            if (!paused) accumulator += Time.unscaledDeltaTime * speed;
             int budget = 0;
             while (!paused && accumulator >= activeSettings.StepSeconds && budget++ < 256) {
                 if (environmentPending) { simulation.SetEnvironment(pendingTemperature, pendingFood); environmentPending = false; }
                 organismRenderer.Capture(simulation);
-                int controlled = simulation.ControlledId; simulation.Step(); Journey.RecordStep(simulation, controlled); accumulator -= activeSettings.StepSeconds;
+                int controlled = simulation.ControlledId; simulation.Step(); organismRenderer.ObserveTick(simulation);
+                Journey.RecordStep(simulation, controlled); accumulator -= activeSettings.StepSeconds;
             }
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
             rig.Tick(overUI, IsControlling);
-            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime,
-                paused ? 1 : Mathf.Clamp01((float)(accumulator / activeSettings.StepSeconds)), rig.Distance, rig.RenderedFocus, DetailedOrganisms);
+            float interpolation = Mathf.Clamp01((float)(accumulator / activeSettings.StepSeconds));
+            // Presentation follows processed simulation time, including pause and retained backlog.
+            visualTime = System.Math.Max(0, (simulation.Tick - 1 + interpolation) * activeSettings.StepSeconds);
+            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, visualTime,
+                interpolation, rig.Distance, rig.RenderedFocus, DetailedOrganisms);
             ocean.Draw(simulation, view, (float)visualTime, rig.RenderedFocus);
             if (LivingOcean) ocean.DrawVents(simulation, rig.RenderedFocus, (float)visualTime);
             sound.Tick(simulation, selectedId, SoundVolume, paused);
