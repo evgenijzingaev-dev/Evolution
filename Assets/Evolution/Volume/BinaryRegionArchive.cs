@@ -7,7 +7,7 @@ namespace Evolution.Volume
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
     public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive
     {
-        const int Magic=0x45564f33,Version=4;
+        const int Magic=0x45564f33,Version=5;
         readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         public BinaryRegionArchive(string directory)
         {
@@ -62,6 +62,8 @@ namespace Evolution.Volume
             var b=c.Budget;
             foreach(float f in new[] {b.Start,b.Substrate,b.Organic,b.Light,b.Prey,b.Upkeep,b.Movement,b.Defense,b.Stress,b.Repair,b.Growth,b.Attack,b.Division,b.Contact,b.Transport,b.PredationLoss,b.Swimming,b.Turning,b.Boost})w.Write(f);
             w.Write(a.Order);w.Write((int)a.PlannedDevelopment);w.Write((int)a.InheritedDevelopment);w.Write(a.DevelopmentPaid);w.Write(a.NaturalMutationMask);
+            w.Write(a.BondIdentity??"");w.Write((int)a.PlannedConnection);
+            w.Write(c.BondParentId);w.Write(c.ColonyId);w.Write(c.TissueSlot);w.Write((int)c.Role);w.Write(c.Specialization);w.Write(c.TransportLastStep);
         }
         static void WriteGenome(BinaryWriter w,Genome g)
         {
@@ -84,6 +86,13 @@ namespace Evolution.Volume
             if(version>=4){a.PlannedDevelopment=(DevelopmentDirection)r.ReadInt32();a.InheritedDevelopment=(DevelopmentDirection)r.ReadInt32();a.DevelopmentPaid=r.ReadSingle();a.NaturalMutationMask=r.ReadInt32();
                 if(!CellEvolution.Valid(a.PlannedDevelopment)||!CellEvolution.Valid(a.InheritedDevelopment)||float.IsNaN(a.DevelopmentPaid)||float.IsInfinity(a.DevelopmentPaid)||a.DevelopmentPaid<0)throw new InvalidDataException("Invalid development record");}
             if(version<4)a.NaturalMutationMask=a.Biology.BirthMutationMask;
+            if(version>=5) {
+                a.BondIdentity=ReadOptional(r);a.PlannedConnection=(BirthConnection)r.ReadInt32();
+                a.Biology.BondParentId=r.ReadInt32();a.Biology.ColonyId=r.ReadInt32();a.Biology.TissueSlot=r.ReadInt32();
+                a.Biology.Role=(CellRole)r.ReadInt32();a.Biology.Specialization=r.ReadSingle();a.Biology.TransportLastStep=r.ReadSingle();
+                if(a.PlannedConnection<BirthConnection.Natural||a.PlannedConnection>BirthConnection.Retain||a.Biology.Role<CellRole.Generalist||a.Biology.Role>CellRole.Reproduction
+                    ||!(a.Biology.Specialization>=0&&a.Biology.Specialization<=1)||a.BondIdentity!=null&&a.BondIdentity!=CellEvolution.ParentIdentity(a))throw new InvalidDataException("Invalid colony record");
+            }
             return a;
         }
         static Genome ReadGenome(BinaryReader r)=>new Genome {Speed=r.ReadSingle(),Size=r.ReadSingle(),Uptake=r.ReadSingle(),PreferredTemperature=r.ReadSingle(),OrganicSpecialization=r.ReadSingle(),

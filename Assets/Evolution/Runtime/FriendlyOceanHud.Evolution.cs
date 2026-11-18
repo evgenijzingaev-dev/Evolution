@@ -6,6 +6,7 @@ namespace Evolution.Runtime
 {
     public sealed partial class FriendlyOceanHud
     {
+        static string ColonyRoleName(CellRole role)=>role==CellRole.Feeding?"Питание":role==CellRole.Movement?"Движение":role==CellRole.Defense?"Защита":role==CellRole.Reproduction?"Размножение":"Универсальная";
         Vector2 evolutionScroll;
         string lastOwnBirth,lastOwnDeath;
         void DrawFamilyRecovery(Rect r)
@@ -24,17 +25,40 @@ namespace Evolution.Runtime
             bool hasCell=water.SelectedIndex>=0;
             var agent=hasCell?water.World.Get(water.SelectedIndex):water.EvolutionPlay.Fallen??default;
             var c=agent.Biology;
-            float height=children.Count*96+(hasCell||water.EvolutionPlay.Fallen.HasValue?810+CellEvolution.TraitNames.Length*25:100);
+            float height=children.Count*96+(hasCell||water.EvolutionPlay.Fallen.HasValue?1400+water.World.OrganismSize(water.SelectedIndex)*72+CellEvolution.TraitNames.Length*25:100);
             evolutionScroll=GUI.BeginScrollView(new Rect(r.x+12,r.y+58,r.width-24,r.height-122),evolutionScroll,new Rect(0,0,r.width-48,height));
             float width=r.width-68,y=0;
             GUI.Label(new Rect(6,y,width,34),"Твои прямые потомки в загруженной области: "+children.Count,title);y+=40;
-            if(children.Count==0){GUI.Label(new Rect(6,y,width,48),"Накопи энергию и разделись. Потомок будет самостоятельной клеткой.\nY сразу передаёт управление последнему живому потомку.",micro);y+=54;}
+            if(children.Count==0){GUI.Label(new Rect(6,y,width,48),"Накопи энергию и разделись. Выбери: отделить потомка или сохранить связь.\nY сразу передаёт управление последнему живому потомку.",micro);y+=54;}
             foreach(int index in children) {
                 var child=water.World.Get(index);
                 if(Button(new Rect(6,y,width,32),"Играть за потомка · поколение "+child.Biology.Generation+" · энергия "+child.Biology.Energy.ToString("F1"))) {
                     GUI.EndScrollView();if(water.FollowOffspring(index)){development=false;transition=0;}return;
                 }
                 GUI.Label(new Rect(8,y+35,width-8,56),CellEvolution.Changes(child.Biology),micro);y+=96;
+            }
+            if(hasCell&&agent.Alive) {
+                var w=water.World;int root=w.OrganismRoot(water.SelectedIndex);int size=w.OrganismSize(water.SelectedIndex);
+                GUI.Label(new Rect(6,y,width,32),"Организм · "+size+" клеток",title);y+=38;
+                bool own=w.Controlled==water.SelectedIndex;
+                if(Button(new Rect(6,y,width,34),w.ControlColony?"Управление целым организмом":"Управление выбранной клеткой",
+                    "Целый организм: общий курс. Одна клетка: её вклад в курс пропорционален массе.",w.ControlColony,own))w.ControlColony=!w.ControlColony;
+                y+=42;
+                string connection=w.ConnectionBlock(water.SelectedIndex);
+                if(Button(new Rect(6,y,width,34),"Следующий потомок: оставить соединённым · +0.30 энергии",connection??"Связь оплачивается только при успешном рождении",agent.PlannedConnection==BirthConnection.Retain,own&&connection==null))w.PlanConnection(BirthConnection.Retain);
+                y+=40;
+                if(Button(new Rect(6,y,width,34),"Следующий потомок: отделить","Самостоятельная жизнь без платы за связь",agent.PlannedConnection==BirthConnection.Separate,own))w.PlanConnection(BirthConnection.Separate);
+                y+=40;
+                if(Button(new Rect(6,y,width,34),"Отсоединить выбранную ветвь","Связь с родителем разрывается. Живые дочерние клетки остаются с этой клеткой.",false,own&&w.BondParent(water.SelectedIndex)>=0))w.Detach(water.SelectedIndex);
+                y+=42;
+                float reserve=0,capacity=0;for(int i=0;i<w.Count;i++)if(w.Get(i).Alive&&w.OrganismRoot(i)==root){reserve+=w.Get(i).Biology.Energy;capacity+=Biology.Capacity(w.Get(i).Biology.Genes);}
+                GUI.Label(new Rect(6,y,width,52),"Общий запас: "+reserve.ToString("F1")+" / "+capacity.ToString("F1")+" · транспорт теряет 5%\nПитание, движение и защита требуют энергии. Связи ограничены геномом и пространством.",micro);y+=60;
+                for(int i=0;i<w.Count;i++)if(w.Get(i).Alive&&w.OrganismRoot(i)==root) {
+                    var member=w.Get(i).Biology;
+                    if(Button(new Rect(6,y,width,32),"Перейти к клетке "+member.Id+" · "+ColonyRoleName(member.Role))) {water.Choose(i,false);water.PlaySelected();}
+                    GUI.Label(new Rect(8,y+34,width-8,30),"Запас "+member.Energy.ToString("F1")+" · баланс шага "+member.Budget.Net.ToString("+0.00;-0.00;0.00")+" · обмен "+member.Budget.Transport.ToString("+0.00;-0.00;0.00"),micro);y+=72;
+                }
+                y+=16;
             }
             if(hasCell||water.EvolutionPlay.Fallen.HasValue) {
                 GUI.Label(new Rect(6,y,width,32),"Поколение "+c.Generation+" · линия "+c.LineageId,title);y+=36;

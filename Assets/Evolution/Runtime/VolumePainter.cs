@@ -92,9 +92,18 @@ namespace Evolution.Runtime
                     bodies.Opacity=threads.Opacity=vesicles.Opacity=1;
                     bool detailed=distance<14&&(i==selected||near<12);if(detailed&&i!=selected)near++;
                     float detail=detailed?1-WaterOptics.SmoothRange(10,14,distance):0;
-                    var c=a.Biology;var g=c.Genes;int phaseId=c.Id%997;var form=CrystalForms.From(g);
+                    var c=a.Biology;var g=c.Genes;int phaseId=(c.ColonyId!=0?c.ColonyId:c.Id)%997;var form=CrystalForms.From(g);
                     var traits=new Vector4(g.Photosynthesis,g.Predation,g.Membrane,Mathf.Repeat(phaseId*.618f,1));
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
+                    if(c.Specialization>0) {
+                        Color role=c.Role==CellRole.Feeding?new Color(.45f,1,.65f,membrane.a):c.Role==CellRole.Movement?new Color(.4f,.8f,1,membrane.a):c.Role==CellRole.Defense?new Color(.9f,.72f,.42f,membrane.a):membrane;
+                        membrane=Color.Lerp(membrane,role,c.Specialization*.65f);
+                    }
+                    int parent=world.BondParent(i);
+                    if(a.Alive&&parent>=0) {
+                        Pose(world,world.Get(parent),t,out Vector3 anchor,out _,out _);
+                        Segment(anchor,p,.065f*size,Color.Lerp(new Color(.35f,.65f,.85f),new Color(.6f,1,.8f),Mathf.Clamp01(Mathf.Abs(c.TransportLastStep)*10)));
+                    }
                     if(c.DamageLastStep>0)membrane=Color.Lerp(membrane,new Color(1,.42f,.48f,.3f),.45f);
                     float divisionAge=a.DivisionAt>0?(float)((time-a.DivisionAt)/VolumeWorld.DivisionSeconds):-1;
                     // Daughter shells remain whole: a single shared neck represents fission.
@@ -127,15 +136,15 @@ namespace Evolution.Runtime
                     float phase=(float)(visual.Phase%(Mathf.PI*40));
                     DrawInterior(world,a,form,p,rotation,size,traits,phase);
                     Color fibre=new Color(.42f,.68f,.81f);
-                    if(g.Speed>.8f) {
+                    if(g.Speed>.8f||c.Role==CellRole.Movement&&c.Specialization>.1f) {
                         Vector3 root=CrystalMeshes.Point(form,new Vector3(-.5f,0,0)),last=p+rotation*root*size;
-                        for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*(.65f+.3f*g.Speed),
+                        for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*(.65f+.3f*g.Speed)*(1+(c.Role==CellRole.Movement?c.Specialization:0)),
                             Mathf.Cos(phase-u*8)*u*.035f,Mathf.Sin(phase-u*8)*u*(.015f+visual.Drive*.08f)))*size;
                             Segment(last,next,.010f*size*(1-u*.65f),fibre);last=next;}
                     }
                     if(g.Uptake>1.05f)DrawCilia(form,p,rotation,size,phase,visual.Drive,fibre);
                     if(form==CrystalForm.Diatom)DrawDiatomRibs(p,rotation,size);
-                    if(form==CrystalForm.Radiolarian)for(int j=0;j<14;j++) {
+                    if(form==CrystalForm.Radiolarian||c.Role==CellRole.Defense&&c.Specialization>.3f)for(int j=0;j<14;j++) {
                         Vector3 n=Fibonacci(j,14);Vector3 root=CrystalMeshes.Point(form,n*.5f)*size;
                         Segment(p+rotation*root,p+rotation*(root+n*.22f*size),.014f*size,new Color(.8f,.9f,1));
                     }

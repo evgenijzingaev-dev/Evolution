@@ -299,7 +299,7 @@ namespace Evolution.Runtime
         }
         void DrawCell()
         {
-            var r=Right;Box(r,Detail==HudDetail.Scientific?"Научные данные":water.SelectedIndex>=0?"Клетка · поколение "+water.World.Get(water.SelectedIndex).Biology.Generation:"Твоя клетка");
+            var r=Right;Box(r,Detail==HudDetail.Scientific?"Научные данные":water.SelectedIndex>=0?"Организм · "+water.World.OrganismSize(water.SelectedIndex)+" клеток":"Твоя клетка");
             if(water.SelectedIndex<0){DrawFamilyRecovery(r);return;}
             var a=water.World.Get(water.SelectedIndex);var c=a.Biology;
             if(!a.Alive){DrawFamilyRecovery(r);return;}
@@ -311,10 +311,10 @@ namespace Evolution.Runtime
             Row(r,2,"Питание",readout.Nutrition,"Возможное усвоение ближайшей доступной пищи за секунду относительно базового расхода клетки.");
             Row(r,3,"Температура",readout.Temperature,"Комфорт определяется эффективностью обмена с учётом любимой температуры и устойчивости клетки.");
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
-            Row(r,5,"Свет",readout.Illumination,"Доступность света в этой точке воды; особенно важна для фотосинтеза.");
+            Row(r,5,"Роль",ColonyRoleName(c.Role),"Специализация: "+(c.Specialization*100).ToString("F0")+"%. Управление, связи и общий запас — в панели развития.");
             GUI.Label(new Rect(r.x+16,r.y+252,r.width-32,58),CellEvolution.EnergyReason(water.World,water.SelectedIndex),micro);
             var children=CellEvolution.Offspring(water.World,water.EvolutionPlay.Identity);
-            if(Button(new Rect(r.x+12,r.y+314,r.width-24,32),children.Count>0?"Потомки: "+children.Count+" · выбрать · Y":"Сравнить наследование"))SetPage(HudPage.Development);
+            if(Button(new Rect(r.x+12,r.y+314,r.width-24,32),children.Count>0?"Потомки: "+children.Count+" · выбрать · Y":"Организм / наследование"))SetPage(HudPage.Development);
         }
         void DrawScience(Rect r,VolumeAgent a)
         {
