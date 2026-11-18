@@ -1,6 +1,6 @@
 Shader "Evolution/MicroHabitat"
 {
-    Properties { _InstanceColor("Color", Color) = (0.1,0.3,0.3,1) }
+    Properties { _Resources("Resource field", 2D) = "white" {} }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" }
@@ -10,29 +10,26 @@ Shader "Evolution/MicroHabitat"
             #pragma target 3.5
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            UNITY_INSTANCING_BUFFER_START(Props)
-                UNITY_DEFINE_INSTANCED_PROP(float4, _InstanceColor)
-            UNITY_INSTANCING_BUFFER_END(Props)
-            struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 world : TEXCOORD1; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            float _Temperature;
+            #include "OceanWater.hlsl"
+            TEXTURE2D(_Resources); SAMPLER(sampler_Resources);
+            struct Attributes { float4 positionOS : POSITION; };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 world : TEXCOORD0; };
+            float _Temperature, _WorldSize;
             Varyings Vert(Attributes input) {
-                Varyings o; UNITY_SETUP_INSTANCE_ID(input); UNITY_TRANSFER_INSTANCE_ID(input, o);
-                o.world = TransformObjectToWorld(input.positionOS.xyz); o.positionCS = TransformWorldToHClip(o.world);
-                o.uv = input.positionOS.xz + .5; return o;
+                Varyings o; o.world = TransformObjectToWorld(input.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(o.world); return o;
             }
             half4 Frag(Varyings i) : SV_Target {
-                UNITY_SETUP_INSTANCE_ID(i);
-                half4 data = UNITY_ACCESS_INSTANCED_PROP(Props, _InstanceColor);
-                float2 p = i.uv * 2 - 1;
-                float pool = saturate(1 - dot(p,p) * .7);
-                float caustic = pow(saturate(sin(i.world.x * 1.8 + sin(i.world.z * 1.3)) * sin(i.world.z * 2.1 - i.world.x * .4)), 5);
-                half3 water = lerp(half3(.014,.055,.10), half3(.09,.045,.065), saturate(_Temperature / 50));
-                half3 nutrient = half3(.035,.22,.17) * data.r * (.35 + pool * .65);
-                half3 remains = half3(.2,.10,.035) * data.g * pool;
-                return half4(water + nutrient + remains + caustic * .025, 1);
+                float2 p = i.world.xz, flow = float2(_OceanTime * .018, _OceanTime * .011);
+                half3 food = SAMPLE_TEXTURE2D(_Resources, sampler_Resources, p / _WorldSize).rgb;
+                float n = OceanNoise(p * .14 + flow), detail = OceanNoise(p * .37 - flow);
+                float light = pow(saturate(sin(p.x * .21 + sin(p.y * .19) + _OceanTime * .09)), 12);
+                half3 water = lerp(half3(.025,.10,.17),half3(.045,.24,.27), n);
+                water += half3(.03,.09,.055) * food.r * detail + half3(.10,.065,.018) * food.g;
+                water = lerp(water, water * half3(1.25,1,.8), food.b * .4);
+                water += light * half3(.035,.075,.065) + saturate(_Temperature / 50) * half3(.015,.012,0);
+                return half4(OceanFog(water, i.world),1);
             }
             ENDHLSL
         }

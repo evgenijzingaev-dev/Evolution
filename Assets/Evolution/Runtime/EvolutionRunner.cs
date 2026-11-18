@@ -6,15 +6,15 @@ namespace Evolution.Runtime
     public sealed partial class EvolutionRunner : MonoBehaviour
     {
         public int Seed = 42;
+        public bool LivingOcean = true;
         public SimulationConfig Settings = new SimulationConfig();
         Simulation simulation;
         OrganismRenderer organismRenderer;
         SimulationConfig activeSettings;
-        Mesh mesh, habitat;
-        Material cellsMaterial, membraneMaterial, foodMaterial;
-        readonly Matrix4x4[] matrices = new Matrix4x4[1023];
-        readonly Vector4[] colors = new Vector4[1023];
-        MaterialPropertyBlock properties;
+        Mesh mesh, habitat, membraneMesh;
+        Material cellsMaterial, membraneMaterial;
+        OceanRenderer ocean;
+        OceanLook oceanLook;
         Camera view;
         MicroscopeCamera rig;
         GameObject ownedCamera;
@@ -30,21 +30,22 @@ namespace Evolution.Runtime
         public bool IsPaused { get => paused; set => paused = value; }
         void Start()
         {
-            mesh = MicroMeshes.Cell(); habitat = MicroMeshes.Habitat();
-            cellsMaterial = MakeMaterial("InstancedCells"); membraneMaterial = MakeMaterial("CellMembrane"); foodMaterial = MakeMaterial("MicroHabitat");
-            properties = new MaterialPropertyBlock();
+            mesh = MicroMeshes.Cell(); membraneMesh = MicroMeshes.Cell(16, 24); habitat = MicroMeshes.Habitat();
+            cellsMaterial = MakeMaterial("InstancedCells"); membraneMaterial = MakeMaterial("CellMembrane");
             view = Camera.main;
             if (!view) { ownedCamera = new GameObject("Microscope Camera", typeof(Camera)); view = ownedCamera.GetComponent<Camera>(); view.tag = "MainCamera"; }
-            view.backgroundColor = new Color(.012f, .038f, .065f); view.clearFlags = CameraClearFlags.SolidColor;
+            view.backgroundColor = new Color(.035f, .19f, .23f); view.clearFlags = CameraClearFlags.SolidColor;
+            oceanLook = new OceanLook(transform, view); oceanLook.Apply(cellsMaterial); oceanLook.Apply(membraneMaterial);
             rig = gameObject.AddComponent<MicroscopeCamera>();
             ResetWorld();
         }
         static Material MakeMaterial(string resource) => new Material(Resources.Load<Shader>(resource)) { enableInstancing = true };
         public void ResetWorld()
         {
-            activeSettings = Settings.Copy();
+            activeSettings = Settings.Copy(); activeSettings.OceanZones = LivingOcean;
             simulation = new Simulation(activeSettings, unchecked((uint)Seed)); accumulator = visualTime = 0;
-            organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity);
+            organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
+            ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
             pendingTemperature = activeSettings.Temperature; pendingFood = activeSettings.NutrientRegeneration; environmentPending = false;
         }
@@ -114,41 +115,11 @@ namespace Evolution.Runtime
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
             organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 0 : Time.unscaledDeltaTime);
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
-            rig.Tick(overUI); RenderHabitat(); RenderSuspension();
-        }
-        void RenderHabitat()
-        {
-            int total = activeSettings.GridSize * activeSettings.GridSize;
-            float width = activeSettings.WorldSize / activeSettings.GridSize;
-            properties.SetFloat("_Temperature", simulation.Temperature);
-            for (int start = 0; start < total; start += matrices.Length) {
-                int count = Mathf.Min(matrices.Length, total - start);
-                for (int j = 0; j < count; j++) {
-                    int i = start + j;
-                    matrices[j] = Matrix4x4.TRS(new Vector3((i % activeSettings.GridSize + .5f) * width, -.15f, (i / activeSettings.GridSize + .5f) * width),
-                        Quaternion.identity, new Vector3(width, 1, width));
-                    colors[j] = new Vector4(simulation.GetNutrient(i) / activeSettings.NutrientCapacity, 1 - Mathf.Exp(-simulation.GetOrganicEnergy(i) / 8), 0, 1);
-                }
-                properties.SetVectorArray("_InstanceColor", colors);
-                Graphics.DrawMeshInstanced(habitat, 0, foodMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
-            }
-        }
-        void RenderSuspension()
-        {
-            const int count = 128;
-            float world = activeSettings.WorldSize, time = (float)visualTime;
-            for (int i = 0; i < count; i++) {
-                float x = Mathf.Repeat(i * 7.137f + time * .03f, world), z = Mathf.Repeat(i * 11.319f + time * .015f, world);
-                float height = .2f + Mathf.Repeat(i * .719f, 5);
-                matrices[i] = Matrix4x4.TRS(new Vector3(x, height, z), Quaternion.identity, Vector3.one * (.018f + (i % 3) * .012f));
-                colors[i] = new Color(.16f, .35f, .4f);
-            }
-            properties.SetVectorArray("_InstanceColor", colors); properties.SetFloat("_WorldSize", world);
-            Graphics.DrawMeshInstanced(mesh, 0, cellsMaterial, matrices, count, properties, ShadowCastingMode.Off, false);
+            rig.Tick(overUI); ocean.Draw(simulation, view, (float)visualTime);
         }
         void OnDestroy()
         {
-            Destroy(mesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); Destroy(foodMaterial);
+            Destroy(mesh); Destroy(membraneMesh); Destroy(habitat); Destroy(cellsMaterial); Destroy(membraneMaterial); ocean?.Dispose(); oceanLook?.Dispose();
             Destroy(panelTexture); Destroy(hudSkin); if (ownedCamera) Destroy(ownedCamera);
         }
     }

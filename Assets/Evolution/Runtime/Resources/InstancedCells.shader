@@ -1,42 +1,43 @@
 Shader "Evolution/InstancedCells"
 {
-    Properties { _InstanceColor("Color", Color) = (0.2,0.8,0.5,1) }
+    Properties {
+        _InstanceColor("Color", Color) = (0.2,0.8,0.5,1)
+        _MicroTex("Cytoplasm", 2D) = "gray" {}
+        _MicroNormal("Microrelief", 2D) = "bump" {}
+    }
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque" }
         Pass
         {
+            Tags { "LightMode"="UniversalForward" }
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "CellSurface.hlsl"
             UNITY_INSTANCING_BUFFER_START(Props)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _InstanceColor)
             UNITY_INSTANCING_BUFFER_END(Props)
-            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; float3 positionWS : TEXCOORD1; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 tangentOS : TANGENT; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; float3 positionWS : TEXCOORD1; float4 tangentWS : TEXCOORD2; float2 uv : TEXCOORD3; UNITY_VERTEX_INPUT_INSTANCE_ID };
             float _WorldSize;
             Varyings Vert(Attributes input) {
-                Varyings output; UNITY_SETUP_INSTANCE_ID(input); UNITY_TRANSFER_INSTANCE_ID(input, output);
-                output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
-                output.normalWS = TransformObjectToWorldNormal(input.normalOS); return output;
+                Varyings o; UNITY_SETUP_INSTANCE_ID(input); UNITY_TRANSFER_INSTANCE_ID(input, o);
+                o.positionWS = TransformObjectToWorld(input.positionOS.xyz); o.positionCS = TransformWorldToHClip(o.positionWS);
+                o.normalWS = TransformObjectToWorldNormal(input.normalOS);
+                o.tangentWS = float4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w * GetOddNegativeScale()); o.uv = input.uv; return o;
             }
-            half4 Frag(Varyings input) : SV_Target {
-                UNITY_SETUP_INSTANCE_ID(input);
-                if (_WorldSize > 0) {
-                    clip(input.positionWS.x); clip(input.positionWS.z);
-                    clip(_WorldSize - input.positionWS.x); clip(_WorldSize - input.positionWS.z);
-                }
-                half3 n = normalize(input.normalWS);
-                half diffuse = saturate(dot(n, normalize(float3(.3,1,-.4))));
-                half lighting = .32 + .55 * smoothstep(.05, .75, diffuse);
-                half3 eye = normalize(GetCameraPositionWS() - input.positionWS);
-                half rim = pow(1 - saturate(dot(n, eye)), 3) * .22;
-                half shine = pow(saturate(dot(n, normalize(eye + normalize(float3(.3,1,-.4))))), 28) * .25;
-                return half4(UNITY_ACCESS_INSTANCED_PROP(Props, _InstanceColor).rgb * (lighting + rim) + shine, 1);
+            half4 Frag(Varyings i) : SV_Target {
+                UNITY_SETUP_INSTANCE_ID(i);
+                if (_WorldSize > 0) { clip(i.positionWS.x); clip(i.positionWS.z); clip(_WorldSize - i.positionWS.x); clip(_WorldSize - i.positionWS.z); }
+                half3 structure = SAMPLE_TEXTURE2D(_MicroTex,sampler_MicroTex,i.uv * float2(3,2)).rgb;
+                half3 n = CellNormal(i.uv,i.normalWS,i.tangentWS);
+                half3 albedo = UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor).rgb * (.7 + structure.r * .55);
+                half4 lit = CellLighting(i.positionWS,n,albedo,.55 + structure.g * .25,.04);
+                return half4(OceanFog(lit.rgb,i.positionWS),1);
             }
             ENDHLSL
         }
