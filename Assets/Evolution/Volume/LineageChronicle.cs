@@ -55,12 +55,10 @@ namespace Evolution.Volume
                 var a = world.Get(controlled);
                 if (founderGeneration == int.MinValue && a.Alive && !string.IsNullOrEmpty(a.Identity)) {
                     dynasty.Add(a.Identity);
-                    {
-                        founderIdentity = a.Identity;
-                        founderGeneration = a.Biology.Generation;
-                        deepestGeneration = a.Biology.Generation;
-                        startedAt = world.Time;
-                    }
+                    founderIdentity = a.Identity;
+                    founderGeneration = a.Biology.Generation;
+                    deepestGeneration = a.Biology.Generation;
+                    startedAt = world.Time;
                 }
             }
             if (dynasty.Count == 0) return false;
