@@ -90,6 +90,15 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void HudExplainsFoundersOriginalHabitatWithoutChangingNicheRules()
+        {
+            Assert.AreEqual("светлая вода", LineageChallenge.NicheName(1));
+            Assert.AreEqual("темнота", LineageChallenge.NicheName(2));
+            Assert.AreEqual("термальный источник", LineageChallenge.NicheName(3));
+            Assert.AreEqual("переходная вода", LineageChallenge.NicheName(0));
+        }
+
+        [Test]
         public void NicheVictoryRequiresLivingDescendantWithEnergyInDifferentEnvironment()
         {
             var sun = new NicheSample { Light = .8f, Temperature = 23 };
