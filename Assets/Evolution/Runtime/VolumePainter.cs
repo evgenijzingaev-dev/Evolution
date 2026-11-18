@@ -114,7 +114,7 @@ namespace Evolution.Runtime
                         // Real residents keep a small internal silhouette at medium distance.
                         if(a.Alive&&distance<30)for(int j=0;j<3;j++) {
                             Vector3 local=CrystalMeshes.Point(form,Fibonacci(j,3)*.22f)*size;
-                            Color pigment=g.Photosynthesis>.4f?new Color(.4f,.72f,.40f):new Color(.88f,.61f,.32f);
+                            Color pigment=Color.Lerp(new Color(.88f,.61f,.32f),new Color(.4f,.72f,.40f),g.Photosynthesis);
                             bodies.Add(p+rotation*local,rotation,Vector3.one*size*.14f,pigment,traits);
                         }
                         bodies.Opacity=1;if(!detailed||!a.Alive)continue;
@@ -129,7 +129,7 @@ namespace Evolution.Runtime
                     Color fibre=new Color(.42f,.68f,.81f);
                     if(g.Speed>.8f) {
                         Vector3 root=CrystalMeshes.Point(form,new Vector3(-.5f,0,0)),last=p+rotation*root*size;
-                        for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*.95f,
+                        for(int j=1;j<=14;j++) {float u=j/14f;Vector3 next=p+rotation*(root+new Vector3(-u*(.65f+.3f*g.Speed),
                             Mathf.Cos(phase-u*8)*u*.035f,Mathf.Sin(phase-u*8)*u*(.015f+visual.Drive*.08f)))*size;
                             Segment(last,next,.010f*size*(1-u*.65f),fibre);last=next;}
                     }
@@ -221,7 +221,7 @@ namespace Evolution.Runtime
                 float radius=.22f+.17f*Mathf.Repeat(granule*.381966f,1);
                 Vector3 point=CrystalMeshes.Point(form,Fibonacci(granule,36)*radius)*size;
                 float grainSize=(.025f+.018f*Mathf.Repeat(granule*.618034f,1))*size;
-                Color tint=granule%4==0?new Color(.86f,.70f,.39f):new Color(.40f,.65f,.70f);
+                Color tint=Color.Lerp(new Color(.40f,.65f,.70f),new Color(.86f,.70f,.39f),granule%4==0?1:g.OrganicSpecialization);
                 bodies.Add(p+rotation*point,rotation,Vector3.one*grainSize,tint,traits);
             }
             int count=8+(int)(g.Photosynthesis*7);

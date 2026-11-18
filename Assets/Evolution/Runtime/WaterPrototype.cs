@@ -20,6 +20,7 @@ namespace Evolution.Runtime
         public FriendlyOceanHud Hud {get;private set;}
         Vector3? moveTarget;
         public int SelectedIndex=>selected;
+        public CellLineagePlay EvolutionPlay {get;}=new CellLineagePlay();
         public bool Paused {get;set;}
         public Camera Lens {get;private set;}
         public ChunkOcean Ocean {get;private set;}
@@ -59,13 +60,22 @@ namespace Evolution.Runtime
             int result=World.Count>0?Ocean.Nearest(best==null?default:best.Center):-1;
             return result;
         }
-        public bool PlaySelected() {if(!Selection.Alive)return false;bool overview=Overview!=null&&Overview.Active;Overview?.EnterCellPlay();World.Controlled=selected;following=true;if(overview)Rig.FocusOn(VolumePainter.V(Selection.Position),Mathf.Clamp(Selection.Biology.Genes.Size*3,2.8f,8));return true;}
+        public bool PlaySelected() {if(!Selection.Alive)return false;bool overview=Overview!=null&&Overview.Active;Overview?.EnterCellPlay();EvolutionPlay.TakeControl(World,selected);moveTarget=null;following=true;if(overview)Rig.FocusOn(VolumePainter.V(Selection.Position),Mathf.Clamp(Selection.Biology.Genes.Size*3,2.8f,8));return true;}
+        public bool FollowOffspring(int index=-1)
+        {
+            if(!EvolutionPlay.FollowOffspring(World,index))return false;
+            selected=World.Controlled;moveTarget=null;World.Input=default;World.Boost=World.Attack=false;
+            Overview?.EnterCellPlay();following=true;
+            Rig.FocusOn(VolumePainter.V(Selection.Position),Mathf.Clamp(Selection.Biology.Genes.Size*3,2.8f,8));
+            Hud?.RefreshNow();return true;
+        }
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
         void Update()
         {
             if(World==null)return;
+            bool modal=HudVisible&&Hud!=null&&Hud.CapturesCommands;
             bool over=HudVisible&&Hud!=null&&Hud.OverUi(Input.mousePosition);
             if(Input.GetKeyDown(KeyCode.F1))Hud.HelpVisible=!Hud.HelpVisible;
             if(Input.GetKeyDown(KeyCode.F2))Hud.CycleDetail();
@@ -73,16 +83,17 @@ namespace Evolution.Runtime
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
             if(Input.GetKeyDown(KeyCode.Escape)){if(Hud.CloseOverlay()){}else if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Home))Overview.Home();
-            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
-            else if(!Overview.Typing&&Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
-            if(!over&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Tab)&&World.Controlled<0){if(!Overview.Active)Overview.Enter();Overview.SetMode(!Overview.Analytical);}
+            else if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Tab))for(int n=1;n<=World.Count;n++) {int candidate=(selected+n)%World.Count;if(World.Get(candidate).Alive){Select(candidate);break;}}
+            if(!over&&!modal&&Input.GetMouseButtonDown(0)&&OrganismsVisible) {
                 if(Overview.Active)Overview.Click(Input.mousePosition);
                 else {int picked=PickOrganism(Input.mousePosition);if(picked>=0){Select(picked);moveTarget=null;}
                     else if(World.Controlled>=0) {var plane=new Plane(-Lens.transform.forward,VolumePainter.V(Selection.Position));var ray=Lens.ScreenPointToRay(Input.mousePosition);if(plane.Raycast(ray,out float along))moveTarget=ray.GetPoint(along);}}
             }
             World.Input=default;World.Boost=World.Attack=false;
-            if(!Overview.Typing&&!Paused&&Input.GetKeyDown(KeyCode.R))World.RequestDivision();
-            if(World.Controlled>=0&&!Paused&&!over&&Application.isFocused) {
+            if(!Overview.Typing&&!modal&&!Paused&&Input.GetKeyDown(KeyCode.R))World.RequestDivision();
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Y))FollowOffspring();
+            if(World.Controlled>=0&&!Paused&&!over&&!modal&&Application.isFocused) {
                 Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
                 if(command.sqrMagnitude>.001f)moveTarget=null;
@@ -94,11 +105,11 @@ namespace Evolution.Runtime
             if(following&&OrganismsVisible&&Selection.Alive)Rig.Follow(VolumePainter.V(Selection.Position));
             Rig.Tick(over||Overview.Typing,following);
             string identity=Selection.Identity;
-            if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0){selected=World.Count>0?Ocean.Nearest(VolumePainter.V(Lens.transform.position)):-1;following=false;}}
+            if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0)following=false;}
             if(!Paused)accumulator+=Time.unscaledDeltaTime;
             int steps=0;
             while(!Paused&&accumulator>=VolumeWorld.StepSeconds&&steps++<8) {
-                World.Step();int count=OrganismsVisible?NearestFlows():0;
+                World.Step();EvolutionPlay.RecordStep(World);int count=OrganismsVisible?NearestFlows():0;
                 Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);accumulator-=VolumeWorld.StepSeconds;
             }
             if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);

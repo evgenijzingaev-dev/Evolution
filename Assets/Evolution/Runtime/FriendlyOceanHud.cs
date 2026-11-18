@@ -12,12 +12,13 @@ namespace Evolution.Runtime
 
     // A real Unity IMGUI overlay. Textures below are only reusable rounded chrome;
     // all labels, bars, map points and interactions are driven by the live world.
-    public sealed class FriendlyOceanHud : MonoBehaviour
+    public sealed partial class FriendlyOceanHud : MonoBehaviour
     {
         WaterPrototype water;
         VolumeWorld readWorld;int readIndex=-2;
         public HudDetail Detail;
         public bool HelpVisible, AttackRequested;
+        public bool CapturesCommands=>development||settings||HelpVisible||journal;
         public HudPage Page => development ? HudPage.Development : water.Overview.Active ? HudPage.Overview : HudPage.Cell;
         bool development, settings, journal;
         float requestedScale=1, nextRead, transition, mapRange=45, shownEnergy;
@@ -41,13 +42,13 @@ namespace Evolution.Runtime
         float H => Screen.height/Scale;
         Rect Top => new Rect(18,14,W-36,58);
         Rect Left => new Rect(18,90,272,Page==HudPage.Overview?264:170);
-        Rect Right => new Rect(W-310,264,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-372):300);
+        Rect Right => new Rect(W-310,264,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-372):356);
         Rect MapBox => new Rect(18,H-310,272,238);
         Rect Actions => new Rect(W/2-258,H-154,516,80);
         Rect Footer => new Rect(18,H-58,W-36,42);
         Rect SettingsBox => new Rect(W-326,80,308,158);
-        Rect HelpBox => new Rect(W-326,80,308,158);
-        Rect DevelopmentBox => new Rect(W/2-270,102,540,Mathf.Min(420,H-286));
+        Rect HelpBox => new Rect(W-326,80,308,190);
+        Rect DevelopmentBox => new Rect(W/2-320,90,640,Mathf.Min(480,H-320));
         Rect ObserverBox => new Rect(306,90,W-632,116);
         Rect ToastBox => new Rect(W-310,88,292,162);
         public bool ThreatMarkerVisible { get; private set; }
@@ -72,7 +73,7 @@ namespace Evolution.Runtime
             development=page==HudPage.Development;transition=0;AttackRequested=false;
             if(page==HudPage.Cell)water.PlaySelected();
             else if(page==HudPage.Overview){water.Overview.Enter();water.Overview.SetMode(false);}
-            else water.Observe();
+            // Development keeps control; modal input blocks swimming/R, while ecology continues.
         }
         // Input hit areas must match visible overlays: otherwise invisible panels block
         // picking organisms and issuing movement commands in the 3D ocean.
@@ -107,7 +108,7 @@ namespace Evolution.Runtime
         {
             var p=new Vector2(pixels.x/Scale,(Screen.height-pixels.y)/Scale);
             return Top.Contains(p)||Left.Contains(p)||Right.Contains(p)||MapBox.Contains(p)||Actions.Contains(p)||Footer.Contains(p)||
-                ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||
+                ((settings&&SettingsBox.Contains(p))||(HelpVisible&&HelpBox.Contains(p)))||(development&&DevelopmentBox.Contains(p))||
                 OverVisibleNotice(p)||OverObserverButton(p);
         }
         void Update()
@@ -128,6 +129,17 @@ namespace Evolution.Runtime
             if(water.SelectedIndex>=0){var a=water.World.Get(water.SelectedIndex);
                 if(identity!=a.Identity){identity=a.Identity;assimilated=a.Biology.AssimilatedEnergy;AttackRequested=false;}
                 else if(a.Biology.AssimilatedEnergy>assimilated+.01){Notify("food","Организм получил энергию","Пища усваивается автоматически рядом с источником",false);assimilated=a.Biology.AssimilatedEnergy;}
+            }
+            string ownBirth=water.World.LastOffspringIdentity;
+            if(ownBirth!=null&&ownBirth!=lastOwnBirth) {
+                int child=water.Ocean.Find(ownBirth);
+                if(child>=0&&CellEvolution.ParentIdentity(water.World.Get(child))==water.EvolutionPlay.Identity) {
+                    Notify("own-birth","Родился твой потомок","Y — играть за него; «Развитие» — сравнить и выбрать",false);lastOwnBirth=ownBirth;
+                }
+            }
+            if(water.EvolutionPlay.Fallen.HasValue&&water.EvolutionPlay.Fallen.Value.Identity!=lastOwnDeath) {
+                lastOwnDeath=water.EvolutionPlay.Fallen.Value.Identity;
+                Notify("own-death","Твоя клетка погибла","Причина показана в карточке. Потомок может продолжить линию.",true);
             }
             if(readout.Threat>=0)Notify("danger","Рядом опасность!","Хищник в зоне чувствительности",true);
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
@@ -287,9 +299,10 @@ namespace Evolution.Runtime
         }
         void DrawCell()
         {
-            var r=Right;Box(r,Detail==HudDetail.Scientific?"Научные данные":"Твоя клетка");
-            if(water.SelectedIndex<0){Label(r.x+16,r.y+60,260,"Выбери живой организм");return;}
+            var r=Right;Box(r,Detail==HudDetail.Scientific?"Научные данные":water.SelectedIndex>=0?"Клетка · поколение "+water.World.Get(water.SelectedIndex).Biology.Generation:"Твоя клетка");
+            if(water.SelectedIndex<0){DrawFamilyRecovery(r);return;}
             var a=water.World.Get(water.SelectedIndex);var c=a.Biology;
+            if(!a.Alive){DrawFamilyRecovery(r);return;}
             if(Detail==HudDetail.Scientific){DrawScience(r,a);return;}
             Row(r,0,"Энергия",Mathf.RoundToInt(readout.Energy*100)+"%","Запас энергии / вместимость клетки. Движение расходует энергию.");
             Fill(new Rect(r.x+16,r.y+91,r.width-32,5),new Color(.12f,.25f,.3f));
@@ -299,10 +312,9 @@ namespace Evolution.Runtime
             Row(r,3,"Температура",readout.Temperature,"Комфорт определяется эффективностью обмена с учётом любимой температуры и устойчивости клетки.");
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
             Row(r,5,"Свет",readout.Illumination,"Доступность света в этой точке воды; особенно важна для фотосинтеза.");
-            int offspring=water.Ocean.Find(water.World.LastOffspringIdentity);
-            if(offspring>=0&&water.World.Get(offspring).Alive&&water.World.Get(offspring).Identity.StartsWith(a.Identity+"/b",StringComparison.Ordinal)) {
-                if(Button(new Rect(r.x+12,r.y+252,r.width-24,36),"Наблюдать потомка")){water.Select(offspring);return;}
-            } else GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":water.World.DivisionBlock(water.SelectedIndex)??"Можно разделиться · R",micro);
+            GUI.Label(new Rect(r.x+16,r.y+252,r.width-32,58),CellEvolution.EnergyReason(water.World,water.SelectedIndex),micro);
+            var children=CellEvolution.Offspring(water.World,water.EvolutionPlay.Identity);
+            if(Button(new Rect(r.x+12,r.y+314,r.width-24,32),children.Count>0?"Потомки: "+children.Count+" · выбрать · Y":"Сравнить наследование"))SetPage(HudPage.Development);
         }
         void DrawScience(Rect r,VolumeAgent a)
         {
@@ -341,10 +353,12 @@ namespace Evolution.Runtime
             string divisionTip=blocked??"Рождение самостоятельного потомка";
             if(water.SelectedIndex>=0) {
                 var c=water.World.Get(water.SelectedIndex).Biology;
-                float construction=Biology.StructureEnergy(c.Genes)+Biology.BirthOverhead(c.Genes);
+                float developmentFee=CellEvolution.Cost(c,water.World.Get(water.SelectedIndex).PlannedDevelopment);
+                var expectedGenes=CellEvolution.Template(c.Genes,water.World.Get(water.SelectedIndex).PlannedDevelopment);
+                float construction=Biology.StructureEnergy(expectedGenes)+Biology.BirthOverhead(expectedGenes);
                 float provision=Mathf.Max(c.Energy,water.World.DivisionThreshold(water.SelectedIndex));
-                float cost=construction+Mathf.Min((provision-construction)*.5f,Biology.Capacity(c.Genes)*.5f);divisionCost=cost;
-                divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка.";
+                float cost=developmentFee+construction+Mathf.Min((provision-developmentFee-construction)*.5f,Biology.Capacity(c.Genes)*.5f);divisionCost=cost;
+                divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка. Развитие: +"+developmentFee.ToString("F1")+".";
             }
             if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
             if(water.SelectedIndex>=0) {
@@ -352,7 +366,7 @@ namespace Evolution.Runtime
                 Box(energyInfo);
                 GUI.Label(new Rect(energyInfo.x+8,energyInfo.y+3,energyInfo.width-16,40),"Нужно "+water.World.DivisionThreshold(water.SelectedIndex).ToString("F1")+" · Расход ≈ "+divisionCost.ToString("F1")+" энергии\n"+(blocked??"Готово · R"),muted);
             }
-            if(Action(new Rect(r.x+416,r.y,cell,76),4,"Развитие","Просмотреть наследуемые черты",development))SetPage(HudPage.Development);
+            if(Action(new Rect(r.x+416,r.y,cell,76),4,"Развитие","Выбрать наследуемое развитие, сравнить геном и перейти к своему потомку",development))SetPage(HudPage.Development);
         }
         void DrawFooter()
         {
@@ -394,19 +408,6 @@ namespace Evolution.Runtime
             if(Button(new Rect(r.x+181,r.y+198,35,30),"+","Выше на 20"))water.Overview.SetSlice(false,water.Overview.SliceIndex+1);
             if(Button(new Rect(r.x+220,r.y+198,40,30),"×2","Масштаб карты; колесо над картой"))mapRange=mapRange>100?25:mapRange*2;
         }
-        void DrawDevelopment()
-        {
-            var r=DevelopmentBox;Box(r,"Развитие твоего организма");
-            if(water.SelectedIndex<0)return;var c=water.World.Get(water.SelectedIndex).Biology;var g=c.Genes;
-            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nПотомки наследуют геном; возможны небольшие мутации.",text);
-            Row(r,2,"Линия",c.LineageId.ToString(),"Генетическая линия выбранного организма");
-            Row(r,3,"Питание",g.Photosynthesis>.5f?"Фотосинтез":g.Predation>.5f?"Хищничество":"Смешанное","Преобладающая стратегия существующего генома");
-            Row(r,4,"Оболочка",g.Membrane>.7f?"Плотная":"Гибкая","Мембрана пассивно участвует в защите. Отдельная активная защита в 3D отсутствует.");
-            Row(r,5,"Подвижность",g.Speed>1.18f?"Быстрая":"Умеренная","Наследуемая скорость организма");
-            Row(r,6,"Поколение",c.Generation.ToString(),"Поколение увеличивается при реальном рождении потомка. Деление расходует энергию; геном наследуется с возможными мутациями.");
-            if(Button(new Rect(r.x+20,r.yMax-64,240,42),"Наблюдать генетическую линию")){development=false;water.Overview.Enter();water.Overview.ChooseOrganism(water.SelectedIndex,false);water.Overview.SelectLineage();water.Overview.SetMode(true);water.Overview.FollowSelection();}
-            if(Button(new Rect(r.x+280,r.yMax-64,240,42),"Вернуться к клетке"))SetPage(HudPage.Cell);
-        }
         void DrawSettings()
         {
             var r=SettingsBox;Box(r,"Настройки");Label(r.x+16,r.y+54,260,"Размер интерфейса",micro);
@@ -416,7 +417,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,96),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,120),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {

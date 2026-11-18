@@ -76,7 +76,7 @@ namespace Evolution.Tests
         {
             float scale=Mathf.Min(width/1440f,height/810f),w=width/scale,h=height/scale;
             var viewport=new Rect(18,80,w-36,h-152);
-            var blockers=new[] {new Rect(18,90,272,170),new Rect(w-310,264,292,300),new Rect(w-310,88,292,162),new Rect(w/2-224,h-208,448,46)};
+            var blockers=new[] {new Rect(18,90,272,170),new Rect(w-310,264,292,356),new Rect(w-310,88,292,162),new Rect(w/2-224,h-208,448,46)};
             int visible=0;
             for(float x=20;x<w;x+=41)for(float y=82;y<h;y+=37) {
                 var p=new Vector3(x,y,1);
