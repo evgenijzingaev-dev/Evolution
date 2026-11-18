@@ -5,6 +5,7 @@ namespace Evolution.Localization
 {
     public enum TextKey
     {
+        CrystalFocusOn,CrystalFocusOff,CrystalThreat,
         VolumeTitle,VolumeScope,VolumeWaterOnly,VolumeLife,VolumeFlowOn,VolumeFlowOff,VolumeHeatOn,VolumeHeatOff,VolumeFoodOn,VolumeFoodOff,
         VolumeSample,VolumeVector,VolumeCell,VolumeIncome,VolumeNet,VolumePhotoDiet,VolumeDiet,VolumeParticles,VolumeControls,VolumeFoodLabel,VolumeChunks,VolumeProbe,
         NaturalColors, NaturalLegend, StyleIdentity, StyleSoloIdentity, SourceAndDrain,
@@ -40,7 +41,10 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
-                [TextKey.VolumeTitle]="EVOLUTION · объёмная вода",
+                [TextKey.CrystalFocusOn]="Фокус на организме: включён",
+                [TextKey.CrystalFocusOff]="Фокус на организме: выключен",
+                [TextKey.CrystalThreat]="Хищник · {0:F1}",
+                [TextKey.VolumeTitle]="EVOLUTION · прозрачный микромир",
                 [TextKey.VolumeScope]="Отдельный опыт: исследуйте воду и питание. Без размножения и сохранения линии.",
                 [TextKey.VolumeWaterOnly]="Скрыть организмы · только вода",
                 [TextKey.VolumeLife]="Показать организмы",
