@@ -21,11 +21,15 @@ class EvidenceTests(unittest.TestCase):
         shot = dict(tick=20, cameraFrames=4, luminanceRange=.8, luminanceDeviation=.2,
                     visibleOrganisms=5, nearestDepth=4, farthestDepth=20,
                     currents=True, currentSpeed=.2, temperature=True, food=True, hudVisible=True,
-                    foodSubstrate=12, foodOrganic=4)
-        self.report = dict(passed=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
+                    foodSubstrate=12, foodOrganic=4, activePopulation=250, knownRegions=125, analytical=False, organismMarkers=20, regionClusters=15, surveyLayer=0, depthColours=False, markerMinY=-15, markerMaxY=15, selectedOrganism=7, fullDepth=True, sliceIndex=0)
+        self.report = dict(passed=True, navigationChecked=True, unity="6000.6.9f1", pipeline="UniversalRenderPipelineAsset",
                            graphicsApi="OpenGLCore", graphicsDevice="test-device",
                            scene="WaterPrototype3D", width=1920, height=1080, seed=42,
                            revision="test-sha", screenshots=[dict(shot, file=f) for f in EXPECTED])
+        self.report["screenshots"][6]["analytical"] = True
+        self.report["screenshots"][7].update(analytical=True,surveyLayer=4)
+        self.report["screenshots"][8]["depthColours"] = True
+        self.report["screenshots"][10].update(analytical=True,fullDepth=False,markerMinY=1,markerMaxY=19)
         self.images = {f: b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1920, 1080) + bytes([i]) * 24000
                        for i, f in enumerate(EXPECTED)}
 
@@ -35,7 +39,7 @@ class EvidenceTests(unittest.TestCase):
             return validate(self.root, "test-sha")
 
     def test_complete_evidence(self):
-        self.assertEqual(len(self.check()["screenshots"]), 5)
+        self.assertEqual(len(self.check()["screenshots"]), len(EXPECTED))
 
     def test_wrong_render_setup_or_revision(self):
         original = copy.deepcopy(self.report)
@@ -89,6 +93,26 @@ class EvidenceTests(unittest.TestCase):
         self.report["screenshots"][4].update(foodSubstrate=0, foodOrganic=0)
         with self.assertRaises(ValueError): self.check()
 
+    def test_navigation_must_have_run(self):
+        self.report["navigationChecked"] = False
+        with self.assertRaises(ValueError): self.check()
+
+    def test_no_analytical_markers(self):
+        self.report["screenshots"][6]["organismMarkers"] = 0
+        with self.assertRaises(ValueError): self.check()
+
+    def test_no_density_clusters(self):
+        self.report["screenshots"][7]["regionClusters"] = 0
+        with self.assertRaises(ValueError): self.check()
+
+    def test_flat_vertical_distribution(self):
+        self.report["screenshots"][8]["markerMaxY"] = -14
+        with self.assertRaises(ValueError): self.check()
+
+    def test_slice_rejects_other_depth(self):
+        self.report["screenshots"][10]["markerMaxY"] = 21
+        with self.assertRaises(ValueError): self.check()
+
 
 class TriggerTests(unittest.TestCase):
     def test_small_nonvisual_push_skips_unity(self):
@@ -99,6 +123,7 @@ class TriggerTests(unittest.TestCase):
                      "Assets/Evolution/Runtime/CrystalMeshes.cs", "Tools/ci/check_visual_preview.py",
                      "Assets/Evolution/Presentation/CrystalForms.cs", "Assets/Evolution/Settings/PrototypeURP.asset",
                      "Assets/Evolution/Presentation/WaterOptics.cs",
+                     "Assets/Evolution/Runtime/OceanOverview.Ui.cs", "Assets/Evolution/Volume/OceanSurvey.cs",
                      "ProjectSettings/GraphicsSettings.asset", "Packages/manifest.json"]:
             with self.subTest(path=path): self.assertTrue(visual_change([path]))
 

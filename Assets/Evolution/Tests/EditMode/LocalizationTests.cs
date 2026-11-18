@@ -17,7 +17,7 @@ namespace Evolution.Tests
                 // Keep the EVOLUTION brand, standard temperature unit and format placeholders.
                 string visible = Regex.Replace(text, @"\{\d+(?::[^}]+)?\}", "").Replace("EVOLUTION", "").Replace("°C", "");
                 // Standard keycap labels are shared across keyboard layouts.
-                visible = Regex.Replace(visible, @"\b(?:WASD|F|G|H|P|Q|R|T|X|Y|Z|Home|Esc)\b", "");
+                visible = Regex.Replace(visible, @"\b(?:WASD|E|F|G|H|P|Q|R|T|X|Y|Z|Home|Esc|Tab)\b", "");
                 Assert.IsFalse(Regex.IsMatch(visible, "[A-Za-z]"), $"Untranslated UI string: {key}");
             }
         }
@@ -30,7 +30,7 @@ namespace Evolution.Tests
                 Assert.AreEqual("Температура: 22,5 °C", GameText.Format(TextKey.Temperature, 22.5f));
                 Assert.AreEqual("10×", GameText.Format(TextKey.TimeScale, 10));
                 foreach (TextKey key in Enum.GetValues(typeof(TextKey)))
-                    Assert.DoesNotThrow(() => GameText.Format(key, 1, 2, 3, 4, 5), key.ToString());
+                    Assert.DoesNotThrow(() => GameText.Format(key, 1, 2, 3, 4, 5, 6, 7, 8), key.ToString());
             } finally { CultureInfo.CurrentCulture = previous; }
         }
     }

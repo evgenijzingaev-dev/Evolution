@@ -16,7 +16,7 @@ namespace Evolution.Runtime
         const int Width = 1920, Height = 1080;
         static string destination;
         WaterPrototype water;
-        bool failed;
+        bool failed,navigationChecked;
         RenderTexture target;
         int renderedFrames;
         float yaw, pitch = 15;
@@ -28,6 +28,9 @@ namespace Evolution.Runtime
             public Vector3 cameraPosition, cameraEuler;
             public long tick;
             public int visibleOrganisms, cameraFrames;
+            public bool analytical,fullDepth,depthColours;
+            public int organismMarkers,regionClusters,activePopulation,knownRegions,surveyLayer,sliceIndex,selectedOrganism,selectedLineage;
+            public float markerMinY,markerMaxY;
             public float nearestDepth, farthestDepth, projectedCoverage, luminanceRange, luminanceDeviation;
             public bool currents, temperature, food, hudVisible;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
@@ -37,7 +40,7 @@ namespace Evolution.Runtime
             public string unity, pipeline, graphicsApi, graphicsDevice, graphicsVendor, graphicsVersion, revision;
             public string scene = "WaterPrototype3D";
             public int width = Width, height = Height, seed = 42;
-            public bool passed;
+            public bool passed,navigationChecked;
             public Shot[] screenshots;
         }
 
@@ -96,12 +99,14 @@ namespace Evolution.Runtime
         IEnumerator Start()
         {
             yield return null;
+            water.Overview.LeaveForLegacy();
+            water.Rig.Restore(new WaterView {Focus=water.Rig.Focus,Distance=7,Yaw=0,Pitch=15});
             Debug.Log("Visual Preview phase: game loop running");
             Require(Application.unityVersion == "6000.6.9f1", "wrong Unity version");
             Require(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset, "URP is not active");
             Require(SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && SystemInfo.graphicsShaderLevel >= 45,
                 "no usable graphics device (never run the player with -nographics)");
-            foreach (var name in new[] { "Evolution/VolumeBody", "Evolution/VolumeMembrane", "Evolution/VolumeSuspension", "Evolution/VolumeBackdrop" }) {
+            foreach (var name in new[] { "Evolution/VolumeBody", "Evolution/VolumeMembrane", "Evolution/VolumeSuspension", "Evolution/VolumeBackdrop", "Evolution/SurveyMarker" }) {
                 var shader = Shader.Find(name);
                 Require(shader && shader.isSupported, "unsupported or missing shader: " + name);
             }
@@ -160,20 +165,60 @@ namespace Evolution.Runtime
             yield return Capture("05-temperature-food");
 
             Require(!failed && shots.Count == 5, "incomplete capture");
-            File.WriteAllText(Path.Combine(destination, "manifest.json"), JsonUtility.ToJson(Context(shots.ToArray(), true), true));
             // A separate evidence frame for the water itself; not an invented population or backdrop fixture.
             water.OrganismsVisible = false;
             SetView(focus, 23, 25, 22, false, false, false);
             yield return Capture("06-water-only", false);
+            water.OrganismsVisible=true;water.HudVisible=true;
+            var overview=water.Overview;overview.Enter();overview.SetMode(false);overview.AutoFrame=false;overview.AutoOrbit=false;
+            overview.Layer=SurveyLayer.Lineage;overview.FullDepth=true;water.Rig.ApplyImmediate();
+            CheckNavigation(identity);
+            yield return Capture("07-cinematic-overview");
+            var activeFocus=water.Rig.Focus;
+            overview.SetMode(true);overview.AutoFrame=false;overview.AutoOrbit=false;
+            water.Rig.FocusOn(activeFocus,72);water.Rig.ApplyImmediate();
+            yield return Capture("08-analytical-overview");
+            overview.Layer=SurveyLayer.Density;water.Rig.FocusOn(activeFocus,100);water.Rig.Orbit(15,25);water.Rig.ApplyImmediate();
+            yield return Capture("09-density-map");
+            overview.Layer=SurveyLayer.Lineage;overview.DepthColours=true;water.Rig.FocusOn(activeFocus,75);water.Rig.Orbit(-15,-25);water.Rig.ApplyImmediate();
+            yield return Capture("10-depth-distribution");
+            overview.DepthColours=false;overview.SetMode(false);overview.AutoOrbit=false;overview.AutoFrame=false;
+            int chosen=water.Ocean.Find(identity);Require(chosen>=0,"selected actual organism left the active region");
+            overview.ChooseOrganism(chosen,false);overview.ZoomSelection();water.Rig.ApplyImmediate();
+            yield return Capture("11-selected-organism");
+            overview.SetMode(true);overview.AutoOrbit=false;overview.AutoFrame=false;overview.DepthColours=true;
+            overview.SetSlice(false,ChunkKey.At(ToV3(activeFocus)).Y);water.Rig.FocusOn(activeFocus,70);water.Rig.ApplyImmediate();
+            yield return Capture("12-horizontal-slice");
+            Require(!failed&&shots.Count==11,"incomplete strategic capture");
+            File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
             Application.Quit(0);
         }
+        void CheckNavigation(string identity)
+        {
+            var saved=water.Rig.View;var facing=water.Lens.transform.forward;
+            water.Rig.Orbit(360,0);water.Rig.ApplyImmediate();Require(Vector3.Dot(facing,water.Lens.transform.forward)>.9999f,"360-degree orbit changed orientation");
+            water.Rig.Restore(saved);water.Rig.ApplyImmediate();
+            int index=water.Ocean.Find(identity);Require(index>=0,"navigation target missing");
+            water.Overview.SetSlice(false,999);water.Overview.ChooseOrganism(index,false);
+            Require(water.Overview.SliceIndex==ChunkKey.At(water.World.Get(index).Position).Y,"selection did not switch to the target depth slice");
+            water.Overview.ZoomSelection();water.Rig.ApplyImmediate();
+            Require(water.Rig.Distance<=8,"organism zoom did not approach");
+            water.Overview.Back();water.Rig.ApplyImmediate();
+            Require(Mathf.Abs(water.Rig.Distance-saved.Distance)<.001f&&Vector3.Distance(water.Rig.Focus,saved.Focus)<.001f,"previous camera view was not restored");
+            Require(!water.Overview.FullDepth&&water.Overview.SliceIndex==999,"previous depth slice was not restored");
+            Require(water.PlaySelected()&&!water.Overview.Active&&water.World.Controlled==index,"cell play control was not preserved");
+            water.Overview.Back();water.Rig.ApplyImmediate();
+            Require(water.World.Controlled<0&&water.Overview.Active,"return from cell play failed");
+            water.Overview.FullDepth=true;navigationChecked=true;
+        }
+        static V3 ToV3(Vector3 p)=>new V3(p.x,p.y,p.z);
         Report Context(Shot[] frames, bool passed)
         {
             return new Report {
                 unity = Application.unityVersion, pipeline = GraphicsSettings.currentRenderPipeline.GetType().Name,
                 graphicsApi = SystemInfo.graphicsDeviceType.ToString(), graphicsDevice = SystemInfo.graphicsDeviceName,
                 graphicsVendor = SystemInfo.graphicsDeviceVendor, graphicsVersion = SystemInfo.graphicsDeviceVersion,
-                revision = Environment.GetEnvironmentVariable("EVOLUTION_PREVIEW_SHA") ?? "local",
+                revision = Environment.GetEnvironmentVariable("EVOLUTION_PREVIEW_SHA") ?? "local",navigationChecked=navigationChecked,
                 screenshots = frames, passed = passed
             };
         }
@@ -209,6 +254,19 @@ namespace Evolution.Runtime
                 var f = water.World.GetFood(k);
                 if ((ToVector(f.Position) - point).sqrMagnitude < 100) { shot.foodSubstrate += f.Substrate; shot.foodOrganic += f.Organic; }
             }
+            if(water.Overview.Active) {
+                var overview=water.Overview;shot.analytical=overview.Analytical;shot.fullDepth=overview.FullDepth;shot.depthColours=overview.DepthColours;
+                shot.organismMarkers=overview.VisibleMarkers;shot.regionClusters=overview.VisibleClusters;shot.activePopulation=overview.Survey.ActiveLiving;
+                shot.knownRegions=overview.Survey.Regions.Count;shot.surveyLayer=(int)overview.Layer;shot.sliceIndex=overview.SliceIndex;
+                shot.selectedOrganism=overview.HasSelectedOrganism?water.World.Get(water.SelectedIndex).Biology.Id:0;shot.selectedLineage=overview.SelectedLineage;
+                shot.markerMinY=float.PositiveInfinity;shot.markerMaxY=float.NegativeInfinity;
+                foreach(var a in overview.Survey.Agents) {
+                    if(!overview.FullDepth&&ChunkKey.At(a.Position).Y!=overview.SliceIndex)continue;
+                    var v=water.Lens.WorldToViewportPoint(ToVector(a.Position));if(v.z<=0||v.x<0||v.x>1||v.y<0||v.y>1)continue;
+                    shot.markerMinY=Mathf.Min(shot.markerMinY,a.Position.Y);shot.markerMaxY=Mathf.Max(shot.markerMaxY,a.Position.Y);
+                }
+                if(float.IsInfinity(shot.markerMinY))shot.markerMinY=shot.markerMaxY=0;
+            }
             return shot;
         }
         IEnumerator Capture(string name,bool record=true)
@@ -221,7 +279,7 @@ namespace Evolution.Runtime
             bool includeHud = water.HudVisible;
             water.Lens.targetTexture = includeHud ? null : target;
             int before = renderedFrames;
-            for (int frame = 0; frame < 4; frame++) yield return new WaitForEndOfFrame();
+            for (int frame = 0; frame < (water.Overview.Active?8:4); frame++) yield return new WaitForEndOfFrame();
             Require(renderedFrames - before >= 2, "URP camera did not render");
             Texture2D image;
             if (includeHud) {
@@ -256,6 +314,14 @@ namespace Evolution.Runtime
                 "blank/flat game framebuffer: range=" + shot.luminanceRange + ", deviation=" + shot.luminanceDeviation :
                 name == "03-depth-ensemble" && (shot.visibleOrganisms < 3 || shot.farthestDepth - shot.nearestDepth < 3) ?
                 "ensemble must contain three organisms at different real depths" : null;
+            if(water.Overview.Active&&error==null) {
+                if(!shot.hudVisible||shot.activePopulation<1||shot.knownRegions<1)error="missing actual ecosystem overview data";
+                else if(name=="08-analytical-overview"&&(!shot.analytical||shot.organismMarkers<3))error="analytical markers missing";
+                else if(name=="09-density-map"&&(!shot.analytical||shot.surveyLayer!=(int)SurveyLayer.Density||shot.regionClusters<3))error="density regions missing";
+                else if(name=="10-depth-distribution"&&(!shot.depthColours||shot.markerMaxY-shot.markerMinY<10))error="actual vertical distribution missing";
+                else if(name=="11-selected-organism"&&shot.selectedOrganism==0)error="actual selected organism missing";
+                else if(name=="12-horizontal-slice"&&(shot.fullDepth||shot.organismMarkers<1||shot.markerMinY<shot.sliceIndex*20-.01f||shot.markerMaxY>(shot.sliceIndex+1)*20+.01f))error="slice contains wrong depth data";
+            }
             if (error != null) {
                 var diagnostic = Path.Combine(destination, "diagnostics"); Directory.CreateDirectory(diagnostic);
                 File.WriteAllBytes(Path.Combine(diagnostic, shot.file), image.EncodeToPNG());
