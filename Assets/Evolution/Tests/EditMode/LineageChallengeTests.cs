@@ -137,6 +137,20 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void StarvationTakesPriorityOverOtherDescendantsReserveDrainRegardlessOfIterationOrder()
+        {
+            string starvation = LineageChallenge.SettlementAdvice(true, .30f, true);
+            string draining = LineageChallenge.SettlementAdvice(true, .60f, false);
+            StringAssert.Contains("голодает",
+                LineageChallenge.MoreUrgentSettlementHint(
+                    LineageChallenge.MoreUrgentSettlementHint(null, draining), starvation));
+            StringAssert.Contains("голодает",
+                LineageChallenge.MoreUrgentSettlementHint(
+                    LineageChallenge.MoreUrgentSettlementHint(null, starvation), draining));
+            Assert.IsNull(LineageChallenge.MoreUrgentSettlementHint(null, null));
+        }
+
+        [Test]
         public void StarvingDescendantInForeignNicheGetsActionableAdviceBeforeSettlement()
         {
             // Low energy prevents settlement, but must not hide the reason from the player.
