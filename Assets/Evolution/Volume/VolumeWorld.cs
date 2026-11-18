@@ -32,6 +32,7 @@ namespace Evolution.Volume
         readonly List<VolumeAgent> agents;
         public const int PopulationLimit=2048;
         public const float DivisionSeconds=2;
+        public LifeJournal Life {get;internal set;}=new LifeJournal();
         internal string DivisionRequest;
         public string LastOffspringIdentity {get;internal set;}
         public int Births {get;private set;}
@@ -213,7 +214,10 @@ namespace Evolution.Volume
                         Diagnostics.RecyclingLoss+=biomass-recycled;
                     }
                     Diagnostics.Unpaid+=Math.Max(0,-a.Biology.Energy);
-                    Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;if(Controlled==i)Controlled=-1;continue;
+                    Diagnostics.Death(a.Biology);a.Biology.Energy=0;a.Alive=false;a.DiedAt=Time;agents[i]=a;
+                    Life.Record(new LifeEvent {Kind=LifeEventKind.Death,Time=Time,Agent=a,
+                        Cause=a.Biology.Consumed||a.Biology.DamageLastStep>0?DeathAppearance.Damage:DeathAppearance.Exhaustion});
+                    if(Controlled==i)Controlled=-1;continue;
                 }
                 if((i!=Controlled||requested==a.Identity)&&Biology.CanDivide(a.Biology)&&a.Biology.Energy>=DivisionThreshold(i)&&DivisionBlock(i)==null)Divide(i);
             }
@@ -287,6 +291,7 @@ namespace Evolution.Volume
                 InheritedDevelopment=development,DevelopmentPaid=developmentCost,NaturalMutationMask=Observation.MutationMask(template,child.Genes),
                 FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
             agents.Add(daughter);RefreshColonies();Births++;Diagnostics.Births++;Diagnostics.MaxGeneration=Math.Max(Diagnostics.MaxGeneration,child.Generation);Diagnostics.BirthOverhead+=Biology.BirthOverhead(child.Genes)+developmentCost;Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+developmentCost;if(index==Controlled)LastOffspringIdentity=identity;
+            Life.Record(new LifeEvent {Kind=LifeEventKind.Division,Time=at,Agent=a,Child=daughter});
         }
         V3 Steer(int i,out int cloud)
         {
@@ -312,3 +317,4 @@ namespace Evolution.Volume
         public OceanSample Sample(V3 p)=>new OceanSample {Temperature=Temperature(p),Light=WaterField.Light(p),Fertility=1};
     }
 }
+

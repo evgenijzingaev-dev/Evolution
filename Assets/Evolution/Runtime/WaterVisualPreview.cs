@@ -12,7 +12,7 @@ using UnityEngine.SceneManagement;
 namespace Evolution.Runtime
 {
     // Dormant in ordinary games. No alternate renderer, fixture organisms or biology changes.
-    public sealed class WaterVisualPreview : MonoBehaviour
+    public sealed partial class WaterVisualPreview : MonoBehaviour
     {
         const int Width = 1920, Height = 1080;
         static string destination;
@@ -135,6 +135,9 @@ namespace Evolution.Runtime
             while (water.World == null || water.World.Tick < 20) yield return null;
             Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
+            if(Array.IndexOf(Environment.GetCommandLineArgs(),"-evolution-living-cells")>=0) {
+                yield return CaptureLivingCells();Application.Quit(failed?1:0);yield break;
+            }
             int selected = water.ScenicSelection(); float nearest;
             Require(selected >= 0, "no living organism");
             water.Select(selected);
@@ -279,7 +282,7 @@ namespace Evolution.Runtime
             public float parentBefore,parentAfter,childEnergy,divisionCost,construction;
             public bool paid,inheritance,independent;
         }
-        IEnumerator CaptureDivision()
+        IEnumerator CaptureDivision(bool showHud=true)
         {
             water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;
             water.OrganismsVisible=true;water.Paused=true;
@@ -311,7 +314,7 @@ namespace Evolution.Runtime
             water.World.Input=default;
             var before=water.World.Get(candidate);var focus=ToVector(before.Position);
             float heading=Mathf.Atan2(before.Direction.X,before.Direction.Z)*Mathf.Rad2Deg+90;
-            SetView(focus,4.5f,heading,12,false,false,false,true);water.HudVisible=true;water.Hud.RefreshNow();
+            SetView(focus,4.5f,heading,12,false,false,false,true);water.HudVisible=showHud;water.Hud.RefreshNow();
             yield return Capture("division-before",false);
             candidate=water.Ocean.Find(parent);Require(candidate>=0,"division parent missing after camera move");
             Require(water.World.RequestDivision(),"paid division request rejected");water.World.Step();
@@ -477,7 +480,7 @@ namespace Evolution.Runtime
                 else if(name=="11-selected-organism"&&shot.selectedOrganism==0)error="actual selected organism missing";
                 else if(name=="12-horizontal-slice"&&(shot.fullDepth||shot.organismMarkers<1||shot.markerMinY<shot.sliceIndex*20-.01f||shot.markerMaxY>(shot.sliceIndex+1)*20+.01f))error="slice contains wrong depth data";
             }
-            if(name.CompareTo("13-")>=0&&(!shot.friendlyHud||!shot.layoutFits))error="friendly HUD is missing or layout overlaps";
+            if(record&&name.CompareTo("13-")>=0&&(!shot.friendlyHud||!shot.layoutFits))error="friendly HUD is missing or layout overlaps";
             if((name=="17-danger-food-ui"||name=="19-ui-1366x768"||name=="20-ui-2560x1440")&&
                 (shot.threatIndex<0||!shot.threatMarkerVisible||Mathf.Abs(shot.threatConnectorLength-18)>.01f))error="real short threat marker missing";
             if(name=="23-offscreen-threat-1366x768"&&(shot.threatIndex<0||shot.threatMarkerVisible))error="offscreen threat must not draw a marker";
@@ -495,4 +498,5 @@ namespace Evolution.Runtime
         }
     }
 }
+
 
