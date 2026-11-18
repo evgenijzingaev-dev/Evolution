@@ -11,12 +11,14 @@ permissions:
   contents: read
 
 # Serialize license use across runs as well as within a run. Do not interrupt activation.
-concurrency:
-  group: evolution-unity-personal
-  cancel-in-progress: false
 
 jobs:
   unity:
+    # Only jobs that use Unity enter the license queue. Skipped draft checks
+    # must not replace a pending Visual Preview run in GitHub concurrency.
+    concurrency:
+      group: evolution-unity-personal
+      cancel-in-progress: false
     name: Compile, Edit Mode, Play Mode, Linux build
     # Drafts run the fast core workflow; full Unity validation starts when marked ready.
     # Fork PRs and Dependabot do not receive account secrets. Never use pull_request_target.
@@ -182,3 +184,4 @@ jobs:
           df -h
           free -h
           sudo dmesg | grep -Ei 'out of memory|oom-kill|killed process' | tail -n 20 || true
+

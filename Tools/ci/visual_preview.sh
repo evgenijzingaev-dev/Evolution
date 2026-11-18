@@ -9,7 +9,7 @@ case "$backend" in
     export LIBGL_ALWAYS_SOFTWARE=1
     if [[ ${EVOLUTION_INSIDE_XVFB:-} != 1 ]]; then
       export EVOLUTION_INSIDE_XVFB=1
-      exec xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24 +extension GLX' bash "$0" "$@"
+      exec xvfb-run --auto-servernum --server-args='-screen 0 2560x1440x24 +extension GLX' bash "$0" "$@"
     fi
     ;;
   hardware)
@@ -69,3 +69,4 @@ PY
   exit 1
 fi
 python3 Tools/ci/check_visual_preview.py "$destination"
+

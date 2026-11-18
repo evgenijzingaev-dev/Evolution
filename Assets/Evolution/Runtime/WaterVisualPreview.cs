@@ -33,6 +33,8 @@ namespace Evolution.Runtime
             public float markerMinY,markerMaxY;
             public float nearestDepth, farthestDepth, projectedCoverage, luminanceRange, luminanceDeviation;
             public bool currents, temperature, food, hudVisible;
+            public int width=Width,height=Height,hudDetail,hudPage,threatIndex=-1,foodIndex=-1,notificationCount;
+            public bool friendlyHud,layoutFits;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
         [Serializable] sealed class Report
@@ -190,8 +192,54 @@ namespace Evolution.Runtime
             overview.SetSlice(false,ChunkKey.At(ToV3(activeFocus)).Y);water.Rig.FocusOn(activeFocus,70);water.Rig.ApplyImmediate();
             yield return Capture("12-horizontal-slice");
             Require(!failed&&shots.Count==11,"incomplete strategic capture");
+            overview.FullDepth=true;overview.DepthColours=false;
+            chosen=water.Ocean.Find(identity);Require(chosen>=0,"HUD organism missing");
+            water.Select(chosen);water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;
+            water.HudVisible=true;water.FindFood=true;water.ShowTemperature=water.ShowCurrents=false;
+            water.Rig.ApplyImmediate();water.Hud.RefreshNow();
+            yield return Capture("13-cell-play-ui");
+            water.Rig.FocusOn(ToVector(water.World.Get(chosen).Position),3.6f);water.Rig.ApplyImmediate();
+            yield return Capture("14-cell-info-ui");
+            water.Hud.SetPage(HudPage.Overview);overview.AutoOrbit=false;overview.AutoFrame=false;water.Rig.ApplyImmediate();
+            yield return Capture("15-cinematic-ui");
+            overview.SetMode(true);overview.AutoFrame=false;overview.AutoOrbit=false;overview.Layer=SurveyLayer.Density;
+            water.Rig.FocusOn(water.Rig.Focus,72);water.Rig.ApplyImmediate();water.Hud.Detail=HudDetail.Observer;
+            yield return Capture("16-analytical-ui");
+            // Find a factual threat. If necessary advance the unchanged model, with a bounded
+            // search; never create, move, feed or mutate an organism for the evidence.
+            int danger=FindThreat();
+            for(int step=0;danger<0&&step<400;step++){
+                water.World.Step();
+                if(step%20==19){danger=FindThreat();yield return null;}
+            }
+            if(danger>=0)water.Select(danger);
+            else {int living=water.ScenicSelection();if(living>=0)water.Select(living);}
+            water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;water.Hud.RefreshNow();
+            water.Rig.ApplyImmediate();
+            yield return Capture("17-danger-food-ui");
+            water.Hud.Detail=HudDetail.Scientific;
+            yield return Capture("18-scientific-ui");
+            water.Hud.Detail=HudDetail.Normal;
+            Screen.SetResolution(1366,768,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            Require(Screen.width==1366&&Screen.height==768,"1366 framebuffer resize failed");
+            yield return Capture("19-ui-1366x768");
+            Screen.SetResolution(2560,1440,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            Require(Screen.width==2560&&Screen.height==1440,"1440p framebuffer resize failed");
+            yield return Capture("20-ui-2560x1440");
+            Screen.SetResolution(Width,Height,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            water.Hud.SetPage(HudPage.Development);
+            yield return Capture("21-development-ui");
+            Require(!failed&&shots.Count==20,"incomplete friendly HUD capture");
             File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
             Application.Quit(0);
+        }
+        int FindThreat()
+        {
+            for(int i=0;i<water.World.Count;i++)if(water.World.Get(i).Alive&&PlayerReadout.Read(water.World,i).Threat>=0)return i;
+            return -1;
         }
         void CheckNavigation(string identity)
         {
@@ -237,7 +285,10 @@ namespace Evolution.Runtime
             var shot = new Shot { file = file, tick = water.World.Tick, cameraPosition = water.Lens.transform.position,
                 cameraEuler = water.Lens.transform.eulerAngles, nearestDepth = float.PositiveInfinity,
                 currents = water.ShowCurrents, temperature = water.ShowTemperature, food = water.FindFood,
-                hudVisible = water.HudVisible };
+                hudVisible = water.HudVisible, width=Screen.width,height=Screen.height,
+                friendlyHud=water.HudVisible&&water.Hud!=null,layoutFits=water.Hud!=null&&water.Hud.LayoutFits,
+                hudDetail=(int)water.Hud.Detail,hudPage=(int)water.Hud.Page,threatIndex=water.Hud.Readout.Threat,
+                foodIndex=water.Hud.Readout.Food,notificationCount=water.Hud.NotificationCount };
             for (int i = 0; i < water.World.Count; i++) {
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
@@ -283,9 +334,9 @@ namespace Evolution.Runtime
             Require(renderedFrames - before >= 2, "URP camera did not render");
             Texture2D image;
             if (includeHud) {
-                Require(Screen.width == Width && Screen.height == Height, "unexpected game framebuffer resolution");
+                Require(Screen.width >= 1280 && Screen.height >= 720, "unexpected game framebuffer resolution");
                 image = ScreenCapture.CaptureScreenshotAsTexture();
-                Require(image && image.width == Width && image.height == Height, "missing game framebuffer");
+                Require(image && image.width == Screen.width && image.height == Screen.height, "missing game framebuffer");
             } else {
                 image = new Texture2D(Width, Height, TextureFormat.RGB24, false);
                 var previous = RenderTexture.active;
@@ -322,6 +373,7 @@ namespace Evolution.Runtime
                 else if(name=="11-selected-organism"&&shot.selectedOrganism==0)error="actual selected organism missing";
                 else if(name=="12-horizontal-slice"&&(shot.fullDepth||shot.organismMarkers<1||shot.markerMinY<shot.sliceIndex*20-.01f||shot.markerMaxY>(shot.sliceIndex+1)*20+.01f))error="slice contains wrong depth data";
             }
+            if(name.CompareTo("13-")>=0&&(!shot.friendlyHud||!shot.layoutFits))error="friendly HUD is missing or layout overlaps";
             if (error != null) {
                 var diagnostic = Path.Combine(destination, "diagnostics"); Directory.CreateDirectory(diagnostic);
                 File.WriteAllBytes(Path.Combine(diagnostic, shot.file), image.EncodeToPNG());
@@ -335,3 +387,4 @@ namespace Evolution.Runtime
         }
     }
 }
+
