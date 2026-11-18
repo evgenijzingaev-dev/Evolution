@@ -144,6 +144,9 @@ namespace Evolution.Volume
             if (existing == null || candidate.Contains("голодает")) return candidate;
             return existing;
         }
+        public static string NicheName(int kind)
+            => kind == 1 ? "светлая вода" : kind == 2 ? "темнота" : kind == 3 ? "термальный источник" : "переходная вода";
+        public string FounderNicheName => NicheName(founderNiche);
         public static int NicheKind(NicheSample sample)
         {
             if (sample.Vent >= .4f) return 3; // Hydrothermal
