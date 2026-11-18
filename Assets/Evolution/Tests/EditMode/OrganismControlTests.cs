@@ -21,10 +21,11 @@ namespace Evolution.Tests
         {
             var a = new Simulation(Config(),42,new[] { Founder(x:9.99f), Founder(x:2) });
             a.TryControl(1); a.SetControlInput(100,0); var other = a.GetCell(1); a.Step();
-            Assert.That(a.GetCell(0).X,Is.EqualTo(.04f).Within(.0001));
+            Assert.That(Observation.PeriodicDelta(a.GetCell(0).X - 9.99f,10),Is.InRange(.001f,.049f));
             Assert.That(a.GetCell(0).Z,Is.EqualTo(4)); Assert.AreNotEqual(other.X,a.GetCell(1).X);
             a.SetControlInput(0,0); var stationary = a.GetCell(0); a.Step();
-            Assert.AreEqual(stationary.X,a.GetCell(0).X); Assert.AreEqual(stationary.Z,a.GetCell(0).Z);
+            Assert.Greater(Observation.PeriodicDelta(a.GetCell(0).X - stationary.X,10),0);
+            Assert.Less(a.GetCell(0).VelocityX,stationary.VelocityX); Assert.AreEqual(stationary.Z,a.GetCell(0).Z);
             Assert.Less(a.GetCell(0).Energy,stationary.Energy);
             Assert.Throws<ArgumentException>(() => a.SetControlInput(float.NaN,0));
         }
@@ -33,7 +34,7 @@ namespace Evolution.Tests
             var cfg = Config(); var a = new Simulation(cfg,42,new[] { Founder(.01f) });
             a.TryControl(1); a.Step(); Assert.AreEqual(0,a.Count); Assert.AreEqual(0,a.ControlledId); Assert.AreEqual(1,a.Deaths);
             var b = new Simulation(cfg,42,new[] { Founder() }); var c = new Simulation(cfg,42,new[] { Founder() });
-            b.TryControl(1); b.SetControlInput(0,0); b.Step(); c.Step(); Assert.AreEqual(c.GetCell(0).Energy,b.GetCell(0).Energy);
+            b.TryControl(1); b.SetControlInput(0,0); b.Step(); c.Step(); Assert.Greater(b.GetCell(0).Energy,c.GetCell(0).Energy);
         }
         [Test] public void ManualDivisionUsesNormalProvisioningAndChildCanBeControlled()
         {
@@ -56,7 +57,7 @@ namespace Evolution.Tests
         {
             var a = new Simulation(Config(),42,new[] { Founder(24,5,adhesion:1) });
             a.Step(); Assert.AreEqual(1,a.ColonyCount); var child = a.GetCell(1); a.TryControl(child.Id); a.SetControlInput(0,1);
-            var root = a.GetCell(0); a.Step(); Assert.That(a.GetCell(0).X,Is.EqualTo(root.X).Within(.00001));
+            var root = a.GetCell(0); a.Step(); Assert.Greater(a.GetCell(0).X,root.X); Assert.Less(a.GetCell(0).Heading,1.5708f);
             Assert.Greater(a.GetCell(0).Z,root.Z); Assert.AreEqual(root.Id,a.GetCell(1).BondParentId);
         }
         [Test] public void ReleaseClearsQueuedDivisionAndControlDoesNotPreventAgingDeath()

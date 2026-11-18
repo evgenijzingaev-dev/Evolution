@@ -38,6 +38,13 @@ namespace Evolution.Core
             if (a.Differentiation != b.Differentiation) mask |= 256;
             if (a.Transport != b.Transport) mask |= 512;
             if (a.RolePattern != b.RolePattern) mask |= 1024;
+            if (a.Photosynthesis != b.Photosynthesis) mask |= 1 << 11;
+            if (a.Predation != b.Predation) mask |= 1 << 12;
+            if (a.Membrane != b.Membrane) mask |= 1 << 13;
+            if (a.Sensitivity != b.Sensitivity) mask |= 1 << 14;
+            if (a.ThermalTolerance != b.ThermalTolerance) mask |= 1 << 15;
+            if (a.ToxinResistance != b.ToxinResistance) mask |= 1 << 16;
+            if (a.EnergyEfficiency != b.EnergyEfficiency) mask |= 1 << 17;
             return mask;
         }
     }

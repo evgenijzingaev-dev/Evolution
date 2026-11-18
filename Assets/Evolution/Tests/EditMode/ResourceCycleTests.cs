@@ -99,7 +99,7 @@ namespace Evolution.Tests
             double consumed = before.Genes.Uptake * cfg.StepSeconds * 2 * (.2f + .8f * before.Genes.OrganicSpecialization);
             Assert.That(afterDecay - organic, Is.EqualTo(consumed).Within(.0002));
             Assert.That(world.GetCell(0).Energy, Is.EqualTo(before.Energy + consumed *
-                Biology.OrganicAssimilation(before.Genes, 22) - Biology.Cost(before.Genes, 22) * cfg.StepSeconds).Within(.00001));
+                Biology.OrganicAssimilation(before.Genes, 22) - Biology.Cost(before.Genes, 22) * cfg.StepSeconds - world.GetCell(0).Budget.Movement).Within(.00001));
         }
 
         [Test] public void DeathsReturnOnlyFundedEnergyAndRemainsBecomeAvailableNextTick()
@@ -107,14 +107,16 @@ namespace Evolution.Tests
             // More cells than tiles ensures shared tiles. None may eat this tick's deaths.
             var cfg = new SimulationConfig { InitialPopulation = 20, GridSize = 2, WorldSize = 1,
                 InitialNutrients = 0, NutrientRegeneration = 0, MaxAge = .05f, OrganicDecayRate = .1f };
-            var world = new Simulation(cfg, 42); double expected = 0;
+            var world = new Simulation(cfg, 42); double expected = 0; var motionRandom = new RandomSource(world.RandomState);
             for (int i = 0; i < world.Count; i++) {
                 var c = world.GetCell(i);
-                expected += .75f * (c.Energy - Biology.Cost(c.Genes, 22) * cfg.StepSeconds + 2 * c.Genes.Size);
+                c.TargetHeading += motionRandom.Range(-1, 1) * cfg.StepSeconds * 2;
+                CellMotion.Integrate(ref c, c.Genes.Speed, 0, 0, cfg.StepSeconds);
+                expected += .75f * (c.Energy - (Biology.Cost(c.Genes, 22) + CellMotion.Cost(c)) * cfg.StepSeconds + 2 * c.Genes.Size);
             }
             world.Step(); Assert.AreEqual(0, world.Count); Assert.AreEqual(20, world.Deaths);
             Assert.That(Stored(world, cfg.GridSize), Is.EqualTo(expected).Within(.0001));
-            world.Step();
+            expected = Stored(world, cfg.GridSize); world.Step();
             Assert.That(Stored(world, cfg.GridSize), Is.EqualTo(expected * (1 - .1f * cfg.StepSeconds)).Within(.0001));
             Assert.AreEqual(20, world.Deaths);
         }
