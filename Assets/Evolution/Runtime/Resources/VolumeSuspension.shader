@@ -1,5 +1,6 @@
 Shader "Evolution/VolumeSuspension"
 {
+    Properties { _WaterFade("Water visibility guard",Vector)=(20,36,0,0) }
     SubShader {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Transparent" "Queue"="Transparent+10" }
         Pass {
