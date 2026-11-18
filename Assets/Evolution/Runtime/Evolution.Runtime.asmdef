@@ -3,6 +3,7 @@
   "references": [
     "Evolution.Core",
     "Evolution.Localization",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
   ]
 }

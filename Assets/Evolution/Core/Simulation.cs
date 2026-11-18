@@ -4,6 +4,7 @@ namespace Evolution.Core
     [Serializable]
     public sealed class SimulationConfig
     {
+        public bool OceanZones;
         public int Capacity = 4096, InitialPopulation = 160, GridSize = 32, MaxColonyCells = 16;
         public float WorldSize = 40, StepSeconds = .05f, InitialNutrients = 4,
             NutrientRegeneration = .12f, NutrientCapacity = 8, Temperature = 22,
@@ -55,6 +56,8 @@ namespace Evolution.Core
         public SimulationConfig Config => config.Copy();
         public uint RandomState => random.State;
         public Cell GetCell(int i) { if (i < 0 || i >= Count) throw new ArgumentOutOfRangeException(nameof(i)); return cells[i]; }
+        public OceanSample EnvironmentAt(float x, float z) => OceanEnvironment.Sample(x, z, config.WorldSize,
+            Tick * config.StepSeconds, Temperature, config.OceanZones);
         public float GetNutrient(int i) => nutrients[i];
         public float GetOrganicEnergy(int i) => organicEnergy[i];
         public Simulation(SimulationConfig settings, uint seed) : this(settings, seed, null) { }
@@ -68,7 +71,7 @@ namespace Evolution.Core
             organicEnergy = new float[nutrients.Length]; pendingRemains = new float[nutrients.Length];
             Temperature = config.Temperature; NutrientRegeneration = config.NutrientRegeneration;
             for (int i = 0; i < nutrients.Length; i++) {
-                nutrients[i] = Math.Min(config.InitialNutrients, config.NutrientCapacity);
+                nutrients[i] = Math.Min(config.InitialNutrients * SampleTile(i).Fertility, config.NutrientCapacity);
                 organicEnergy[i] = config.InitialOrganicEnergy;
             }
             for (int i = 0; i < (founders == null ? config.InitialPopulation : founders.Length); i++) {
@@ -95,21 +98,22 @@ namespace Evolution.Core
         {
             float dt = config.StepSeconds;
             for (int i = 0; i < nutrients.Length; i++) {
-                nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * dt);
+                nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * SampleTile(i).Fertility * dt);
                 // Decay dissipates energy; it does not create another energy-bearing resource.
                 organicEnergy[i] *= Math.Max(0, 1 - config.OrganicDecayRate * dt);
             }
             colonies.Prepare(cells, Count, config);
             colonies.Contact(cells, Count, config, ref random);
             colonies.Prepare(cells, Count, config);
-            colonies.Move(cells, Count, config, ref random);
+            colonies.Move(cells, Count, config, ref random, Tick * dt);
             // Feed and pay upkeep first, then transport can rescue a hungry living neighbour.
             for (int i = 0; i < Count; i++) {
                 Cell c = cells[i]; c.Age += dt;
                 colonies.Develop(ref c, dt);
                 int tile = Tile(c);
-                Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], Temperature, dt);
-                c.Energy -= Multicellularity.Cost(c, Temperature, colonies.Protection(i)) * dt;
+                float localTemperature = EnvironmentAt(c.X, c.Z).Temperature;
+                Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], localTemperature, dt);
+                c.Energy -= Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
                 cells[i] = c;
             }
             EnergyTransferred = colonies.Exchange(cells, Count, dt, config.MaxAge);
@@ -143,6 +147,8 @@ namespace Evolution.Core
             colonies.Prepare(cells, Count, config);
             colonies.Layout(cells, Count, config.WorldSize); Tick++;
         }
+        OceanSample SampleTile(int i) => EnvironmentAt((i % config.GridSize + .5f) * config.WorldSize / config.GridSize,
+            (i / config.GridSize + .5f) * config.WorldSize / config.GridSize);
         int Tile(Cell c) => Math.Min(config.GridSize - 1, (int)(c.Z / config.WorldSize * config.GridSize)) * config.GridSize
             + Math.Min(config.GridSize - 1, (int)(c.X / config.WorldSize * config.GridSize));
         float Wrap(float x)
