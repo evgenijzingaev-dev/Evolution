@@ -25,6 +25,7 @@ namespace Evolution.Runtime
         readonly List<int> expired = new List<int>();
         int used;
         float world, visualTime;
+        bool closeView;
         public OrganismRenderer(Mesh mesh, Material body, Material membrane, int capacity, Mesh membraneMesh)
         {
             this.mesh = mesh; this.membraneMesh = membraneMesh; this.body = body; this.membrane = membrane;
@@ -45,8 +46,9 @@ namespace Evolution.Runtime
         Color Tint(Cell c, int mode) => mode == 1 ? Color.Lerp(new Color(.18f, .9f, .55f), new Color(1, .52f, .24f), c.Genes.OrganicSpecialization)
             : mode == 2 ? Color.Lerp(RoleColor(CellRole.Generalist), RoleColor(c.Role), c.Specialization)
             : Color.Lerp(new Color(.2f, .5f, 1), new Color(1, .3f, .22f), c.Genes.PreferredTemperature / 50);
-        public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float frameSeconds)
+        public void Draw(Simulation simulation, int mode, float worldSize, int selectedId, float time, float frameSeconds, float cameraDistance)
         {
+            closeView = cameraDistance < 18; membrane.SetFloat("_OceanTime", time);
             world = worldSize; visualTime = time; used = 0; byId.Clear();
             for (int i = 0; i < simulation.Count; i++) { var c = simulation.GetCell(i); byId.Add(c.Id, c); }
             foreach (var entry in lastCells) {
@@ -71,7 +73,6 @@ namespace Evolution.Runtime
             foreach (int id in expired) { positions.Remove(id); divisions.Remove(id); }
             lastCells.Clear(); foreach (var pair in byId) lastCells.Add(pair.Key, pair.Value);
             byId.TryGetValue(selectedId, out var selected);
-            int grid = simulation.Config.GridSize;
             // Opaque organelles first, translucent membranes last; transparent depth writes are disabled.
             current = body; shape = Vector4.zero;
             for (int i = 0; i < simulation.Count; i++) {
@@ -82,20 +83,20 @@ namespace Evolution.Runtime
                 Color color = Tint(c, mode);
                 Add(p, r, new Vector3(.26f, .29f, .27f) * s, Color.Lerp(color, new Color(.35f, .2f, .55f), .65f));
                 Add(p + r * new Vector3(.03f, .08f, .04f) * s, r, Vector3.one * .09f * s, new Color(.8f, .8f, 1));
-                for (int j = 0; j < 3 + (int)(c.Genes.Uptake * 1.4f); j++) {
+                for (int j = 0; j < (closeView ? 3 + (int)(c.Genes.Uptake * 1.4f) : 2); j++) {
                     float angle = j * Mathf.PI * .5f + c.Id;
                     Vector3 offset = new Vector3(Mathf.Cos(angle) * .22f, .02f, Mathf.Sin(angle) * .2f) * s;
                     Add(p + r * offset, r * Quaternion.Euler(0, j * 45, 20), new Vector3(.12f, .08f, .065f) * s, Color.Lerp(color, Color.white, .35f));
                 }
                 // Motility structures are inherited; tissue development adds further specialization.
-                if (c.Genes.Speed > .8f) {
+                if (closeView && c.Genes.Speed > .8f) {
                     for (int j = 0; j < 5; j++) {
                         float wave = Mathf.Sin(visualTime * (3 + c.Genes.Speed) - j * .9f + c.Id) * .08f * j;
                         Add(p + r * new Vector3(-.38f - j * .11f, wave * .25f, wave) * s,
                             r * Quaternion.Euler(0, -wave * 100, 0), new Vector3(.18f, .025f, .027f) * s, color);
                     }
                 }
-                if (c.Genes.Uptake > 1.05f) {
+                if (closeView && c.Genes.Uptake > 1.05f) {
                     for (int j = 0; j < 6; j++) {
                         float angle = j * Mathf.PI / 3, wave = Mathf.Sin(visualTime * 7 + j + c.Id) * .035f;
                         Add(p + r * new Vector3(Mathf.Cos(angle) * .43f, wave, Mathf.Sin(angle) * .4f) * s,
@@ -103,7 +104,7 @@ namespace Evolution.Runtime
                     }
                 }
                 float d = c.Specialization;
-                if (d > .15f) {
+                if (closeView && d > .15f) {
                     if (c.Role == CellRole.Movement) {
                         for (int j = 0; j < 3; j++) {
                             float wave = Mathf.Sin(visualTime * 5 + c.Id + j * .8f) * .07f;
@@ -122,8 +123,7 @@ namespace Evolution.Runtime
                     }
                 }
                 // Nutrient motes move into the membrane only while local food and reserve room exist.
-                int tile = Mathf.Min(grid - 1, (int)(c.Z / world * grid)) * grid + Mathf.Min(grid - 1, (int)(c.X / world * grid));
-                if (c.Energy < Biology.Capacity(c.Genes) * .97f && (simulation.GetNutrient(tile) > .01f || simulation.GetOrganicEnergy(tile) > .01f)) {
+                if (c.FoodLastStep > .00001f) {
                     float phase = Mathf.Repeat(visualTime * .8f + c.Id * .37f, 1);
                     float angle = c.Id * 2.4f;
                     Add(p + new Vector3(Mathf.Cos(angle), .25f, Mathf.Sin(angle)) * (.65f * (1 - phase) + .16f) * s,
@@ -158,7 +158,6 @@ namespace Evolution.Runtime
                 float stretch = 1 + (c.Genes.Speed - .6f) * .10f + c.Specialization * (c.Role == CellRole.Movement ? .2f : -.08f);
                 float pinch = divisions.TryGetValue(c.Id, out float dividedAt) ? Mathf.Clamp01(1 - (time - dividedAt) / .8f) : 0;
                 shape = new Vector4(c.Genes.Branching * .14f, 2 + Mathf.Floor(c.Genes.Adhesion * 4), c.Genes.RolePattern * 6.28f, pinch);
-                membrane.SetFloat("_OceanTime", time);
                 Color color = Tint(c, mode); color.a = .22f;
                 Add(p, r, new Vector3(.82f * stretch, .65f, .76f) * s, color);
                 shape = Vector4.zero;
@@ -188,7 +187,7 @@ namespace Evolution.Runtime
         {
             if (used == 0) return;
             properties.SetVectorArray("_Shape", shapes); properties.SetVectorArray("_InstanceColor", colors); properties.SetFloat("_WorldSize", world);
-            Graphics.DrawMeshInstanced(current == membrane ? membraneMesh : mesh, 0, current, matrices, used, properties, ShadowCastingMode.Off, false);
+            Graphics.DrawMeshInstanced(current == membrane && closeView ? membraneMesh : mesh, 0, current, matrices, used, properties, ShadowCastingMode.Off, false);
             used = 0;
         }
     }

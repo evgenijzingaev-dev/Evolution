@@ -9,7 +9,7 @@ namespace Evolution.Localization
         DietColors, TemperatureColors, Resume, Pause, TimeScale, Temperature, Regeneration,
         Restart, ZoomIn, ZoomOut, DietLegend, TemperatureLegend, FoodLegend, Extinction, Colonies, Transport, ColonyTraits, FeedingCells,
         MovementCells, DefenseCells, ReproductiveCells, RoleColors, RoleLegend, ColonyHelp, SelectionHelp, ColonyBlueprint,
-        Observe, PopulationShort, TimeShort, Environment, CloseEnvironment, Overview, Focus, Follow, StopFollow, NothingSelected, PickHelp, OrganismTitle, CellIdentity, AgeGeneration, EnergyReserve, Vitality, VitalityHelp, ReproductionReady, ReproductionYoung, ReproductionEnergy, PopulationFull, Genes, HideGenes, GeneMotion, GeneFeeding, GeneTemperature, GeneAdhesion, GeneStructure, GeneRoles, ColonyEnergy, RolesSummary, Generalists, MutationSummary, NoMutations, FounderGenome, ControlHelp, ShortcutHelp, PendingEnvironment, MutationSpeed, MutationSize, MutationUptake, MutationTemperature, MutationDiet, MutationAdhesion, MutationColonySize, MutationBranching, MutationDifferentiation, MutationTransport, MutationPattern, RoleDetail, GeneralistRole, FeedingRole, MovementRole, DefenseRole, ReproductionRole, LegendCompact, RestartConfirm, RestartCancel, RestartWarning, SelectedValue, PlayOrganism, ReturnObserve, ControlledMode, PlayHelp, Divide, PlayChild, LocalEnvironment
+        Observe, PopulationShort, TimeShort, Environment, CloseEnvironment, Overview, Focus, Follow, StopFollow, NothingSelected, PickHelp, OrganismTitle, CellIdentity, AgeGeneration, EnergyReserve, Vitality, VitalityHelp, ReproductionReady, ReproductionYoung, ReproductionEnergy, PopulationFull, Genes, HideGenes, GeneMotion, GeneFeeding, GeneTemperature, GeneAdhesion, GeneStructure, GeneRoles, ColonyEnergy, RolesSummary, Generalists, MutationSummary, NoMutations, FounderGenome, ControlHelp, ShortcutHelp, PendingEnvironment, MutationSpeed, MutationSize, MutationUptake, MutationTemperature, MutationDiet, MutationAdhesion, MutationColonySize, MutationBranching, MutationDifferentiation, MutationTransport, MutationPattern, RoleDetail, GeneralistRole, FeedingRole, MovementRole, DefenseRole, ReproductionRole, LegendCompact, RestartConfirm, RestartCancel, RestartWarning, SelectedValue, PlayOrganism, ReturnObserve, ControlledMode, PlayHelp, Divide, PlayChild, LocalEnvironment, HideGoals, ShowGoals, GoalsIntro, LineageTitle, GoalProgress, GoalRules, ThermalChallenge, StageComplete, ChooseHeir, LineageLost, GoalSurvive, GoalFeed, GoalReserve, GoalReproduce, GoalInherit, GoalAdapt, GoalColony
     }
 
     // UI uses keys. Future languages supply a separate catalog with the same keys.
@@ -27,6 +27,23 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.ShowGoals] = "Цели эволюции",
+                [TextKey.HideGoals] = "Скрыть цели",
+                [TextKey.GoalsIntro] = "Начните играть за организм, чтобы развивать его генетическую линию. Можно свободно наблюдать без заданий.",
+                [TextKey.LineageTitle] = "Линия № {0} · цели {1}/7\nДостижения опыта: {2}/7",
+                [TextKey.GoalProgress] = "{0} · {1:P0}",
+                [TextKey.GoalSurvive] = "Выжить 30 секунд",
+                [TextKey.GoalFeed] = "Усвоить 5 единиц пищи",
+                [TextKey.GoalReserve] = "Заполнить резерв на 85%",
+                [TextKey.GoalReproduce] = "Успешно разделиться",
+                [TextKey.GoalInherit] = "Продолжить за потомка",
+                [TextKey.GoalAdapt] = "Выдержать смену среды 15 секунд",
+                [TextKey.GoalColony] = "Удержать развитую колонию 20 секунд",
+                [TextKey.GoalRules] = "Адаптация: сдвиг местной температуры от 4 °C и резерв от 35%. Колония: от 4 клеток, две функции от 25%, средний резерв от 40%. Цели считаются во время управления. Чужой организм начинает новую линию; достижения сохраняются до нового опыта.",
+                [TextKey.ThermalChallenge] = "Испытание: изменить температуру",
+                [TextKey.StageComplete] = "Многоклеточная жизнь устойчива! Следующее испытание: продолжить линию при другой температуре или меньшем количестве пищи.",
+                [TextKey.ChooseHeir] = "Наследник № {0} · поколение {1}",
+                [TextKey.LineageLost] = "Линия вымерла. Выберите другой живой организм, чтобы начать новую.",
                 [TextKey.PlayOrganism] = "Играть за организм",
                 [TextKey.ReturnObserve] = "Вернуться к наблюдению",
                 [TextKey.ControlledMode] = "Управление организмом",
@@ -114,7 +131,7 @@ namespace Evolution.Localization
                 [TextKey.ZoomOut] = "Отдалить",
                 [TextKey.DietLegend] = "Зелёные клетки лучше усваивают субстрат; оранжевые — органику.",
                 [TextKey.TemperatureLegend] = "Синие клетки приспособлены к холоду; красные — к теплу.",
-                [TextKey.FoodLegend] = "Зелёный грунт — питательный субстрат. Коричневые участки — конечные органические остатки.",
+                [TextKey.FoodLegend] = "Зелёные облака — питательный субстрат; янтарные — органические остатки. Течения переносят организмы; цвет воды отражает температурные зоны.",
                 [TextKey.Colonies] = "Колонии: {0} | Клеток в колониях: {1} | Крупнейшая: {2}",
                 [TextKey.Transport] = "Передача энергии внутри организмов: {0:F2}/с",
                 [TextKey.ColonyBlueprint] = "Наследуемый предел колонии: {0:F1} | Ветвление: {1:P0} | Потенциал тканей: {2:P0}",

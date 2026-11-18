@@ -26,11 +26,12 @@ namespace Evolution.Runtime
         bool environmentPending;
         public Simulation World => simulation;
         public int SelectedId => selectedId;
+        public EvolutionJourney Journey { get; private set; }
         public bool IsControlling => simulation != null && simulation.ControlledId != 0;
         public bool PlaySelected()
         {
             if (!simulation.TryControl(selectedId)) return false;
-            FocusSelected(true); speed = 1; return true;
+            Journey.Begin(simulation, selectedId); showGoals = true; FocusSelected(true); speed = 1; return true;
         }
         public void ObserveWorld() { simulation.ReleaseControl(); rig.StopFollowing(); }
         public bool PlayOffspring()
@@ -56,7 +57,7 @@ namespace Evolution.Runtime
         public void ResetWorld()
         {
             activeSettings = Settings.Copy(); activeSettings.OceanZones = LivingOcean;
-            simulation = new Simulation(activeSettings, unchecked((uint)Seed)); accumulator = visualTime = 0;
+            simulation = new Simulation(activeSettings, unchecked((uint)Seed)); Journey = new EvolutionJourney(); accumulator = visualTime = 0;
             organismRenderer = new OrganismRenderer(mesh, cellsMaterial, membraneMaterial, activeSettings.Capacity, membraneMesh);
             ocean?.Dispose(); ocean = new OceanRenderer(activeSettings.WorldSize, activeSettings.GridSize, habitat, mesh);
             selectedId = 0; rig.Initialize(view, activeSettings.WorldSize);
@@ -115,7 +116,7 @@ namespace Evolution.Runtime
             if (simulation == null) return;
             bool overUI = PointerOverUI(Input.mousePosition);
             if (Input.GetKeyDown(KeyCode.Space)) paused = !paused;
-            if (Input.GetKeyDown(KeyCode.F)) FocusSelected(false);
+            if (Input.GetKeyDown(KeyCode.F)) FocusSelected(IsControlling);
             if (Input.GetKeyDown(KeyCode.G)) FocusSelected(true);
             if (Input.GetKeyDown(KeyCode.Escape)) { if (IsControlling) ObserveWorld(); else ClearSelection(); }
             if (IsControlling && Input.GetKeyDown(KeyCode.Home)) { ObserveWorld(); rig.Overview(); }
@@ -134,11 +135,11 @@ namespace Evolution.Runtime
             int budget = 0;
             while (!paused && accumulator >= activeSettings.StepSeconds && budget++ < 256) {
                 if (environmentPending) { simulation.SetEnvironment(pendingTemperature, pendingFood); environmentPending = false; }
-                simulation.Step(); accumulator -= activeSettings.StepSeconds;
+                int controlled = simulation.ControlledId; simulation.Step(); Journey.RecordStep(simulation, controlled); accumulator -= activeSettings.StepSeconds;
             }
             // Backlog is retained: frame rate cannot silently discard simulation ticks.
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
-            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 0 : Time.unscaledDeltaTime);
+            organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 0 : Time.unscaledDeltaTime, rig.Distance);
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
             rig.Tick(overUI, IsControlling); ocean.Draw(simulation, view, (float)visualTime);
         }
