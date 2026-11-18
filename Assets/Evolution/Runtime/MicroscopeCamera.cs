@@ -23,14 +23,21 @@ namespace Evolution.Runtime
         public void Zoom(float wheel) { targetDistance = Observation.Zoom(targetDistance, wheel, world); }
         public void FocusOn(Vector3 point, bool follow, float frameDistance = 5) { targetFocus = Bound(point); targetDistance = Mathf.Clamp(frameDistance, Mathf.Min(2, world * .5f), world * 1.65f); Following = follow; }
         public void StopFollowing() { Following = false; }
-        public void FollowPoint(Vector3 point) { if (Following) targetFocus = Bound(point); }
+        public void FollowPoint(Vector3 point) {
+            if (!Following) return;
+            point = Bound(point);
+            if (Mathf.Abs(point.x - targetFocus.x) > world * .5f) focus.x += point.x > targetFocus.x ? world : -world;
+            if (Mathf.Abs(point.z - targetFocus.z) > world * .5f) focus.z += point.z > targetFocus.z ? world : -world;
+            targetFocus = point;
+        }
         Vector3 Bound(Vector3 point) => new Vector3(Mathf.Clamp(point.x, 0, world), .54f, Mathf.Clamp(point.z, 0, world));
-        public void Tick(bool pointerOverUI)
+        public Vector3 ControlDirection(Vector2 input) => Quaternion.Euler(0, targetYaw, 0) * new Vector3(input.x, 0, input.y);
+        public void Tick(bool pointerOverUI, bool controlling = false)
         {
             if (!lens || !Application.isFocused) return;
             float dt = Mathf.Min(Time.unscaledDeltaTime, .1f);
             if (!pointerOverUI) Zoom(Input.mouseScrollDelta.y);
-            if (Input.GetKeyDown(KeyCode.Home)) Overview();
+            if (!controlling && Input.GetKeyDown(KeyCode.Home)) Overview();
             if (Input.GetKeyDown(KeyCode.Escape)) Following = false;
             if (Input.GetMouseButtonDown(2) || Input.GetMouseButtonDown(1)) { dragging = !pointerOverUI; previousPointer = Input.mousePosition; }
             Vector3 mouseDelta = (Input.mousePosition - previousPointer) * (1080f / Mathf.Max(1, Screen.height)); previousPointer = Input.mousePosition;
@@ -41,8 +48,8 @@ namespace Evolution.Runtime
             if ((Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))) move.z--;
             if ((Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))) move.x++;
             if ((Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))) move.x--;
-            if (move.sqrMagnitude > 0) { Following = false; targetFocus += rotation * move.normalized * targetDistance * .65f * dt; }
-            if (dragging && Input.GetMouseButton(2)) {
+            if (!controlling && move.sqrMagnitude > 0) { Following = false; targetFocus += rotation * move.normalized * targetDistance * .65f * dt; }
+            if (!controlling && dragging && Input.GetMouseButton(2)) {
                 Following = false;
                 targetFocus -= rotation * new Vector3(mouseDelta.x * .1f, 0, mouseDelta.y * .1f) * targetDistance * .025f;
             }

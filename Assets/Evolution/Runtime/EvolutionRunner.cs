@@ -26,6 +26,19 @@ namespace Evolution.Runtime
         bool environmentPending;
         public Simulation World => simulation;
         public int SelectedId => selectedId;
+        public bool IsControlling => simulation != null && simulation.ControlledId != 0;
+        public bool PlaySelected()
+        {
+            if (!simulation.TryControl(selectedId)) return false;
+            FocusSelected(true); speed = 1; return true;
+        }
+        public void ObserveWorld() { simulation.ReleaseControl(); rig.StopFollowing(); }
+        public bool PlayOffspring()
+        {
+            int child = simulation.LastOffspringId;
+            if (!Observation.TryFind(simulation, child, out _)) return false;
+            SelectCell(child); return PlaySelected();
+        }
         public MicroscopeCamera CameraRig => rig;
         public bool IsPaused { get => paused; set => paused = value; }
         void Start()
@@ -52,9 +65,10 @@ namespace Evolution.Runtime
         public bool SelectCell(int id)
         {
             if (!Observation.TryFind(simulation, id, out _)) return false;
-            selectedId = id; rig.StopFollowing(); return true;
+            if (IsControlling && selectedId != id) ObserveWorld();
+            selectedId = id; if (!IsControlling) rig.StopFollowing(); return true;
         }
-        public void ClearSelection() { selectedId = 0; rig.StopFollowing(); }
+        public void ClearSelection() { ObserveWorld(); selectedId = 0; rig.StopFollowing(); }
         public void FocusSelected(bool follow)
         {
             if (Observation.TryFind(simulation, selectedId, out var c)) { OrganismFrame(c, out var center, out float radius); rig.FocusOn(center, follow, Mathf.Max(3, radius * 3.2f)); }
@@ -103,8 +117,19 @@ namespace Evolution.Runtime
             if (Input.GetKeyDown(KeyCode.Space)) paused = !paused;
             if (Input.GetKeyDown(KeyCode.F)) FocusSelected(false);
             if (Input.GetKeyDown(KeyCode.G)) FocusSelected(true);
-            if (Input.GetKeyDown(KeyCode.Escape)) ClearSelection();
+            if (Input.GetKeyDown(KeyCode.Escape)) { if (IsControlling) ObserveWorld(); else ClearSelection(); }
+            if (IsControlling && Input.GetKeyDown(KeyCode.Home)) { ObserveWorld(); rig.Overview(); }
             if (!overUI && Input.GetMouseButtonDown(0)) { int id = Pick(Input.mousePosition); if (id == 0) ClearSelection(); else SelectCell(id); }
+            if (IsControlling) {
+                float x = 0, z = 0;
+                if (!overUI && Application.isFocused && !paused) {
+                    if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) x++;
+                    if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) x--;
+                    if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) z++;
+                    if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) z--;
+                }
+                Vector3 direction = rig.ControlDirection(new Vector2(x,z)); simulation.SetControlInput(direction.x,direction.z);
+            }
             if (!paused) { accumulator += Time.unscaledDeltaTime * speed; visualTime += Time.unscaledDeltaTime * speed; }
             int budget = 0;
             while (!paused && accumulator >= activeSettings.StepSeconds && budget++ < 256) {
@@ -115,7 +140,7 @@ namespace Evolution.Runtime
             if (selectedId != 0 && !Observation.TryFind(simulation, selectedId, out _)) ClearSelection();
             organismRenderer.Draw(simulation, colorMode, activeSettings.WorldSize, selectedId, (float)visualTime, paused ? 0 : Time.unscaledDeltaTime);
             if (rig.Following && Observation.TryFind(simulation, selectedId, out var selected)) { OrganismFrame(selected, out var center, out _); rig.FollowPoint(center); }
-            rig.Tick(overUI); ocean.Draw(simulation, view, (float)visualTime);
+            rig.Tick(overUI, IsControlling); ocean.Draw(simulation, view, (float)visualTime);
         }
         void OnDestroy()
         {
