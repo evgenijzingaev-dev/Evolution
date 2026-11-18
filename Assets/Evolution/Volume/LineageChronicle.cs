@@ -27,6 +27,7 @@ namespace Evolution.Volume
         VolumeWorld latest;
         long journalSequence;
         int hunts, divisions, deepestGeneration, lastAlive, lastMissing;
+        long lastHuntTick = long.MinValue;
         int founderGeneration = int.MinValue;
         string founderIdentity;
         double startedAt = double.NaN;
@@ -53,14 +54,12 @@ namespace Evolution.Volume
             if (!ReferenceEquals(world, latest)) { latest = world; journalSequence = 0; }
             if (controlled >= 0 && controlled < world.Count) {
                 var a = world.Get(controlled);
-                if (a.Alive && !string.IsNullOrEmpty(a.Identity)) {
+                if (founderGeneration == int.MinValue && a.Alive && !string.IsNullOrEmpty(a.Identity)) {
                     dynasty.Add(a.Identity);
-                    if (founderGeneration == int.MinValue) {
-                        founderIdentity = a.Identity;
-                        founderGeneration = a.Biology.Generation;
-                        deepestGeneration = a.Biology.Generation;
-                        startedAt = world.Time;
-                    }
+                    founderIdentity = a.Identity;
+                    founderGeneration = a.Biology.Generation;
+                    deepestGeneration = a.Biology.Generation;
+                    startedAt = world.Time;
                 }
             }
             if (dynasty.Count == 0) return false;
@@ -87,7 +86,8 @@ namespace Evolution.Volume
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
                 if (a.Identity == null || !dynasty.Contains(a.Identity)) continue;
-                if (a.Alive) {
+                if (a.Alive && !dead.Contains(a.Identity)) {
+                    // A confirmed death is terminal even if streaming returns a stale live snapshot.
                     observed.Add(a.Identity);
                     lastAlive++;
                     if (a.Biology.Generation > deepestGeneration) deepestGeneration = a.Biology.Generation;
@@ -98,7 +98,11 @@ namespace Evolution.Volume
             // A confirmed bite of the played member is the model's own per-tick fact.
             if (controlled >= 0 && controlled < world.Count) {
                 var a = world.Get(controlled);
-                if (a.Alive && dynasty.Contains(a.Identity) && a.Biology.AttackLastStep > 0) hunts++;
+                if (a.Alive && !dead.Contains(a.Identity) && dynasty.Contains(a.Identity)
+                    && a.Biology.AttackLastStep > 0 && world.Tick != lastHuntTick) {
+                    hunts++;
+                    lastHuntTick = world.Tick;
+                }
             }
             lastMissing = 0;
             foreach (var identity in dynasty) if (!dead.Contains(identity) && !observed.Contains(identity)) lastMissing++;

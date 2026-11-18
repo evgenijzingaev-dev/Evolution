@@ -89,6 +89,79 @@ namespace Evolution.Tests
             Assert.IsFalse(chronicle.Finished);
         }
         [Test]
+        public void ConfirmedDeadFounderCannotAppearAliveAfterStreamingRebind()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            world.RequestDivision();
+            world.Step();
+            chronicle.Record(world, 0);
+            Assert.AreEqual(1, chronicle.Divisions);
+
+            var corpse = world.Get(0);
+            corpse.Alive = false;
+            var child = world.Get(1);
+            var confirmed = new VolumeWorld(new[] { corpse, child },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(confirmed, -1);
+
+            // A stale loaded copy reports the dead founder as alive, while the
+            // genuine descendant is temporarily outside the streamed region.
+            corpse.Alive = true;
+            var stale = new VolumeWorld(new[] { corpse },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(stale, -1);
+            Assert.IsFalse(chronicle.Finished, "Missing offspring must not be declared extinct.");
+            Assert.IsTrue(chronicle.FinishByPlayer());
+            StringAssert.Contains("неизвестен", chronicle.Summary.EndText);
+            StringAssert.DoesNotContain("Линия жива:", chronicle.Summary.EndText,
+                "Confirmed dead founder must not count as a living dynasty member.");
+        }
+        [Test]
+        public void SwitchingControlToUnrelatedCellDoesNotAdoptItIntoDynasty()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            var outsider = Founder();
+            outsider.Identity = "unrelated-outsider";
+            var switched = new VolumeWorld(new[] { world.Get(0), outsider },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(switched, 1);
+            // Only the founder is a dynasty member; an unrelated controlled cell
+            // must not prevent extinction or appear as a surviving descendant.
+            var founder = world.Get(0);
+            founder.Alive = false;
+            var afterDeath = new VolumeWorld(new[] { founder, outsider },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            Assert.IsTrue(chronicle.Record(afterDeath, 1));
+            Assert.AreEqual(ChronicleEnd.Extinct, chronicle.Summary.End);
+            Assert.AreEqual(0, chronicle.Divisions);
+        }
+        [Test]
+        public void RepeatedHudReadsCannotAwardMultipleHuntsInOneTick()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            var founder = world.Get(0);
+            founder.Biology.AttackLastStep = 1;
+            // VolumeAgent is a value type: Get returns a copy. Rebuild the observed
+            // snapshot with the modified agent instead of mutating a detached copy.
+            var observed = new VolumeWorld(new[] { founder },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(observed, 0);
+            chronicle.Record(observed, 0);
+            Assert.AreEqual(1, chronicle.Hunts,
+                "Reading the same simulation tick twice must not manufacture hunts.");
+            var rebound = new VolumeWorld(new[] { founder },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(rebound, 0);
+            Assert.AreEqual(1, chronicle.Hunts,
+                "Rebinding the streamed world at the same tick must not replay the hunt.");
+        }
+        [Test]
         public void WorldRebindDoesNotReplayOldDivisions()
         {
             var world = Ready();
