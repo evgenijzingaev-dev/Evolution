@@ -89,6 +89,36 @@ namespace Evolution.Tests
             Assert.IsFalse(chronicle.Finished);
         }
         [Test]
+        public void ConfirmedDeadFounderCannotAppearAliveAfterStreamingRebind()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            world.RequestDivision();
+            world.Step();
+            chronicle.Record(world, 0);
+            Assert.AreEqual(1, chronicle.Divisions);
+
+            var corpse = world.Get(0);
+            corpse.Alive = false;
+            var child = world.Get(1);
+            var confirmed = new VolumeWorld(new[] { corpse, child },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(confirmed, -1);
+
+            // A stale loaded copy reports the dead founder as alive, while the
+            // genuine descendant is temporarily outside the streamed region.
+            corpse.Alive = true;
+            var stale = new VolumeWorld(new[] { corpse },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(stale, -1);
+            Assert.IsFalse(chronicle.Finished, "Missing offspring must not be declared extinct.");
+            Assert.IsTrue(chronicle.FinishByPlayer());
+            StringAssert.Contains("неизвестен", chronicle.Summary.EndText);
+            StringAssert.DoesNotContain("Линия жива:", chronicle.Summary.EndText,
+                "Confirmed dead founder must not count as a living dynasty member.");
+        }
+        [Test]
         public void WorldRebindDoesNotReplayOldDivisions()
         {
             var world = Ready();
