@@ -44,6 +44,7 @@ namespace Evolution.Volume
         {
             if(index<0||index>=world.Count)return "Выбери клетку, чтобы увидеть её обмен.";
             var a=world.Get(index);if(!a.Alive)return DeathReason(a);var c=a.Biology;var b=c.Budget;
+            if(b.Attack>0 && b.Prey<=0)return "Атака без добычи расходует энергию. Подплыви ближе или выключи атаку.";
             if(b.PredationLoss>0)return "Укусы отнимают энергию. Уходи от хищника.";
             bool inside=false;float stock=0;
             for(int k=0;k<world.FoodCount;k++){var f=world.GetFood(k);if((f.Position-a.Position).Sqr<f.Radius*f.Radius){inside=true;stock+=f.Substrate*2+f.Organic;}}
