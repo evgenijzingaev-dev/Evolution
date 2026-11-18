@@ -30,12 +30,15 @@ namespace Evolution.Volume
         bool TryLoad(ChunkKey key,out RegionState state);
         void Save(RegionState state);
     }
-    public sealed class MemoryRegionArchive : IRegionArchive
+    public sealed class MemoryRegionArchive : IRegionArchive,ISurveyArchive
     {
         readonly Dictionary<ChunkKey,RegionState> saved=new Dictionary<ChunkKey,RegionState>();
         public long Clock {get;set;}
         public bool TryLoad(ChunkKey key,out RegionState state) {if(saved.TryGetValue(key,out var s)){state=s.Clone();return true;}state=null;return false;}
         public void Save(RegionState state)=>saved[state.Key]=state.Clone();
+        readonly List<SurveyRegion> survey=new List<SurveyRegion>();
+        public void ReadSurvey(List<SurveyRegion> destination){foreach(var r in survey)destination.Add(r.Clone());}
+        public void WriteSurvey(IReadOnlyList<SurveyRegion> regions){survey.Clear();foreach(var r in regions)survey.Add(r.Clone());}
     }
     // Two organisms/clouds per chunk, 5^3 visibility guard, near 20 Hz / far 1 Hz.
     // Archived regions preserve pose/genome and receive bounded analytical metabolic catch-up.
@@ -46,11 +49,14 @@ namespace Evolution.Volume
         readonly Dictionary<string,ChunkKey> agentOwners=new Dictionary<string,ChunkKey>(),foodOwners=new Dictionary<string,ChunkKey>();
         readonly V3 offset;ChunkKey center;bool initialized;
         public VolumeWorld World {get;private set;}
+        public OceanSurvey Survey {get;}=new OceanSurvey();
+        public IEnumerable<ChunkKey> LoadedKeys=>loaded.Keys;
         public int LoadedCount=>loaded.Count;
         public ChunkOcean(uint seed,IRegionArchive archive)
         {
             this.seed=seed;this.archive=archive;
             var rng=new RandomSource(seed^0x718197u);offset=new V3(rng.Range(-100,100),rng.Range(-100,100),rng.Range(-100,100));
+            if(archive is ISurveyArchive store){var records=new List<SurveyRegion>();store.ReadSurvey(records);Survey.Restore(records);}
             Stream(default);
         }
         public bool Stream(V3 camera)
@@ -60,7 +66,7 @@ namespace Evolution.Volume
             string controlled=World!=null&&World.Controlled>=0?World.Get(World.Controlled).Identity:null;
             V3 input=World?.Input??default;bool boost=World?.Boost??false,attack=World?.Attack??false;
             long tick=World?.Tick??archive.Clock;
-            if(initialized)Synchronize();
+            if(initialized){Survey.Refresh(World,loaded.Keys);Synchronize();}
             var keep=new HashSet<ChunkKey>();
             for(int z=-2;z<=2;z++)for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++)keep.Add(new ChunkKey(next.X+x,next.Y+y,next.Z+z));
             var expired=new List<ChunkKey>();foreach(var pair in loaded)if(!keep.Contains(pair.Key))expired.Add(pair.Key);
@@ -78,13 +84,15 @@ namespace Evolution.Volume
             World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack};
             agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
-            archive.Clock=tick;center=next;initialized=true;return true;
+            archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
+            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);return true;
         }
         public int Find(string identity)
         {for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==identity)return i;return -1;}
         public int Nearest(V3 point)
         {int index=-1;float distance=float.MaxValue;for(int i=0;i<World.Count;i++){var a=World.Get(i);if(!a.Alive)continue;float d=(a.Position-point).Sqr;if(d<distance){distance=d;index=i;}}return index;}
-        public void Save() {Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Clock=World.Tick;}
+        public void Save() {Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Clock=World.Tick;
+            if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);}
         void Synchronize()
         {
             foreach(var r in loaded.Values) {r.Agents.Clear();r.Food.Clear();r.LastTick=World.Tick;}

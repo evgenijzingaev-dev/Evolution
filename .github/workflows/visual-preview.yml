@@ -12,7 +12,8 @@ on:
       - 'Assets/Evolution/Settings/**'
       - 'Assets/Evolution/Presentation/CrystalForms.cs'
       - 'Assets/Evolution/Presentation/WaterOptics.cs'
-      - 'Assets/Evolution/Volume/WaterSpace.cs'
+      - 'Assets/Evolution/Volume/**'
+      - 'Assets/Evolution/Runtime/OceanOverview*.cs'
       - 'Assets/Evolution/Runtime/WaterVisualPreview.cs'
       - 'Assets/Evolution/Runtime/WaterPrototype.cs'
       - 'Assets/Evolution/Runtime/WaterCamera.cs'
@@ -135,7 +136,7 @@ jobs:
           dockerShmSize: 1025m
           customParameters: -job-worker-count 2
 
-      - name: Render and validate five actual URP game frames
+      - name: Render and validate ecosystem and strategic URP game frames
         id: capture
         run: bash Tools/ci/visual_preview.sh
 
@@ -153,6 +154,12 @@ jobs:
             artifacts/visual-preview/04-currents.png
             artifacts/visual-preview/05-temperature-food.png
             artifacts/visual-preview/06-water-only.png
+            artifacts/visual-preview/07-cinematic-overview.png
+            artifacts/visual-preview/08-analytical-overview.png
+            artifacts/visual-preview/09-density-map.png
+            artifacts/visual-preview/10-depth-distribution.png
+            artifacts/visual-preview/11-selected-organism.png
+            artifacts/visual-preview/12-horizontal-slice.png
             artifacts/visual-preview/manifest.json
           if-no-files-found: error
           retention-days: 14
@@ -165,6 +172,12 @@ jobs:
           name: water-visual-diagnostics-NOT-VALIDATED-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             artifacts/visual-preview/*.png
+            artifacts/visual-preview/07-cinematic-overview.png
+            artifacts/visual-preview/08-analytical-overview.png
+            artifacts/visual-preview/09-density-map.png
+            artifacts/visual-preview/10-depth-distribution.png
+            artifacts/visual-preview/11-selected-organism.png
+            artifacts/visual-preview/12-horizontal-slice.png
             artifacts/visual-preview/manifest.json
             artifacts/visual-preview/diagnostics/*.png
             artifacts/visual-preview/diagnostics/*.json
@@ -183,7 +196,7 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write('\nVisual Preview: ' + os.environ['JOB_STATUS'] + '\n')
               url = os.environ.get('ARTIFACT_URL')
-              f.write('\n[Five rendered screenshots and device manifest](' + url + ')\n' if url else '\nNo verified screenshots. Check the failed step and docs/VISUAL_PREVIEW.md for license/GPU configuration.\n')
+              f.write('\n[Ocean and strategic screenshots with device manifest](' + url + ')\n' if url else '\nNo verified screenshots. Check the failed step and docs/VISUAL_PREVIEW.md for license/GPU configuration.\n')
               diagnostic = os.environ.get('DIAGNOSTIC_URL')
               if diagnostic:
                   f.write('\n[Real diagnostic frames — validation FAILED](' + diagnostic + ')\n')
