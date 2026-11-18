@@ -155,7 +155,14 @@ namespace Evolution.Volume
             return 0; // Transitional water
         }
         public static double AdvanceNicheResidence(double previous, bool eligible, double stepSeconds)
-            => eligible ? Math.Max(0, previous) + Math.Max(0, stepSeconds) : 0;
+        {
+            // Invalid or non-forward simulation time must never grant an instant victory.
+            // A corrupted prior streak is discarded rather than carried into a new tick.
+            if (!eligible || double.IsNaN(previous) || double.IsInfinity(previous)
+                || double.IsNaN(stepSeconds) || double.IsInfinity(stepSeconds) || stepSeconds <= 0)
+                return 0;
+            return Math.Max(0, previous) + stepSeconds;
+        }
         // A lineage must establish itself in ONE niche; alternating between two different
         // foreign niches is migration, not uninterrupted settlement.
         public static double AdvanceNicheResidenceInKind(double previous, int previousKind, int currentKind, bool eligible, double stepSeconds)
