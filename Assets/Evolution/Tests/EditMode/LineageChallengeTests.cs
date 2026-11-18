@@ -147,6 +147,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void MigrationGoalOffersOnlyDifferentHabitatsAndPreservesUrgentWarnings()
+        {
+            StringAssert.Contains("темнота", LineageChallenge.SettlementProgressGoal(0, null, 1));
+            StringAssert.DoesNotContain("светлая вода", LineageChallenge.MigrationChoices(1));
+            StringAssert.Contains("светлая вода", LineageChallenge.MigrationChoices(2));
+            StringAssert.DoesNotContain("темнота", LineageChallenge.MigrationChoices(2));
+            StringAssert.DoesNotContain("термальный источник", LineageChallenge.MigrationChoices(3));
+            StringAssert.Contains("термальный источник", LineageChallenge.MigrationChoices(0));
+            StringAssert.Contains("Закрепляйся", LineageChallenge.SettlementProgressGoal(2, null, 1));
+            Assert.AreEqual("Потомок голодает", LineageChallenge.SettlementProgressGoal(0, "Потомок голодает", 1));
+        }
+
+        [Test]
         public void SettlementAdviceExplainsRealEnergyRiskWithoutInventingRewards()
         {
             StringAssert.Contains("Переведи", LineageChallenge.SettlementAdvice(false, .8f, true));
