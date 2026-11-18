@@ -144,6 +144,8 @@ namespace Evolution.Volume
         public static string SettlementAdvice(bool inNewNiche, float energyFraction, bool sustainable)
         {
             if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
+            if (float.IsNaN(energyFraction) || float.IsInfinity(energyFraction) || energyFraction < 0f || energyFraction > 1f)
+                return "Энергия потомка недостоверна: дождись корректного наблюдения";
             if (energyFraction < .35f) return "Потомок голодает: найди доступный источник энергии";
             if (!sustainable) return "Энергия убывает: попробуй другую пищу или нишу";
             return null;
