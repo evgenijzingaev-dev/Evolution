@@ -182,6 +182,17 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void InvalidDescendantEnergyIsExplainedAndCannotCompleteSettlement()
+        {
+            foreach (float energy in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity, -0.1f, 1.1f }) {
+                Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, energy));
+                StringAssert.Contains("недостоверна", LineageChallenge.SettlementAdvice(true, energy, true));
+            }
+            StringAssert.Contains("голодает", LineageChallenge.SettlementAdvice(true, .30f, true));
+            Assert.IsNull(LineageChallenge.SettlementAdvice(true, .75f, true));
+        }
+
+        [Test]
         public void StarvationTakesPriorityOverOtherDescendantsReserveDrainRegardlessOfIterationOrder()
         {
             string starvation = LineageChallenge.SettlementAdvice(true, .30f, true);
