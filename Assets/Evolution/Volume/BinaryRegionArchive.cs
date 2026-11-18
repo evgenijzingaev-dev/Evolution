@@ -7,14 +7,22 @@ namespace Evolution.Volume
     // Explicit versioned records; no BinaryFormatter, reflection or executable object deserialization.
     public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive
     {
-        const int Magic=0x45564f33,Version=2;
-        readonly string directory;long clock;
+        const int Magic=0x45564f33,Version=3;
+        readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         public BinaryRegionArchive(string directory)
         {
             this.directory=directory;Directory.CreateDirectory(directory);string path=Path.Combine(directory,"clock.bin");
             if(File.Exists(path))using(var r=new BinaryReader(File.OpenRead(path)))clock=r.ReadInt64();
+            path=Path.Combine(directory,"ecology.bin");if(File.Exists(path))using(var r=new BinaryReader(File.OpenRead(path)))diagnostics=VolumeDiagnostics.Read(r);
         }
         public long Clock {get=>clock;set {clock=value;Atomic(Path.Combine(directory,"clock.bin"),w=>w.Write(value));}}
+        public VolumeDiagnostics Diagnostics {get=>diagnostics.Clone();set {diagnostics=value.Clone();Atomic(Path.Combine(directory,"ecology.bin"),w=>diagnostics.Write(w));}}
+        public System.Collections.Generic.IEnumerable<ChunkKey> Keys {
+            get {foreach(string path in Directory.GetFiles(directory,"*.region")) {
+                var parts=Path.GetFileNameWithoutExtension(path).Split('_');
+                if(parts.Length==3&&int.TryParse(parts[0],out int x)&&int.TryParse(parts[1],out int y)&&int.TryParse(parts[2],out int z))yield return new ChunkKey(x,y,z);
+            }}
+        }
         public bool TryLoad(ChunkKey key,out RegionState state)
         {
             string path=Path.Combine(directory,key+".region");if(!File.Exists(path)){state=null;return false;}
@@ -23,14 +31,14 @@ namespace Evolution.Volume
                 if(magic!=Magic||version<1||version>Version)throw new InvalidDataException("Unsupported EVOLUTION water region; original file retained.");
                 state=new RegionState {Key=key,LastTick=r.ReadInt64()};int count=Count(r);
                 for(int i=0;i<count;i++)state.Agents.Add(ReadAgent(r,version));count=Count(r);
-                for(int i=0;i<count;i++)state.Food.Add(new FoodCloud {Identity=r.ReadString(),Pattern=r.ReadInt32(),Position=ReadV(r),Radius=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle()});
+                for(int i=0;i<count;i++){var f=new FoodCloud {Identity=r.ReadString(),Pattern=r.ReadInt32(),Position=ReadV(r),Radius=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle()};if(version>=3)f.Order=r.ReadInt64();state.Food.Add(f);}
             }
             return true;
         }
         public void Save(RegionState state)=>Atomic(Path.Combine(directory,state.Key+".region"),w=>{
             w.Write(Magic);w.Write(Version);w.Write(state.LastTick);w.Write(state.Agents.Count);
             foreach(var a in state.Agents)WriteAgent(w,a);w.Write(state.Food.Count);
-            foreach(var f in state.Food){w.Write(f.Identity??"");w.Write(f.Pattern);WriteV(w,f.Position);w.Write(f.Radius);w.Write(f.Substrate);w.Write(f.Organic);}
+            foreach(var f in state.Food){w.Write(f.Identity??"");w.Write(f.Pattern);WriteV(w,f.Position);w.Write(f.Radius);w.Write(f.Substrate);w.Write(f.Organic);w.Write(f.Order);}
         });
         public void ReadSurvey(System.Collections.Generic.List<SurveyRegion> destination)=>SurveyPersistence.Read(Path.Combine(directory,"strategy.survey"),destination);
         public void WriteSurvey(System.Collections.Generic.IReadOnlyList<SurveyRegion> regions)=>SurveyPersistence.Write(Path.Combine(directory,"strategy.survey"),regions);
@@ -53,6 +61,7 @@ namespace Evolution.Volume
             WriteGenome(w,c.Genes);WriteGenome(w,c.ParentGenes);
             var b=c.Budget;
             foreach(float f in new[] {b.Start,b.Substrate,b.Organic,b.Light,b.Prey,b.Upkeep,b.Movement,b.Defense,b.Stress,b.Repair,b.Growth,b.Attack,b.Division,b.Contact,b.Transport,b.PredationLoss,b.Swimming,b.Turning,b.Boost})w.Write(f);
+            w.Write(a.Order);
         }
         static void WriteGenome(BinaryWriter w,Genome g)
         {
@@ -71,6 +80,7 @@ namespace Evolution.Volume
             a.Biology.Budget=new EnergyBudget {Start=r.ReadSingle(),Substrate=r.ReadSingle(),Organic=r.ReadSingle(),Light=r.ReadSingle(),Prey=r.ReadSingle(),Upkeep=r.ReadSingle(),
                 Movement=r.ReadSingle(),Defense=r.ReadSingle(),Stress=r.ReadSingle(),Repair=r.ReadSingle(),Growth=r.ReadSingle(),Attack=r.ReadSingle(),Division=r.ReadSingle(),
                 Contact=r.ReadSingle(),Transport=r.ReadSingle(),PredationLoss=r.ReadSingle(),Swimming=r.ReadSingle(),Turning=r.ReadSingle(),Boost=r.ReadSingle()};
+            if(version>=3)a.Order=r.ReadInt64();
             return a;
         }
         static Genome ReadGenome(BinaryReader r)=>new Genome {Speed=r.ReadSingle(),Size=r.ReadSingle(),Uptake=r.ReadSingle(),PreferredTemperature=r.ReadSingle(),OrganicSpecialization=r.ReadSingle(),

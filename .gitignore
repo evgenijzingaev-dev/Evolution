@@ -126,3 +126,5 @@ InitTestScene*.unity*
 *.lic.meta
 .env
 .env.*
+
+!Tools/VolumeDiagnostics/VolumeDiagnostics.csproj

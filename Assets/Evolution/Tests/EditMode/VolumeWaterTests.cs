@@ -52,7 +52,8 @@ namespace Evolution.Tests
         {
             var template=new VolumeWorld(1);var organic=template.GetFood(0);var substrate=template.GetFood(1);
             var dark=new VolumeWorld(1,42,new[] {Agent(organic.Position,photo:1)}) {Controlled=0};dark.Step();
-            Assert.AreEqual(0,dark.Get(0).Biology.Budget.Light);Assert.Greater(dark.Get(0).Biology.Budget.Organic,0);
+            // Even an initially organic-only cloud now receives the bounded ocean substrate flux.
+            Assert.Greater(dark.Get(0).Biology.Budget.Light,0);Assert.Greater(dark.Get(0).Biology.Budget.Organic,0);
             var sun=new VolumeWorld(1,42,new[] {Agent(substrate.Position,photo:1)}) {Controlled=0};sun.Step();var a=sun.Get(0);
             Assert.Greater(a.Biology.Budget.Light,0);
             float temperature=WaterField.Temperature(a.Position,0);

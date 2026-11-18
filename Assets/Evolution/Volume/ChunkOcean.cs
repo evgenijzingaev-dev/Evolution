@@ -27,6 +27,8 @@ namespace Evolution.Volume
     public interface IRegionArchive
     {
         long Clock {get;set;}
+        VolumeDiagnostics Diagnostics {get;set;}
+        IEnumerable<ChunkKey> Keys {get;}
         bool TryLoad(ChunkKey key,out RegionState state);
         void Save(RegionState state);
     }
@@ -34,6 +36,8 @@ namespace Evolution.Volume
     {
         readonly Dictionary<ChunkKey,RegionState> saved=new Dictionary<ChunkKey,RegionState>();
         public long Clock {get;set;}
+        public VolumeDiagnostics Diagnostics {get;set;}=new VolumeDiagnostics();
+        public IEnumerable<ChunkKey> Keys=>new List<ChunkKey>(saved.Keys);
         public bool TryLoad(ChunkKey key,out RegionState state) {if(saved.TryGetValue(key,out var s)){state=s.Clone();return true;}state=null;return false;}
         public void Save(RegionState state)=>saved[state.Key]=state.Clone();
         readonly List<SurveyRegion> survey=new List<SurveyRegion>();
@@ -41,12 +45,13 @@ namespace Evolution.Volume
         public void WriteSurvey(IReadOnlyList<SurveyRegion> regions){survey.Clear();foreach(var r in regions)survey.Add(r.Clone());}
     }
     // Two organisms/clouds per chunk, 5^3 visibility guard, near 20 Hz / far 1 Hz.
-    // Archived regions preserve pose/genome and receive bounded analytical metabolic catch-up.
+    // Archived regions replay the same far-LOD biology and bounded resource flux.
     public sealed class ChunkOcean
     {
         readonly uint seed;readonly IRegionArchive archive;
         readonly Dictionary<ChunkKey,RegionState> loaded=new Dictionary<ChunkKey,RegionState>();
         readonly Dictionary<string,ChunkKey> agentOwners=new Dictionary<string,ChunkKey>(),foodOwners=new Dictionary<string,ChunkKey>();
+        readonly VolumeDiagnostics diagnostics;
         readonly V3 offset;ChunkKey center;bool initialized;
         public VolumeWorld World {get;private set;}
         public OceanSurvey Survey {get;}=new OceanSurvey();
@@ -54,7 +59,7 @@ namespace Evolution.Volume
         public int LoadedCount=>loaded.Count;
         public ChunkOcean(uint seed,IRegionArchive archive)
         {
-            this.seed=seed;this.archive=archive;
+            this.seed=seed;this.archive=archive;diagnostics=archive.Diagnostics.Clone();
             var rng=new RandomSource(seed^0x718197u);offset=new V3(rng.Range(-100,100),rng.Range(-100,100),rng.Range(-100,100));
             if(archive is ISurveyArchive store){var records=new List<SurveyRegion>();store.ReadSurvey(records);Survey.Restore(records);}
             Stream(default);
@@ -67,6 +72,7 @@ namespace Evolution.Volume
             string divisionRequest=World?.DivisionRequest,offspring=World?.LastOffspringIdentity;
             V3 input=World?.Input??default;bool boost=World?.Boost??false,attack=World?.Attack??false;
             long tick=World?.Tick??archive.Clock;
+            bool supply=World?.NutrientSupply??true;
             if(initialized){Survey.Refresh(World,loaded.Keys);Synchronize();}
             var keep=new HashSet<ChunkKey>();
             for(int z=-2;z<=2;z++)for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++)keep.Add(new ChunkKey(next.X+x,next.Y+y,next.Z+z));
@@ -81,19 +87,41 @@ namespace Evolution.Volume
             var agents=new List<VolumeAgent>();var food=new List<FoodCloud>();var obstacles=new List<V3>();
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
-            for(int i=0;i<agents.Count;i++){var a=agents[i];a.FoodCloud=0;if(a.FoodIdentity!=null)for(int k=0;k<food.Count;k++)if(food[k].Identity==a.FoodIdentity){a.FoodCloud=k;break;}agents[i]=a;}
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
+
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset,diagnostics) {NutrientSupply=supply,ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
-            archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
+            archive.Diagnostics=diagnostics.Clone();archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
             if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);return true;
         }
         public int Find(string identity)
         {for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==identity)return i;return -1;}
         public int Nearest(V3 point)
         {int index=-1;float distance=float.MaxValue;for(int i=0;i<World.Count;i++){var a=World.Get(i);if(!a.Alive)continue;float d=(a.Position-point).Sqr;if(d<distance){distance=d;index=i;}}return index;}
-        public void Save() {Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Clock=World.Tick;
+        public void Save() {Survey.Refresh(World,loaded.Keys);Synchronize();foreach(var r in loaded.Values)archive.Save(r);archive.Diagnostics=diagnostics.Clone();archive.Clock=World.Tick;
             if(archive is ISurveyArchive store)store.WriteSurvey(Survey.Regions);}
+        // Advances known unloaded regions lazily before a global diagnostic snapshot.
+        // Unvisited regions do not exist in this accounting. Loading founders is never a birth.
+        public VolumeSnapshot Snapshot(out VolumeSnapshot archived)
+        {
+            archived=default;var keys=new List<ChunkKey>(archive.Keys);
+            var activeAgents=new HashSet<string>();var activeFood=new HashSet<string>();
+            for(int i=0;i<World.Count;i++)activeAgents.Add(World.Get(i).Identity);
+            for(int k=0;k<World.FoodCount;k++)activeFood.Add(World.GetFood(k).Identity);
+            keys.Sort((a,b)=>a.X!=b.X?a.X.CompareTo(b.X):a.Y!=b.Y?a.Y.CompareTo(b.Y):a.Z.CompareTo(b.Z));
+            foreach(var key in keys)if(!loaded.ContainsKey(key)&&archive.TryLoad(key,out var r)) {
+                // Save may already have archived outbound objects still resident in World.
+                // Their authoritative simulation remains active until the next streaming rebuild.
+                var residentAgents=r.Agents.FindAll(a=>activeAgents.Contains(a.Identity));
+                var residentFood=r.Food.FindAll(f=>activeFood.Contains(f.Identity));
+                r.Agents.RemoveAll(a=>activeAgents.Contains(a.Identity));r.Food.RemoveAll(f=>activeFood.Contains(f.Identity));
+                CatchUp(r,World.Tick);
+                var w=new VolumeWorld(r.Agents.ToArray(),r.Food.ToArray(),Array.Empty<V3>(),r.LastTick,offset);
+                archived.Add(VolumeSnapshot.Read(w));
+                r.Agents.AddRange(residentAgents);r.Food.AddRange(residentFood);archive.Save(r);
+            }
+            archive.Diagnostics=diagnostics.Clone();var total=VolumeSnapshot.Read(World);total.Add(archived);return total;
+        }
         void Synchronize()
         {
             foreach(var r in loaded.Values) {r.Agents.Clear();r.Food.Clear();r.LastTick=World.Tick;}
@@ -102,7 +130,7 @@ namespace Evolution.Volume
             {
                 if(loaded.TryGetValue(key,out var r))return r;
                 if(outbound.TryGetValue(key,out r))return r;
-                r=archive.TryLoad(key,out var saved)?saved:Generate(key,World.Tick);CatchUp(r,World.Tick);outbound.Add(key,r);return r;
+                r=archive.TryLoad(key,out var saved)?saved:new RegionState {Key=key,LastTick=World.Tick};CatchUp(r,World.Tick);outbound.Add(key,r);return r;
             }
             for(int i=0;i<World.Count;i++) {
                 var a=World.Get(i);if(!a.Alive&&World.Time-a.DiedAt>VolumeWorld.DivisionSeconds)continue;var key=ChunkKey.At(a.Position);
@@ -136,20 +164,17 @@ namespace Evolution.Volume
         }
         void CatchUp(RegionState region,long tick)
         {
-            double elapsed=(tick-region.LastTick)*(double)VolumeWorld.StepSeconds;
-            if(elapsed<=0)return;
-            int slices=Math.Min(16,Math.Max(1,(int)Math.Ceiling(elapsed)));float dt=(float)(elapsed/slices);
-            for(int s=0;s<slices;s++)for(int i=0;i<region.Agents.Count;i++) {
-                var a=region.Agents[i];if(!a.Alive)continue;var c=a.Biology;
-                var sample=new OceanSample {Temperature=WaterField.Temperature(a.Position+offset,(region.LastTick*VolumeWorld.StepSeconds)+(s+.5)*dt),Light=WaterField.Light(a.Position)};
-                c.Budget=new EnergyBudget {Start=c.Energy};
-                for(int k=0;k<region.Food.Count;k++) {var f=region.Food[k];if((f.Position-a.Position).Sqr>=f.Radius*f.Radius)continue;
-                    c.Budget.Light+=Ecology.Photosynthesize(ref c,ref f.Substrate,sample,dt);Biology.Feed(ref c,ref f.Substrate,ref f.Organic,sample.Temperature,dt);region.Food[k]=f;}
-                c.FoodLastStep=c.Budget.Intake;c.AssimilatedEnergy+=c.Budget.Intake;
-                c.Budget.Upkeep=Biology.Cost(c.Genes,sample.Temperature)*dt;c.Energy-=c.Budget.Upkeep;c.Age+=dt;
-                if(c.Energy<=0) {a.Alive=false;a.DiedAt=tick*VolumeWorld.StepSeconds;if(region.Food.Count>0){var f=region.Food[0];f.Organic+=Biology.CarcassEnergy(c);region.Food[0]=f;}}
-                a.Biology=c;a.Previous=a.Position;a.RenderTime=tick*VolumeWorld.StepSeconds;a.RenderDuration=dt;region.Agents[i]=a;
-            }
+            if(tick<=region.LastTick)return;
+            // Replay the same far-LOD model, including transport, paid growth/births and death.
+            // Archived regions are isolated until loaded; no neighbours or new regions are generated.
+            var rng=new RandomSource(region.Key.Seed(seed)^0x3817u);
+            var obstacle=region.Key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17));
+            var replay=new VolumeWorld(region.Agents.ToArray(),region.Food.ToArray(),new[] {obstacle},region.LastTick,offset,diagnostics) {
+                NutrientSupply=World?.NutrientSupply??true,ActiveCenter=new V3(1e10f,1e10f,1e10f)};
+            while(replay.Tick<tick){replay.Step();replay.CompactArchived();}
+            region.Agents.Clear();region.Food.Clear();
+            for(int i=0;i<replay.Count;i++){var a=replay.Get(i);if(a.Alive||replay.Time-a.DiedAt<=VolumeWorld.DivisionSeconds)region.Agents.Add(a);}
+            for(int k=0;k<replay.FoodCount;k++)region.Food.Add(replay.GetFood(k));
             region.LastTick=tick;
         }
     }
