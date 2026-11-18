@@ -241,3 +241,21 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               print('PR visual report published:', response.status)
           PY
+
+  publish-public-previews:
+    needs: render
+    if: >-
+      needs.render.result == 'success' && github.repository == 'evgenijzingaev-dev/Evolution' &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'codex/')) ||
+       (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || startsWith(github.ref_name, 'codex/'))))
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    uses: ./.github/workflows/publish-visual-preview.yml
+    with:
+      source_run_id: ${{ fromJSON(github.run_id) }}
+      pr_number: ${{ github.event.pull_request.number || 0 }}
+      tooling_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+    secrets:
+      VISUAL_PREVIEW_PUBLISH_TOKEN: ${{ secrets.VISUAL_PREVIEW_PUBLISH_TOKEN }}

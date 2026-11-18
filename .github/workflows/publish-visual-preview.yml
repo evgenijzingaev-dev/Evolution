@@ -1,0 +1,151 @@
+name: Publish Visual Preview
+
+on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        type: number
+        required: true
+      pr_number:
+        type: number
+        default: 0
+      tooling_ref:
+        type: string
+        required: true
+    secrets:
+      VISUAL_PREVIEW_PUBLISH_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Successful Visual Preview run ID'
+        type: number
+        required: true
+      pr_number:
+        description: 'Destination PR (0: detect from source run)'
+        type: number
+        default: 0
+  # Bootstrap/backfill the existing PR #19 artifact without running Unity again.
+  # Other branches only publish through the successful render's reusable call.
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '.github/workflows/publish-visual-preview.yml'
+      - 'Tools/ci/public*preview*'
+      - 'Tools/ci/test_public_previews.py'
+
+permissions: {}
+
+concurrency:
+  group: evolution-public-previews
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'evgenijzingaev-dev/Evolution' && github.actor != 'dependabot[bot]' &&
+      ((inputs.source_run_id > 0 &&
+        ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'codex/')) ||
+         (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || startsWith(github.ref_name, 'codex/'))))) ||
+       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref == 'codex/public-visual-previews'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.publish.outputs.pr }}
+      status: ${{ steps.publish.outputs.status }}
+      comment_json: ${{ steps.publish.outputs.comment_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tooling_ref || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install image converter
+        run: python3 -m pip install --disable-pip-version-check Pillow==13.0.0
+      - name: Test publication policy and bounded Git snapshots
+        run: python3 -B Tools/ci/test_public_previews.py
+      - name: Check image-only destination credential
+        env:
+          PUBLISH_TOKEN: ${{ secrets.VISUAL_PREVIEW_PUBLISH_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          if not os.getenv('PUBLISH_TOKEN', '').strip():
+              sys.exit('Set VISUAL_PREVIEW_PUBLISH_TOKEN to a fine-grained token with Contents read/write ONLY on evgenijzingaev-dev/Evolution-visual-previews. See docs/VISUAL_PREVIEW.md. Never paste the token into chat or commit it.')
+          print('Destination credential is configured; no credential value is printed.')
+          PY
+      - name: Resolve trusted Unity evidence
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id || 0 }}
+          TARGET_PR: ${{ inputs.pr_number || 0 }}
+        run: >-
+          python3 -B Tools/ci/public_preview_source.py
+          --run "$SOURCE_RUN" --pr "$TARGET_PR"
+          --output "$RUNNER_TEMP/public-preview-plan.json"
+      - name: Download only validated original artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: evgenijzingaev-dev/Evolution
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: ${{ steps.source.outputs.artifact_name }}
+          path: ${{ runner.temp }}/public-preview-originals
+      - name: Publish JPEG snapshot and verify every anonymous URL
+        id: publish
+        env:
+          GH_TOKEN: ${{ secrets.VISUAL_PREVIEW_PUBLISH_TOKEN }}
+        run: >-
+          python3 -B Tools/ci/public_visual_previews.py
+          --originals "$RUNNER_TEMP/public-preview-originals"
+          --plan "$RUNNER_TEMP/public-preview-plan.json"
+
+  report:
+    needs: publish
+    if: needs.publish.result == 'success' && needs.publish.outputs.status != 'superseded'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      # No checkout and no PR code execution with comment-write permissions.
+      - name: Update PR with verified direct image links
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_PR: ${{ needs.publish.outputs.pr }}
+          COMMENT_JSON: ${{ needs.publish.outputs.comment_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request
+          pr = os.environ['TARGET_PR']
+          if not re.fullmatch(r'[1-9][0-9]{0,12}', pr):
+              raise ValueError('Invalid PR identifier')
+          body = json.loads(os.environ['COMMENT_JSON'])['body']
+          marker = '<!-- evolution-public-visual-preview -->'
+          if not body.startswith(marker):
+              raise ValueError('Invalid report marker')
+          root = 'https://api.github.com/repos/evgenijzingaev-dev/Evolution'
+          def api(path, method='GET', data=None):
+              request = urllib.request.Request(root + path, method=method,
+                  data=json.dumps(data).encode() if data is not None else None, headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          existing = None
+          for page in range(1, 11):
+              comments = api('/issues/' + pr + '/comments?per_page=100&page=' + str(page))
+              existing = next((c for c in comments if c['user']['login'] == 'github-actions[bot]' and c['body'].startswith(marker)), None)
+              if existing or len(comments) < 100:
+                  break
+          if existing:
+              api('/issues/comments/' + str(existing['id']), 'PATCH', {'body': body})
+          else:
+              api('/issues/' + pr + '/comments', 'POST', {'body': body})
+          print('PR comment updated with 12 verified public image URLs')
+          PY
