@@ -80,7 +80,11 @@ namespace Evolution.Tests
                 water.Select(blocked);water.PlaySelected();
                 Assert.IsFalse(water.World.RequestDivision());
                 water.Hud.SetPage(HudPage.Development);yield return null;
-                Assert.AreEqual(tick,water.World.Tick);Assert.AreEqual(before,water.World.Get(selected));
+                // Camera selection can unload the original region and reindex slots.
+                // Revisit the actual organism, then compare its entire saved state by identity.
+                water.Observe();water.Rig.FocusOn(VolumePainter.V(before.Position),7);water.Rig.ApplyImmediate();yield return null;
+                int preserved=water.Ocean.Find(before.Identity);Assert.GreaterOrEqual(preserved,0);
+                Assert.AreEqual(tick,water.World.Tick);Assert.AreEqual(before,water.World.Get(preserved));
                 Assert.IsTrue(water.Hud.LayoutFits);
             } finally {Object.Destroy(root);}
             yield return null;
@@ -127,3 +131,4 @@ namespace Evolution.Tests
         }
     }
 }
+

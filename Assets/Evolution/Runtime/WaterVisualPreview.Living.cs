@@ -20,6 +20,7 @@ namespace Evolution.Runtime
             public double deathTime;
             public long deathSequence;
             public int deathFrames;
+            public Report render;
         }
         [Serializable] sealed class MovementEvidence
         {
@@ -75,6 +76,7 @@ namespace Evolution.Runtime
                 yield return Capture("living-death-"+frame.ToString("D3"),false);evidence.deathFrames++;
                 water.World.Step();
             }
+            evidence.render=Context(biologicalShots.ToArray(),!failed);
             File.WriteAllText(Path.Combine(destination,"living-cells.json"),JsonUtility.ToJson(evidence,true));
         }
     }

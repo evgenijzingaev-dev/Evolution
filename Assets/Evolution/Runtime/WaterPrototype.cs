@@ -32,7 +32,7 @@ namespace Evolution.Runtime
         void Start()
         {
             IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
-            Ocean=new ChunkOcean(unchecked((uint)Seed),archive);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
+            Ocean=new ChunkOcean(unchecked((uint)Seed),archive,EcologicalScenario.Natural);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
             selected=ScenicSelection();
             Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
             cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
@@ -144,4 +144,5 @@ namespace Evolution.Runtime
         }
     }
 }
+
 

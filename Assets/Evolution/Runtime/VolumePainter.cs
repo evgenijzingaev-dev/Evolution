@@ -143,6 +143,7 @@ namespace Evolution.Runtime
                     membranes[(int)form].Motion=farMembranes[(int)form].Motion=cytoplasm[(int)form].Motion=cellPose;
                     float phase=cellPose.Phase;
                     Color membrane=new Color(.66f,.86f,1,.30f+.12f*g.Membrane);
+                    if(world.Niches)membrane=Color.Lerp(membrane,new Color(1,.74f,.45f,membrane.a),g.ThermalTolerance*.24f*Mathf.InverseLerp(25,43,g.PreferredTemperature));
                     if(c.Specialization>0) {
                         Color role=c.Role==CellRole.Feeding?new Color(.45f,1,.65f,membrane.a):c.Role==CellRole.Movement?new Color(.4f,.8f,1,membrane.a):c.Role==CellRole.Defense?new Color(.9f,.72f,.42f,membrane.a):membrane;
                         membrane=Color.Lerp(membrane,role,c.Specialization*.65f);
@@ -218,8 +219,21 @@ namespace Evolution.Runtime
             expired.Clear();foreach(var id in states.Keys)if(!present.Contains(id))expired.Add(id);foreach(var id in expired)states.Remove(id);
             for(int form=0;form<6;form++){membranes[form].Fission=farMembranes[form].Fission=cytoplasm[form].Fission=0;membranes[form].Motion=farMembranes[form].Motion=cytoplasm[form].Motion=default;}
             foreach(var obstacle in world.Obstacles)if((V(obstacle)-eye).sqrMagnitude<36*36) {
+                var center=V(obstacle);
+                if(world.Niches&&NicheEnvironment.Vent(obstacle,world.FlowOffset)>.8f) {
+                    // This outcrop uses the actual Core collision/source position. VFX creates no food.
+                    bodies.Add(center,Quaternion.identity,new Vector3(2.1f,1.5f,2.0f),new Color(.25f,.20f,.17f));
+                    bodies.Add(center+Vector3.up*.45f,Quaternion.Euler(8,17,0),new Vector3(.85f,1.65f,.8f),new Color(.31f,.23f,.17f));
+                    float fuel=Mathf.Clamp01(world.EnvironmentAt(obstacle+new V3(0,1.8f,0)).Chemicals/25);
+                    for(int jet=0;jet<16;jet++) {
+                        float age=Mathf.Repeat((float)time*.22f+jet*.0618f,1);
+                        Vector3 drift=new Vector3(Mathf.Sin(jet*2.4f+age*2)*age*.65f,1.1f+age*4,Mathf.Cos(jet*2.4f+age*2)*age*.65f);
+                        particles.Add(center+drift,Quaternion.identity,Vector3.one*(.12f+age*.25f),new Color(1,.55f,.23f,(1-age)*(.12f+.14f*fuel)),new Vector4(4,0,0,0));
+                    }
+                    continue;
+                }
                 // Existing collision objects become porous organic/silica flocs, not invented organisms or food.
-                var center=V(obstacle);farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.10f));
+farMembranes[(int)CrystalForm.Radiolarian].Add(center,Quaternion.identity,Vector3.one*2.45f,new Color(.56f,.77f,.85f,.10f));
                 for(int j=0;j<12;j++) {
                     Vector3 n=Fibonacci(j,12);var knot=center+n*(.65f+.12f*Mathf.Sin(j*2.4f));
                     bodies.Add(knot,Quaternion.Euler(j*17,j*31,0),new Vector3(.28f,.18f,.23f),new Color(.52f,.68f,.67f));
@@ -232,7 +246,7 @@ namespace Evolution.Runtime
                 var p=new V3(x+Mathf.Floor(eye.x/6)*6,y+Mathf.Floor(eye.y/6)*6,z+Mathf.Floor(eye.z/6)*6);
                 p+=new V3(Mathf.Sin(p.Y*.31f+p.Z)*1.1f,Mathf.Sin(p.Z*.27f+p.X)*1.1f,Mathf.Sin(p.X*.37f+p.Y)*1.1f);
                 float fade=1-WaterOptics.SmoothRange(14,18,(V(p)-eye).magnitude);if(fade<=0)continue;
-                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.17f),new Color(1,.38f,.16f,.17f),Mathf.InverseLerp(9,35,temp));
+                if(heat) {float temp=world.Temperature(p);Color c=Color.Lerp(new Color(.2f,.48f,1,.17f),new Color(1,.38f,.16f,.17f),Mathf.InverseLerp(9,world.Niches?50:35,temp));
                     c.a*=fade;particles.Add(V(p),Quaternion.identity,Vector3.one*7.2f,c,new Vector4(4,0,0,0));}
                 if(lightHints) {float light=world.Sample(p).Light;
                     particles.Add(V(p),Quaternion.identity,Vector3.one*2.5f,new Color(.65f,.91f,1,.07f*light*fade),new Vector4(4,0,0,0));}

@@ -24,7 +24,7 @@ namespace Evolution.Runtime
             box=new GUIStyle(uiSkin.box){padding=new RectOffset(12,12,8,8)};box.normal.background=panelTexture;
             label=new GUIStyle(uiSkin.label);title=new GUIStyle(label){fontSize=16,fontStyle=FontStyle.Bold};small=new GUIStyle(label){fontSize=11};
         }
-        static readonly TextKey[] layers={TextKey.SurveyLineage,TextKey.SurveyForm,TextKey.SurveyDiet,TextKey.SurveyThreat,TextKey.SurveyDensity,TextKey.SurveyFood,TextKey.SurveyTemperature,TextKey.SurveyCurrent,TextKey.SurveyLight};
+        static readonly TextKey[] layers={TextKey.SurveyLineage,TextKey.SurveyForm,TextKey.SurveyDiet,TextKey.SurveyThreat,TextKey.SurveyDensity,TextKey.SurveyFood,TextKey.SurveyTemperature,TextKey.SurveyCurrent,TextKey.SurveyLight,TextKey.NicheNutrients,TextKey.NicheOxygen,TextKey.NicheChemistry,TextKey.NicheAdaptation};
         public void DrawUi()
         {
             if(!Active||!water.HudVisible)return;Skin();var old=GUI.skin;var matrix=GUI.matrix;GUI.skin=uiSkin;GUI.matrix=Matrix4x4.Scale(Vector3.one*UiScale);
@@ -34,9 +34,9 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Format(TextKey.SurveyCounts,Survey.ActiveLiving,Survey.KnownLiving,Survey.KnownLineages),small);
             GUILayout.Label(GameText.Get(TextKey.SurveyNoColonies),small);
             GUILayout.BeginHorizontal();
-            if(GUILayout.Button(GameText.Get(TextKey.SurveyFilterPrev)))Layer=(SurveyLayer)(((int)Layer+8)%9);
+            if(GUILayout.Button(GameText.Get(TextKey.SurveyFilterPrev)))Layer=(SurveyLayer)(((int)Layer+layers.Length-1)%layers.Length);
             GUILayout.Label(GameText.Get(layers[(int)Layer]));
-            if(GUILayout.Button(GameText.Get(TextKey.SurveyFilterNext)))Layer=(SurveyLayer)(((int)Layer+1)%9);
+            if(GUILayout.Button(GameText.Get(TextKey.SurveyFilterNext)))Layer=(SurveyLayer)(((int)Layer+1)%layers.Length);
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             if(GUILayout.Button(GameText.Get(FullDepth?TextKey.SurveyFullDepth:TextKey.SurveySlice)))FullDepth=!FullDepth;
@@ -47,6 +47,7 @@ namespace Evolution.Runtime
             else GUILayout.Label(GameText.Format(TextKey.SurveyHeight,SliceIndex*20,(SliceIndex+1)*20),small);
             if(GUILayout.Button(GameText.Get(DepthColours?TextKey.SurveyDepthOn:TextKey.SurveyDepthOff)))DepthColours=!DepthColours;
             if(Survey.TryRegion(RegionKey,out var region)){GUILayout.Label(GameText.Format(TextKey.SurveyRegion,RegionKey.X,RegionKey.Y,RegionKey.Z,region.Living,region.Temperature,region.Light),small);
+                if(water.World.Niches&&Layer>=SurveyLayer.Nutrients)GUILayout.Label(GameText.Format(TextKey.NicheStocks,region.Nutrients,region.Oxygen,region.MeanGeneration,region.MeanOptimum),small);
                 if(Layer==SurveyLayer.Food)GUILayout.Label(GameText.Format(TextKey.SurveyResourceValues,region.Substrate,region.Organic),small);
                 if(Layer==SurveyLayer.Current)GUILayout.Label(GameText.Format(TextKey.VolumeVector,region.Current.X,region.Current.Y,region.Current.Z),small);}
             if(SelectionKind==OverviewSelection.Organism){if(HasSelectedOrganism)GUILayout.Label(GameText.Format(TextKey.SurveySelection,chosenId,SelectedLineage),small);
@@ -104,9 +105,9 @@ namespace Evolution.Runtime
             for(int i=Survey.Events.Count-1;i>=Mathf.Max(0,Survey.Events.Count-5);i--) {
                 var e=Survey.Events[i];if(GUILayout.Button(GameText.Format(EventText(e.Kind),e.Count,e.Lineage)))VisitEvent(i);
             }
-            GUILayout.Label(GameText.Get(TextKey.SurveyUnsupported),small);GUILayout.EndArea();
+            GUILayout.Label(GameText.Format(TextKey.NicheTrend,NicheReadout.Trend(Survey.NicheHistory)),small);GUILayout.EndArea();
         }
-        static readonly TextKey[] legend={TextKey.SurveyLegendLineage,TextKey.SurveyLegendForm,TextKey.SurveyLegendDiet,TextKey.SurveyLegendThreat,TextKey.SurveyLegendDensity,TextKey.SurveyLegendFood,TextKey.SurveyLegendHeat,TextKey.SurveyLegendFlow,TextKey.SurveyLegendLight};
+        static readonly TextKey[] legend={TextKey.SurveyLegendLineage,TextKey.SurveyLegendForm,TextKey.SurveyLegendDiet,TextKey.SurveyLegendThreat,TextKey.SurveyLegendDensity,TextKey.SurveyLegendFood,TextKey.SurveyLegendHeat,TextKey.SurveyLegendFlow,TextKey.SurveyLegendLight,TextKey.NicheLegendNutrients,TextKey.NicheLegendOxygen,TextKey.NicheLegendChemistry,TextKey.NicheLegendAdaptation};
         static readonly TextKey[] dietNames={TextKey.SurveyPhoto,TextKey.SurveyPredator,TextKey.SurveyOrganic,TextKey.SurveySubstrate};
         void DrawLegend()
         {
@@ -125,3 +126,4 @@ namespace Evolution.Runtime
         }
     }
 }
+
