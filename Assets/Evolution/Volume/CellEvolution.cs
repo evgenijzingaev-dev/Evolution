@@ -137,7 +137,7 @@ namespace Evolution.Volume
             if (!sustainable) return "Энергия убывает: попробуй другую пищу или нишу";
             return null;
         }
-        public static int NicheKind(NicheSample sample)
+        // When several descendants are observed, the most urgent verified obstacle wins.\n        public static string MoreUrgentSettlementHint(string existing, string candidate)\n        {\n            if (candidate == null) return existing;\n            if (existing == null || candidate.Contains("голодает")) return candidate;\n            return existing;\n        }\n        public static int NicheKind(NicheSample sample)
         {
             if (sample.Vent >= .4f) return 3; // Hydrothermal
             if (sample.Light < .12f) return 2; // Dark
@@ -301,7 +301,7 @@ namespace Evolution.Volume
                         // becoming eligible for settlement. Explain the blocked goal.
                         if (a.Identity != FounderIdentity && kind != 0 && kind != founderNiche
                             && energyFraction < .35f)
-                            SettlementHint = SettlementAdvice(true, energyFraction, true);
+                            SettlementHint = MoreUrgentSettlementHint(SettlementHint, SettlementAdvice(true, energyFraction, true));
                         if (EligibleNiche(founderNiche, kind,
                             a.Identity != FounderIdentity, true, energyFraction)) {
                             eligible.Add(a.Identity);
@@ -331,7 +331,7 @@ namespace Evolution.Volume
                     nicheResidence.Remove(key);
                     nicheResidenceKind.Remove(key);
                     nicheEntryEnergy.Remove(key);
-                    SettlementHint = SettlementAdvice(true, energyFraction, false);
+                    SettlementHint = MoreUrgentSettlementHint(SettlementHint, SettlementAdvice(true, energyFraction, false));
                     continue;
                 }
                 nicheEntryEnergy[key] = entryFraction;
