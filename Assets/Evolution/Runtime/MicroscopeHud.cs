@@ -10,14 +10,14 @@ namespace Evolution.Runtime
         Texture2D panelTexture;
         GUIStyle panelStyle, titleStyle, hintStyle;
         Vector2 selectionScroll, environmentScroll;
-        bool showEnvironment, showGenes = true, confirmRestart;
+        bool showEnvironment, showGenes, confirmRestart, showGoals;
         float UiScale => Mathf.Clamp(Mathf.Min(Screen.width / 1920f, Screen.height / 1080f), .65f, 1.5f);
         float UiWidth => Screen.width / UiScale;
         float UiHeight => Screen.height / UiScale;
-        Rect TopPanel => new Rect(24, 20, UiWidth - 48, 82);
-        Rect LeftPanel => new Rect(24, 118, 340, Mathf.Min(showEnvironment ? 650 : 420, UiHeight - 250));
-        Rect RightPanel => new Rect(UiWidth - 422, 118, 398, UiHeight - 250);
-        Rect BottomPanel => new Rect(24, UiHeight - 112, UiWidth - 48, 92);
+        Rect TopPanel => new Rect(20, 16, UiWidth - 40, 82);
+        Rect LeftPanel => new Rect(20, 106, 300, Mathf.Min(showEnvironment ? 760 : showGoals ? 700 : 300, UiHeight - 250));
+        Rect RightPanel => new Rect(UiWidth - 370, 106, 350, selectedId == 0 ? 180 : UiHeight - 250);
+        Rect BottomPanel => new Rect(20, UiHeight - 112, UiWidth - 40, 92);
         bool PointerOverUI(Vector3 pointer)
         {
             Vector2 point = new Vector2(pointer.x / UiScale, (Screen.height - pointer.y) / UiScale);
@@ -27,17 +27,17 @@ namespace Evolution.Runtime
         {
             if (hudSkin) return;
             hudSkin = Instantiate(GUI.skin);
-            hudSkin.label.fontSize = 17; hudSkin.label.wordWrap = true;
+            hudSkin.label.fontSize = 16; hudSkin.label.wordWrap = true;
             hudSkin.label.normal.textColor = new Color(.81f, .91f, .93f);
             hudSkin.label.margin = new RectOffset(2, 2, 5, 5);
-            hudSkin.button.fontSize = 17; hudSkin.button.fixedHeight = 36;
+            hudSkin.button.fontSize = 16; hudSkin.button.fixedHeight = 32;
             hudSkin.button.normal.textColor = new Color(.82f, 1, .94f);
             hudSkin.button.margin = new RectOffset(2, 2, 5, 5);
             hudSkin.horizontalSlider.margin = new RectOffset(4, 4, 12, 12);
-            panelTexture = new Texture2D(1, 1); panelTexture.SetPixel(0, 0, new Color(.018f, .047f, .065f, .94f)); panelTexture.Apply();
+            panelTexture = new Texture2D(1, 1); panelTexture.SetPixel(0, 0, new Color(.018f, .047f, .065f, .78f)); panelTexture.Apply();
             panelStyle = new GUIStyle(hudSkin.box) { padding = new RectOffset(18, 18, 14, 14) };
             panelStyle.normal.background = panelTexture;
-            titleStyle = new GUIStyle(hudSkin.label) { fontSize = 25, fontStyle = FontStyle.Bold };
+            titleStyle = new GUIStyle(hudSkin.label) { fontSize = 21, fontStyle = FontStyle.Bold };
             titleStyle.normal.textColor = new Color(.55f, 1, .84f);
             hintStyle = new GUIStyle(hudSkin.label) { fontSize = 15 };
             hintStyle.normal.textColor = new Color(.53f, .72f, .78f);
@@ -72,6 +72,8 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Get(colorMode == 2 ? TextKey.LegendCompact : colorMode == 1 ? TextKey.DietLegend : TextKey.TemperatureLegend), hintStyle);
             if (GUILayout.Button(GameText.Get(showEnvironment ? TextKey.CloseEnvironment : TextKey.Environment))) showEnvironment = !showEnvironment;
             if (showEnvironment) DrawEnvironment();
+            if (GUILayout.Button(GameText.Get(showGoals ? TextKey.HideGoals : TextKey.ShowGoals))) showGoals = !showGoals;
+            if (showGoals) DrawJourney();
             if (simulation.Count == 0) GUILayout.Label(GameText.Get(TextKey.Extinction));
             GUILayout.EndScrollView(); GUILayout.EndArea();
             GUILayout.BeginArea(RightPanel, panelStyle);
@@ -84,8 +86,45 @@ namespace Evolution.Runtime
             GUILayout.EndScrollView(); GUILayout.EndArea();
             GUILayout.BeginArea(BottomPanel, panelStyle);
             GUILayout.Label(GameText.Get(IsControlling ? TextKey.PlayHelp : TextKey.ControlHelp), hintStyle);
-            GUILayout.Label(GameText.Get(TextKey.ShortcutHelp), hintStyle);
+            if (!IsControlling) GUILayout.Label(GameText.Get(TextKey.ShortcutHelp), hintStyle);
             GUILayout.EndArea(); GUI.matrix = oldMatrix; GUI.skin = oldSkin;
+        }
+        static readonly TextKey[] GoalKeys = { TextKey.GoalSurvive, TextKey.GoalFeed, TextKey.GoalReserve, TextKey.GoalReproduce, TextKey.GoalInherit, TextKey.GoalAdapt, TextKey.GoalColony };
+        void DrawMeter(float progress)
+        {
+            Rect rect = GUILayoutUtility.GetRect(0, 6, GUILayout.ExpandWidth(true));
+            Color previous = GUI.color; GUI.color = new Color(.07f,.18f,.21f,.85f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture); rect.width *= Mathf.Clamp01(progress);
+            GUI.color = Color.Lerp(new Color(.85f,.45f,.2f),new Color(.3f,.9f,.75f),Mathf.Clamp01(progress));
+            GUI.DrawTexture(rect, Texture2D.whiteTexture); GUI.color = previous;
+        }
+        void DrawJourney()
+        {
+            if (!Journey.Active) { GUILayout.Label(GameText.Get(TextKey.GoalsIntro), hintStyle); return; }
+            GUILayout.Label(GameText.Format(TextKey.LineageTitle, Journey.RootId, Journey.CompletedCount, Journey.AchievementCount), titleStyle);
+            for (int i = 0; i < GoalKeys.Length; i++) {
+                var goal = (EvolutionGoal)i;
+                GUILayout.Label(GameText.Format(TextKey.GoalProgress, GameText.Get(GoalKeys[i]), Journey.Progress(goal)), hintStyle);
+                DrawMeter(Journey.Progress(goal));
+            }
+            GUILayout.Label(GameText.Get(TextKey.GoalRules), hintStyle);
+            if (IsControlling && !Journey.Completed(EvolutionGoal.Adapt)) {
+                if (GUILayout.Button(GameText.Get(TextKey.ThermalChallenge))) {
+                    pendingTemperature = simulation.Temperature <= 44 ? simulation.Temperature + 6 : simulation.Temperature - 6;
+                    environmentPending = true;
+                }
+            }
+            if (Journey.CompletedCount == GoalKeys.Length) GUILayout.Label(GameText.Get(TextKey.StageComplete));
+            if (!IsControlling) {
+                int shown = 0;
+                for (int i = 0; i < simulation.Count && shown < 3; i++) {
+                    var c = simulation.GetCell(i);
+                    if (!Journey.Contains(c.Id) || c.Generation <= Journey.FounderGeneration) continue;
+                    shown++;
+                    if (GUILayout.Button(GameText.Format(TextKey.ChooseHeir, c.Id, c.Generation))) { SelectCell(c.Id); PlaySelected(); break; }
+                }
+                if (Journey.LivingDescendants == 0) GUILayout.Label(GameText.Get(TextKey.LineageLost), hintStyle);
+            }
         }
         void DrawEnvironment()
         {
@@ -144,6 +183,7 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Format(TextKey.AgeGeneration, c.Age, c.Generation));
             GUILayout.Label(GameText.Format(TextKey.RoleDetail, GameText.Get(RoleKeys[(int)c.Role]), c.Specialization));
             GUILayout.Label(GameText.Format(TextKey.EnergyReserve, c.Energy, Biology.Capacity(c.Genes)));
+            DrawMeter(c.Energy / Biology.Capacity(c.Genes));
             var local = simulation.EnvironmentAt(c.X,c.Z);
             GUILayout.Label(GameText.Format(TextKey.LocalEnvironment, local.Temperature, new Vector2(local.CurrentX,local.CurrentZ).magnitude));
             GUILayout.Label(GameText.Format(TextKey.Vitality, Mathf.Clamp01(c.Energy / Biology.Capacity(c.Genes))));

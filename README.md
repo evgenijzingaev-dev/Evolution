@@ -107,3 +107,5 @@ Unity -batchmode -nographics -projectPath "$PWD" -runTests -testPlatform EditMod
 - [Дорожная карта](docs/ROADMAP.md)
 - [Проверки текущей версии](docs/VALIDATION.md)
 - [Полный список исходных файлов](docs/FILES.md)
+
+Текущая разработка поверх PR #7: [живой океан и PBR-графика](docs/LIVING_OCEAN.md), [управление организмами](docs/ORGANISM_CONTROL.md), [цели, наследники и запуск на Windows](docs/EVOLUTION_JOURNEY.md). Итоговая ветка — `codex/evolution-journey`. Unity-графика требует ручной проверки.

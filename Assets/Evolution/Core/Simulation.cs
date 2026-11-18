@@ -29,6 +29,7 @@ namespace Evolution.Core
         public int BirthMutationMask; // Actual changed traits relative to the parent at birth.
         public Genome Genes;
         public float X, Z, Heading, Energy, Age;
+        public float AssimilatedEnergy, FoodLastStep;
         // Persistent tree edge uses IDs, never dense array indices. ColonyId is derived.
         public int BondParentId, ColonyId, TissueSlot;
         public float BondAngle, Specialization;
@@ -79,7 +80,7 @@ namespace Evolution.Core
                     Cell f = founders[i];
                     if (!Multicellularity.ValidFounder(f, config)) throw new ArgumentException("Invalid founder");
                     f.Id = ++nextId; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
-                    f.BirthMutationMask = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
+                    f.BirthMutationMask = 0; f.AssimilatedEnergy = f.FoodLastStep = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
                     cells[Count++] = f; continue;
                 }
                 var g = Genome.Founder(ref random);
@@ -112,7 +113,9 @@ namespace Evolution.Core
                 colonies.Develop(ref c, dt);
                 int tile = Tile(c);
                 float localTemperature = EnvironmentAt(c.X, c.Z).Temperature;
+                float beforeFood = c.Energy;
                 Biology.Feed(ref c, ref nutrients[tile], ref organicEnergy[tile], localTemperature, dt);
+                c.FoodLastStep = Math.Max(0, c.Energy - beforeFood); c.AssimilatedEnergy += c.FoodLastStep;
                 c.Energy -= Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
                 cells[i] = c;
             }

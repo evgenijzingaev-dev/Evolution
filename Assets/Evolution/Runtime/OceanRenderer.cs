@@ -15,6 +15,8 @@ namespace Evolution.Runtime
         readonly Vector4[] colors = new Vector4[512];
         readonly MaterialPropertyBlock properties = new MaterialPropertyBlock();
         readonly float world;
+        readonly Vector3[] motes = new Vector3[512];
+        float lastTime;
         long uploadedTick = -1;
         public OceanRenderer(float world, int grid, Mesh plane, Mesh mote)
         {
@@ -24,6 +26,7 @@ namespace Evolution.Runtime
                 name = "Living ocean resources", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Repeat
             };
             pixels = new Color[grid * grid];
+            for (int i = 0; i < motes.Length; i++) motes[i] = new Vector3(Mathf.Repeat(i * 7.137f, world), -8 + Mathf.Repeat(i * .719f, 14), Mathf.Repeat(i * 11.319f, world));
             water.SetTexture("_Resources", resources); cloud.SetTexture("_Resources", resources);
         }
         static Material Create(string shader) => new Material(Resources.Load<Shader>(shader)) { enableInstancing = true };
@@ -50,13 +53,15 @@ namespace Evolution.Runtime
             }
             // A deterministic visual field: never consumes the simulation's random source.
             for (int i = 0; i < matrices.Length; i++) {
-                float x = Mathf.Repeat(i * 7.137f + time * .12f + Mathf.Sin(time * .17f + i) * .25f, world);
-                float z = Mathf.Repeat(i * 11.319f + time * .07f, world);
-                float y = -8 + Mathf.Repeat(i * .719f, 14);
+                var point = motes[i]; var flow = simulation.EnvironmentAt(point.x, point.z);
+                point.x = Mathf.Repeat(point.x + flow.CurrentX * (time - lastTime), world);
+                point.z = Mathf.Repeat(point.z + flow.CurrentZ * (time - lastTime), world);
+                motes[i] = point;
                 float size = .018f + i % 5 * .012f;
-                matrices[i] = Matrix4x4.TRS(new Vector3(x, y, z), Quaternion.identity, new Vector3(size, size * .6f, size));
+                matrices[i] = Matrix4x4.TRS(point + Vector3.up * (Mathf.Sin(time * .3f + i) * .08f), Quaternion.identity, new Vector3(size, size * .6f, size));
                 colors[i] = i % 7 == 0 ? new Color(.9f, .62f, .3f, .36f) : new Color(.34f, .82f, .73f, .3f);
             }
+            lastTime = time;
             properties.Clear(); properties.SetVectorArray("_InstanceColor", colors);
             Graphics.DrawMeshInstanced(mote, 0, particles, matrices, matrices.Length, properties, ShadowCastingMode.Off, false, 0, camera);
         }
