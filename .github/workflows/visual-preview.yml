@@ -1,0 +1,228 @@
+name: Visual Preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+    paths:
+      - '.github/workflows/visual-preview.yml'
+      - 'Tools/ci/*visual_preview*'
+      - 'Assets/Evolution/Editor/VisualPreviewBuild.cs'
+      - 'Assets/Evolution/Editor/PrototypeSetup.cs'
+      - 'Assets/Evolution/Settings/**'
+      - 'Assets/Evolution/Presentation/CrystalForms.cs'
+      - 'Assets/Evolution/Volume/WaterSpace.cs'
+      - 'Assets/Evolution/Runtime/WaterVisualPreview.cs'
+      - 'Assets/Evolution/Runtime/WaterPrototype.cs'
+      - 'Assets/Evolution/Runtime/WaterCamera.cs'
+      - 'Assets/Evolution/Runtime/VolumePainter.cs'
+      - 'Assets/Evolution/Runtime/CrystalWaterLook.cs'
+      - 'Assets/Evolution/Runtime/CrystalMeshes.cs'
+      - 'Assets/Evolution/Runtime/MicroMeshes.cs'
+      - 'Assets/Evolution/Runtime/Resources/**'
+      - 'Assets/Evolution/Scenes/WaterPrototype3D.unity'
+      - 'Packages/manifest.json'
+      - 'ProjectSettings/**'
+
+permissions:
+  contents: read
+
+# Share the license lock with Unity Editor CI, including manual runs.
+concurrency:
+  group: evolution-unity-personal
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'visual-preview')))
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: select
+        name: Skip Unity when the latest push changes only nonvisual code
+        run: python3 -B Tools/ci/select_visual_preview.py
+
+  render:
+    needs: select
+    if: needs.select.outputs.run == 'true'
+    runs-on: ${{ fromJSON(vars.VISUAL_PREVIEW_RUNNER || '["ubuntu-24.04"]') }}
+    timeout-minutes: 60
+    env:
+      EVOLUTION_VISUAL_BACKEND: ${{ vars.VISUAL_PREVIEW_BACKEND || 'software' }}
+      EVOLUTION_PREVIEW_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-url }}
+      diagnostic: ${{ steps.diagnostic.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install hosted graphics libraries
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth mesa-utils libgl1-mesa-dri libgl1 libxcursor1 libxrandr2 libxinerama1 libxi6 libasound2t64
+
+      - name: Probe actual OpenGL context before downloading Unity
+        run: bash Tools/ci/visual_preview.sh --probe
+
+      - name: Check preview evidence validator
+        run: python3 -B Tools/ci/test_visual_preview.py
+
+      - name: Check activation secret names
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import base64, os, re, sys
+          missing = [key for key in ('UNITY_LICENSE', 'UNITY_EMAIL', 'UNITY_PASSWORD') if not os.getenv(key, '').strip()]
+          if missing:
+              sys.exit('Missing Unity activation secrets: ' + ', '.join(missing) + '. See docs/VISUAL_PREVIEW.md.')
+          # Match the existing Personal activation contract. Never print malformed license data.
+          try:
+              match = re.search(r'<DeveloperData Value="([A-Za-z0-9+/=]+)"/>', os.environ['UNITY_LICENSE'])
+              serial = base64.b64decode(match[1], validate=True)[4:].decode('ascii')
+              if not re.fullmatch(r'[A-Za-z0-9]{2}(?:-[A-Za-z0-9]{4}){5}', serial):
+                  raise ValueError()
+          except (TypeError, ValueError, UnicodeError):
+              sys.exit('UNITY_LICENSE is incompatible with the configured GameCI Personal activation method. See docs/VISUAL_PREVIEW.md.')
+          print('Activation secret names present; activation is not yet verified.')
+          PY
+
+      - name: Resolve exact Unity image
+        id: images
+        run: |
+          python3 Tools/ci/unity_images.py
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'm_EditorVersion: 6000.6.9f1\n' in Path('ProjectSettings/ProjectVersion.txt').read_text()
+          PY
+
+      - name: Free space on disposable hosted runner
+        if: runner.environment == 'github-hosted'
+        run: bash Tools/ci/prepare_unity_runner.sh
+
+      - name: Build isolated WaterPrototype3D preview player
+        uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: .
+          unityVersion: 6000.6.9f1
+          customImage: ${{ steps.images.outputs.editor_image }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: Evolution.Editor.VisualPreviewBuild.Build
+          buildName: EVOLUTION
+          buildsPath: build/visual-preview
+          versioning: None
+          dockerShmSize: 1025m
+          customParameters: -job-worker-count 2
+
+      - name: Render and validate five actual URP game frames
+        id: capture
+        run: bash Tools/ci/visual_preview.sh
+
+      # Whitelist only verified images and sanitized metadata. Never upload Editor/player logs,
+      # Library, builds, license files, runner home or activation material.
+      - name: Upload validated visual evidence
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: water-visual-preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/visual-preview/01-ocean.png
+            artifacts/visual-preview/02-cell-close.png
+            artifacts/visual-preview/03-depth-ensemble.png
+            artifacts/visual-preview/04-currents.png
+            artifacts/visual-preview/05-temperature-food.png
+            artifacts/visual-preview/manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload real diagnostic frames after capture failure
+        id: diagnostic
+        if: ${{ failure() && steps.capture.outcome == 'failure' && hashFiles('artifacts/visual-preview/**/*.png') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: water-visual-diagnostics-NOT-VALIDATED-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/visual-preview/*.png
+            artifacts/visual-preview/manifest.json
+            artifacts/visual-preview/diagnostics/*.png
+            artifacts/visual-preview/diagnostics/*.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Link result in run summary
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          DIAGNOSTIC_URL: ${{ steps.diagnostic.outputs.artifact-url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python3 - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('\nVisual Preview: ' + os.environ['JOB_STATUS'] + '\n')
+              url = os.environ.get('ARTIFACT_URL')
+              f.write('\n[Five rendered screenshots and device manifest](' + url + ')\n' if url else '\nNo verified screenshots. Check the failed step and docs/VISUAL_PREVIEW.md for license/GPU configuration.\n')
+              diagnostic = os.environ.get('DIAGNOSTIC_URL')
+              if diagnostic:
+                  f.write('\n[Real diagnostic frames — validation FAILED](' + diagnostic + ')\n')
+          PY
+
+  pr-report:
+    needs: render
+    if: >-
+      always() && github.event_name == 'pull_request' && needs.render.result != 'skipped'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      # No checkout or execution of PR code in the job that can write the report.
+      - name: Publish visual result in PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_API: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RESULT: ${{ needs.render.result }}
+          ARTIFACT_URL: ${{ needs.render.outputs.artifact }}
+          DIAGNOSTIC_URL: ${{ needs.render.outputs.diagnostic }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          body = 'Visual Preview — `' + os.environ['HEAD_SHA'] + '`\n\n'
+          if os.environ['RESULT'] == 'success' and os.environ.get('ARTIFACT_URL'):
+              body += '[Пять настоящих кадров Unity / URP и данные рендера](' + os.environ['ARTIFACT_URL'] + ').\n'
+              body += 'Общий океан, клетка крупно, разные глубины, течения, температура и пища. Художественную оценку нужно выполнить по изображениям.\n'
+          else:
+              body += 'Проверка не завершилась успешно. Полного подтверждённого набора нет; заглушки не создаются. Причина указана в отчёте запуска; настройка лицензии/runner описана в docs/VISUAL_PREVIEW.md.\n'
+              if os.environ.get('DIAGNOSTIC_URL'):
+                  body += '\n[Настоящие диагностические кадры — проверка НЕ пройдена](' + os.environ['DIAGNOSTIC_URL'] + ').\n'
+          body += '\n[Отчёт запуска](' + os.environ['RUN_URL'] + ')'
+          url = os.environ['GH_API'] + '/repos/' + os.environ['REPOSITORY'] + '/issues/' + os.environ['PR_NUMBER'] + '/comments'
+          request = urllib.request.Request(url, data=json.dumps({'body': body}).encode(), headers={
+              'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json',
+              'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'}, method='POST')
+          with urllib.request.urlopen(request, timeout=30) as response:
+              print('PR visual report published:', response.status)
+          PY

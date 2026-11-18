@@ -24,7 +24,7 @@ namespace Evolution.Runtime
             var color=profile.Add<ColorAdjustments>(true);color.postExposure.value=.25f;color.contrast.value=5;color.saturation.value=2;
             var vignette=profile.Add<Vignette>(true);vignette.intensity.value=.065f;vignette.smoothness.value=.7f;
             focus=profile.Add<DepthOfField>(true);focus.mode.value=DepthOfFieldMode.Bokeh;focus.aperture.value=6.3f;focus.focalLength.value=45;
-            var volume=root.AddComponent<Volume>();volume.isGlobal=true;volume.priority=20;volume.sharedProfile=profile;
+            var volume=root.AddComponent<UnityEngine.Rendering.Volume>();volume.isGlobal=true;volume.priority=20;volume.sharedProfile=profile;
             const int resolution=128;var pixels=new Color[resolution*resolution];
             for(int y=0;y<resolution;y++)for(int x=0;x<resolution;x++) {
                 float a=x*Mathf.PI*2/resolution,b=y*Mathf.PI*2/resolution;
