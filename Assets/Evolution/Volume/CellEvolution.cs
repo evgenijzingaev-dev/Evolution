@@ -137,7 +137,14 @@ namespace Evolution.Volume
             if (!sustainable) return "Энергия убывает: попробуй другую пищу или нишу";
             return null;
         }
-        // When several descendants are observed, the most urgent verified obstacle wins.\n        public static string MoreUrgentSettlementHint(string existing, string candidate)\n        {\n            if (candidate == null) return existing;\n            if (existing == null || candidate.Contains("голодает")) return candidate;\n            return existing;\n        }\n        public static int NicheKind(NicheSample sample)
+        // When several descendants are observed, the most urgent verified obstacle wins.
+        public static string MoreUrgentSettlementHint(string existing, string candidate)
+        {
+            if (candidate == null) return existing;
+            if (existing == null || candidate.Contains("голодает")) return candidate;
+            return existing;
+        }
+        public static int NicheKind(NicheSample sample)
         {
             if (sample.Vent >= .4f) return 3; // Hydrothermal
             if (sample.Light < .12f) return 2; // Dark
