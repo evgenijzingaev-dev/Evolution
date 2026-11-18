@@ -7,6 +7,14 @@ namespace Evolution.Tests
     public sealed class LineageChallengeTests
     {
         [Test]
+        public void InGameHelpExplainsHowToStartAndStopOptionalLineageChallenge()
+        {
+            StringAssert.Contains("F5", Evolution.Runtime.FriendlyOceanHud.ChallengeHelp);
+            StringAssert.Contains("F6", Evolution.Runtime.FriendlyOceanHud.ChallengeHelp);
+            StringAssert.Contains("испытание", Evolution.Runtime.FriendlyOceanHud.ChallengeHelp);
+        }
+
+        [Test]
         public void ChallengeOutcomeExplainsVerifiedResultWithoutInventingDeathCause()
         {
             StringAssert.Contains("закрепился", LineageChallenge.OutcomeSummary(LineageChallengeState.Won, 2, 1));
