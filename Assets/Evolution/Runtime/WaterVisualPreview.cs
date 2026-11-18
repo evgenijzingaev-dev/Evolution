@@ -295,29 +295,119 @@ namespace Evolution.Runtime
             water.OrganismsVisible=true;water.Paused=true;
             // Find an existing resident able to earn a surplus at its real food cloud.
             // No fixtures, teleports, genome edits or energy/resource injection.
-            int candidate=-1;float best=-1;
-            for(int i=0;i<water.World.Count;i++) {
-                var a=water.World.Get(i);if(!a.Alive||a.Biology.Generation>0)continue;
-                for(int k=0;k<water.World.FoodCount;k++) {
-                    var f=water.World.GetFood(k);float d=(f.Position-a.Position).Length;
-                    float gain=water.World.FoodPotential(k,a.Biology)-Biology.Cost(a.Biology.Genes,water.World.Temperature(a.Position));
-                    float score=gain/(1+d);if(score>best){best=score;candidate=i;}
+            // Rank real residents by actual readiness, not just distant potential food.
+            // A dead/streamed candidate may be replaced, but no organism is spawned,
+            // healed, fed, teleported or genetically modified for the capture.
+            var attempted = new HashSet<string>();
+            int candidate = -1;
+            string parent = null;
+            int ticks = 0;
+            bool ready = false;
+            while (ticks < 2400 && !ready)
+            {
+                int bestIndex = -1;
+                float bestScore = float.NegativeInfinity;
+                bool bestReady = false;
+                for (int i = 0; i < water.World.Count; i++)
+                {
+                    var a = water.World.Get(i);
+                    if (!a.Alive || attempted.Contains(a.Identity)) continue;
+                    // A cell may already be able to divide without a sensed food cloud.
+                    // Light and dissolved resources can also sustain a real organism.
+                    bool divisionReady = water.World.DivisionBlock(i) == null;
+                    var read = PlayerReadout.Read(water.World, i);
+                    float score = a.Biology.Energy;
+                    if (read.Food >= 0 && read.Food < water.World.FoodCount)
+                    {
+                        var food = water.World.GetFood(read.Food);
+                        float distance = (food.Position - a.Position).Length;
+                        float surplus = water.World.FoodPotential(read.Food, a.Biology)
+                            - Biology.Cost(a.Biology.Genes, water.World.Temperature(a.Position));
+                        score += surplus / (1f + distance);
+                    }
+                    if (bestIndex < 0 || (divisionReady && !bestReady) ||
+                        (divisionReady == bestReady &&
+                         (score > bestScore ||
+                          (score == bestScore &&
+                           string.CompareOrdinal(a.Identity, water.World.Get(bestIndex).Identity) < 0))))
+                    {
+                        bestScore = score;
+                        bestReady = divisionReady;
+                        bestIndex = i;
+                    }
+                }
+                if (bestIndex < 0) break;
+                parent = water.World.Get(bestIndex).Identity;
+                attempted.Add(parent);
+                water.Select(bestIndex);
+                water.PlaySelected();
+                // Give a real resident time to travel and feed, but do not let a
+                // living, stalled resident monopolize the shared capture budget.
+                // Progress is measured against the best observed energy and
+                // distance to food, not against elapsed time alone.
+                int lastProgressTick = ticks;
+                float bestEnergy = water.World.Get(bestIndex).Biology.Energy;
+                float bestDistance = float.PositiveInfinity;
+                int trackedFood = -1;
+                while (ticks < 2400)
+                {
+                    candidate = water.Ocean.Find(parent);
+                    if (candidate < 0 || !water.World.Get(candidate).Alive) break;
+                    if (water.World.DivisionBlock(candidate) == null)
+                    {
+                        ready = true;
+                        break;
+                    }
+                    var read = PlayerReadout.Read(water.World, candidate);
+                    var a = water.World.Get(candidate);
+                    bool hasFood = read.Food >= 0 && read.Food < water.World.FoodCount;
+                    V3 delta = default;
+                    float distance = float.PositiveInfinity;
+                    float foodRadius = 0f;
+                    if (hasFood)
+                    {
+                        var food = water.World.GetFood(read.Food);
+                        delta = food.Position - a.Position;
+                        distance = delta.Length;
+                        foodRadius = food.Radius;
+                        if (read.Food != trackedFood)
+                        {
+                            trackedFood = read.Food;
+                            bestDistance = distance;
+                            lastProgressTick = ticks;
+                        }
+                    }
+                    else
+                    {
+                        // No food target is not an automatic failure: photosynthetic
+                        // or resource-fed cells can accumulate energy in place.
+                        trackedFood = -1;
+                        bestDistance = float.PositiveInfinity;
+                    }
+                    if (a.Biology.Energy > bestEnergy + .05f)
+                    {
+                        bestEnergy = a.Biology.Energy;
+                        lastProgressTick = ticks;
+                    }
+                    if (hasFood && distance < bestDistance - .1f)
+                    {
+                        bestDistance = distance;
+                        lastProgressTick = ticks;
+                    }
+                    // Six seconds of model time without meaningful feeding or
+                    // approach is a stall; try another existing resident.
+                    if (ticks - lastProgressTick >= 360) break;
+                    water.World.Input = hasFood && distance > foodRadius * .45f ? delta.Unit : default;
+                    water.World.Step();
+                    ticks++;
+                    if (ticks % 20 == 0) yield return null;
                 }
             }
-            Require(candidate>=0,"no feeding resident for paid division");water.Select(candidate);water.PlaySelected();
-            string parent=water.World.Get(candidate).Identity;
-            int ticks=0;
-            while(ticks++<2400) {
-                candidate=water.Ocean.Find(parent);Require(candidate>=0,"division resident streamed away");
-                if(water.World.DivisionBlock(candidate)==null)break;
-                var a=water.World.Get(candidate);Require(a.Alive,"division resident died before provisioning");
-                var read=PlayerReadout.Read(water.World,candidate);
-                Require(read.Food>=0,"division resident has no sensed edible resources");
-                var food=water.World.GetFood(read.Food);V3 delta=food.Position-a.Position;
-                water.World.Input=delta.Length>food.Radius*.45f?delta.Unit:default;
-                water.World.Step();if(ticks%20==0)yield return null;
-            }
-            Require(water.World.DivisionBlock(candidate)==null,"resident did not earn division energy");
+            // Clear movement even when no viable survivor remains.
+            water.World.Input = default;
+            Require(ready && candidate >= 0 && water.World.Get(candidate).Alive &&
+                water.World.DivisionBlock(candidate) == null,
+                "no real resident survived to paid division within capture budget");
             water.World.Input=default;
             var before=water.World.Get(candidate);var focus=ToVector(before.Position);
             float heading=Mathf.Atan2(before.Direction.X,before.Direction.Z)*Mathf.Rad2Deg+90;
