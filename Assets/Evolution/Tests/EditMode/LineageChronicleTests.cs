@@ -119,6 +119,27 @@ namespace Evolution.Tests
                 "Confirmed dead founder must not count as a living dynasty member.");
         }
         [Test]
+        public void SwitchingControlToUnrelatedCellDoesNotAdoptItIntoDynasty()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            var outsider = Founder();
+            outsider.Identity = "unrelated-outsider";
+            var switched = new VolumeWorld(new[] { world.Get(0), outsider },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(switched, 1);
+            // Only the founder is a dynasty member; an unrelated controlled cell
+            // must not prevent extinction or appear as a surviving descendant.
+            var founder = world.Get(0);
+            founder.Alive = false;
+            var afterDeath = new VolumeWorld(new[] { founder, outsider },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            Assert.IsTrue(chronicle.Record(afterDeath, 1));
+            Assert.AreEqual(ChronicleEnd.Extinct, chronicle.Summary.End);
+            Assert.AreEqual(0, chronicle.Divisions);
+        }
+        [Test]
         public void WorldRebindDoesNotReplayOldDivisions()
         {
             var world = Ready();
