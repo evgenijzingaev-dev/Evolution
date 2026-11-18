@@ -151,3 +151,114 @@ EVOLUTION_PREVIEW_SHA=local bash Tools/ci/visual_preview.sh
 снимков одними статическими проверками. Первый успешный Actions run и его manifest
 нужно использовать как подтверждение выбранного runner; при отсутствии такого
 запуска поддержка рендера остаётся непроверенной.
+
+## Public JPEG previews
+
+`Publish Visual Preview` runs after a successful trusted `Visual Preview/render`
+job. Unity rendering, original PNG upload paths and artifact retention are
+unchanged. The publisher downloads the exact validated artifact, checks its
+native manifest against the render SHA and converts **12 actual frames** to
+progressive JPEG (1440×810; 1280×720 fallback). It never generates or repairs
+screenshots. The capture manifest currently describes 11 frames; the extra
+water-only PNG is also required and decoded from the original artifact.
+
+### Destination and owner setup
+
+`Evolution` is private. Its raw image URLs failed anonymous verification on the
+GitHub-hosted runner, despite working inside this connected ChatGPT environment.
+A successful connected-environment request does not prove public availability.
+The approved destination is a separate **public image-only repository**:
+`evgenijzingaev-dev/Evolution-visual-previews`, branch `visual-previews`.
+The game repository visibility is never changed.
+
+The owner must complete these steps once:
+
+1. Create `Evolution-visual-previews` under `evgenijzingaev-dev`, choose **Public**.
+   An empty repository is fine. No game source or Unity files belong there.
+2. Create a fine-grained GitHub token, select **only this image repository**, with
+   **Contents: Read and write** (plus implicit Metadata: Read). No Actions,
+   administration or access to the game repository is needed for this token.
+3. In the private `Evolution` repository, add Actions secret
+   **VISUAL_PREVIEW_PUBLISH_TOKEN** with this token. Do not paste it into chat,
+   commit it or put it in a repository variable.
+4. Rerun the latest failed `Publish Visual Preview` workflow/job for PR #20.
+   The initial backfill targets PR #19 / successful native run `43409807998`.
+   The original artifact must still be unexpired (14-day retention).
+
+New publication PR #20 prepares these steps but cannot provision them itself:
+the connected GitHub tools lack repository-creation/secret-write operations and
+the cloud browser failed to start. No public delivery is claimed until the
+runner verifies every image and the report job succeeds. Missing credentials
+produce an explicit setup error before publication.
+
+If destination rulesets cover `visual-previews`, allow this publishing credential
+to create and force-update that branch. Game branches keep their usual rules.
+The token is used only for the destination Git push. Unity license secrets are
+never inherited or passed to the reusable publisher.
+
+### Files, links and verification
+
+Only these files are allowed on the image branch:
+
+- `pr-<number>/*.jpg`: exactly 12 JPEGs, at most 350 KiB each;
+- `pr-<number>/publication.json`: whitelisted provenance, dimensions and hashes;
+- `pr-<number>/index.md`: twelve direct HTTPS image URLs and original PNG link;
+- root `index.md`: navigation to retained PR folders.
+
+Example URL:
+`https://raw.githubusercontent.com/evgenijzingaev-dev/Evolution-visual-previews/visual-previews/pr-19/01-ocean.jpg`
+
+The destination must pass an anonymous API check as the expected public
+repository. Every raw image must then pass anonymous HTTP 200, image/jpeg,
+SHA-256 and decoded dimension checks. CDN propagation is retried for up to five
+minutes. Failure reports include safe per-file HTTP/error types, never response
+bodies or credentials. Only successful verification permits a PR success comment
+with all twelve links. The report job updates only its own marked bot comment.
+
+### Trust boundary and permissions
+
+Only this repository's `main` and `codex/*` source branches are trusted. Source
+workflow path, head repository, destination PR association, successful render job
+and validated upload are checked before accepting an artifact. Fork PRs and
+Dependabot are excluded. There is no `pull_request_target` or secrets inheritance.
+Collaborators able to push trusted workflow code are within this explicit trust
+boundary; narrow the branch allowlist if collaboration permissions change.
+
+The source job's ephemeral `GITHUB_TOKEN` has only `contents:read`, `actions:read`
+and `pull-requests:read`. The scoped destination token is exposed only to the
+credential-check and Git publication steps. The separate comment job has only
+`pull-requests:write`, performs no checkout and executes no PR code. Artifacts,
+logs, builds, licenses, PNG text/EXIF/ICC and arbitrary native metadata are not
+copied into the public branch.
+
+### Storage and concurrency
+
+At most **8 PR folders / 32 MiB** are retained, one latest successful snapshot per
+PR. Updating one PR preserves every other retained folder byte-for-byte, except
+retention evictions. Older runs cannot roll back newer previews. The publisher
+uses a parentless Git snapshot and `--force-with-lease` exclusively on the
+image-only repository's `refs/heads/visual-previews`. Concurrent ref changes are
+re-read and retried. This bounds reachable binary history; GitHub controls when
+unreachable Git objects are garbage-collected, so disk reclamation is not
+immediate. Evicted PR links eventually return 404. PNG artifacts retain their
+original Actions retention. Branch links show the latest run; hashes and the
+original artifact identify exact versions.
+
+### Manual backfill and tests
+
+The trusted bootstrap branch `codex/public-visual-previews` runs a lightweight PR
+backfill from `Tools/ci/public_preview_request.json`; no new Unity build is needed.
+Other branches publish only through a successful render's reusable workflow call.
+Once installed on the default branch, **Publish Visual Preview → Run workflow**
+accepts source run ID and destination PR number (0 auto-detects a unique PR).
+Manual runs must select a trusted main/codex branch containing these scripts.
+
+Local checks (Pillow 13.0.0):
+
+```sh
+python3 -B Tools/ci/test_public_previews.py
+python3 -B Tools/ci/test_visual_preview.py
+```
+
+Publication unit tests use synthetic pixels only inside temporary test fixtures;
+these are never published. Production requires successful native Unity evidence.
