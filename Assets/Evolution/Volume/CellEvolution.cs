@@ -30,7 +30,7 @@ namespace Evolution.Volume
         {if(child.Biology.ParentId==0||child.Identity==null)return null;int at=child.Identity.LastIndexOf("/b",StringComparison.Ordinal);return at<0?null:child.Identity.Substring(0,at);}
         public static List<int> Offspring(VolumeWorld world,string parent)
         {
-            var result=new List<int>();if(parent==null)return result;
+            var result=new List<int>();if(parent==null||world==null)return result;
             Cell? anchor=null;for(int i=0;i<world.Count;i++)if(world.Get(i).Identity==parent){anchor=world.Get(i).Biology;break;}
             for(int i=world.Count-1;i>=0;i--){var a=world.Get(i);if(!a.Alive||ParentIdentity(a)!=parent)continue;
                 if(anchor.HasValue&&(a.Biology.ParentId!=anchor.Value.Id||a.Biology.LineageId!=anchor.Value.LineageId||a.Biology.Generation!=anchor.Value.Generation+1))continue;
@@ -78,6 +78,7 @@ namespace Evolution.Volume
     public sealed class CellLineagePlay
     {
         int ownedCell,ownedLineage,ownedGeneration;
+        readonly Dictionary<string,int> cycles=new Dictionary<string,int>(StringComparer.Ordinal);
         public string Identity {get;private set;}
         public VolumeAgent? Fallen {get;private set;}
         public bool TakeControl(VolumeWorld world,int index)
@@ -90,11 +91,27 @@ namespace Evolution.Volume
             if(Identity==null||Fallen.HasValue)return;
             for(int i=0;i<world.Count;i++){var a=world.Get(i);if(a.Identity==Identity){if(!a.Alive)Fallen=a;return;}}
         }
-        public bool FollowOffspring(VolumeWorld world,int index=-1)
+        // Verified direct children of the played cell; empty while identity is unknown.
+        public List<int> VerifiedChildren(VolumeWorld world)
         {
             var children=CellEvolution.Offspring(world,Identity);
             children.RemoveAll(i=>world.Get(i).Biology.ParentId!=ownedCell||world.Get(i).Biology.LineageId!=ownedLineage||world.Get(i).Biology.Generation!=ownedGeneration+1);
-            if(index<0){if(children.Count==0)return false;index=children[0];}
+            return children;
+        }
+        // Without an index Y cycles through the verified offspring of the played cell:
+        // returning to the same parent resumes where the last Y stopped, so a second
+        // child is reachable without opening the development panel.
+        public bool FollowOffspring(VolumeWorld world,int index=-1)
+        {
+            if(Identity==null)return false;
+            var children=VerifiedChildren(world);
+            if(index<0){
+                if(children.Count==0)return false;
+                cycles.TryGetValue(Identity,out int offset);
+                index=children[offset%children.Count];
+                if(cycles.Count>64)cycles.Clear();
+                cycles[Identity]=(offset+1)%children.Count;
+            }
             if(!children.Contains(index))return false;
             return TakeControl(world,index);
         }

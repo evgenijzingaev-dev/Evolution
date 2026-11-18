@@ -14,9 +14,10 @@ namespace Evolution.Runtime
             VolumeAgent? fallen=water.SelectedIndex>=0?water.World.Get(water.SelectedIndex):water.EvolutionPlay.Fallen;
             string message=fallen.HasValue?"Поколение "+fallen.Value.Biology.Generation+"\n"+CellEvolution.DeathReason(fallen.Value):"Клетка не выбрана или вне загруженной области. Выгрузка не означает гибель.";
             GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,154),message,text);
-            var children=CellEvolution.Offspring(water.World,water.EvolutionPlay.Identity);
-            if(Button(new Rect(r.x+12,r.y+228,r.width-24,42),"Продолжить за потомка · Y",children.Count==0?"Живых прямых потомков в загруженной области нет":"Перейти к последнему живому потомку",false,children.Count>0))water.FollowOffspring();
+            var children=water.EvolutionPlay.VerifiedChildren(water.World);
+            if(Button(new Rect(r.x+12,r.y+228,r.width-24,42),"Продолжить за потомка · Y",children.Count==0?"Живых прямых потомков в загруженной области нет":"Y листает потомков по кругу",false,children.Count>0))water.FollowOffspring();
             if(Button(new Rect(r.x+12,r.y+278,r.width-24,42),"Выбрать потомка / сравнить"))SetPage(HudPage.Development);
+            if(Button(new Rect(r.x+12,r.y+326,r.width-24,28),"Завершить линию · хроника","Итог по реальным событиям; живые потомки продолжат линию без вас",false,water.Chronicle!=null&&!water.Chronicle.Finished&&water.Tree!=null&&water.Tree.Count>0))water.Chronicle.FinishByPlayer();
         }
         void DrawDevelopment()
         {
@@ -25,17 +26,30 @@ namespace Evolution.Runtime
             bool hasCell=water.SelectedIndex>=0;
             var agent=hasCell?water.World.Get(water.SelectedIndex):water.EvolutionPlay.Fallen??default;
             var c=agent.Biology;
-            float height=children.Count*96+(hasCell||water.EvolutionPlay.Fallen.HasValue?1400+water.World.OrganismSize(water.SelectedIndex)*72+CellEvolution.TraitNames.Length*25:100);
+            float treeHeight=water.Tree!=null&&water.Tree.Count>0?48+Mathf.Min(14,water.Tree.Count)*24+62:0;
+            float height=children.Count*96+treeHeight+(hasCell||water.EvolutionPlay.Fallen.HasValue?1400+water.World.OrganismSize(water.SelectedIndex)*72+CellEvolution.TraitNames.Length*25:100);
             evolutionScroll=GUI.BeginScrollView(new Rect(r.x+12,r.y+58,r.width-24,r.height-122),evolutionScroll,new Rect(0,0,r.width-48,height));
             float width=r.width-68,y=0;
             GUI.Label(new Rect(6,y,width,34),"Твои прямые потомки в загруженной области: "+children.Count,title);y+=40;
-            if(children.Count==0){GUI.Label(new Rect(6,y,width,48),"Накопи энергию и разделись. Выбери: отделить потомка или сохранить связь.\nY сразу передаёт управление последнему живому потомку.",micro);y+=54;}
+            if(children.Count==0){GUI.Label(new Rect(6,y,width,48),"Накопи энергию и разделись. Выбери: отделить потомка или сохранить связь.\nY передаёт управление потомку; повторные нажатия листают их по кругу.",micro);y+=54;}
             foreach(int index in children) {
                 var child=water.World.Get(index);
                 if(Button(new Rect(6,y,width,32),"Играть за потомка · поколение "+child.Biology.Generation+" · энергия "+child.Biology.Energy.ToString("F1"))) {
                     GUI.EndScrollView();if(water.FollowOffspring(index)){development=false;transition=0;}return;
                 }
                 GUI.Label(new Rect(8,y+35,width-8,56),CellEvolution.Changes(child.Biology),micro);y+=96;
+            }
+            var tree=water.Tree;
+            if(tree!=null&&tree.Count>0) {
+                GUI.Label(new Rect(6,y,width,30),"Древо линии · "+tree.FounderName,title);y+=36;
+                int shown=0;
+                foreach(var node in tree.Ordered()) {
+                    if(shown>=14)break;
+                    string line=new string(' ',2*Mathf.Clamp(node.Generation-tree.FounderGeneration,0,4))+node.Name+" · поколение "+(node.Generation-tree.FounderGeneration)+(node.IsFounder?" · основатель":"")+" · "+LineageTree.StatusText(node);
+                    GUI.Label(new Rect(8,y,width-8,24),line,micro);y+=24;shown++;
+                }
+                if(tree.Count>shown){GUI.Label(new Rect(8,y,width-8,24),"… и ещё "+(tree.Count-shown),micro);y+=24;}
+                y+=12;
             }
             if(hasCell&&agent.Alive) {
                 var w=water.World;int root=w.OrganismRoot(water.SelectedIndex);int size=w.OrganismSize(water.SelectedIndex);
@@ -82,6 +96,8 @@ namespace Evolution.Runtime
                 if(Button(new Rect(6,y,width,32),"Естественное наследование · без доплаты",controlled?"Отменить план; обычная стоимость деления сохраняется":why,agent.PlannedDevelopment==DevelopmentDirection.Natural,controlled))water.World.PlanDevelopment(DevelopmentDirection.Natural);
                 y+=40;GUI.Label(new Rect(6,y,width,50),hasCell?water.World.DivisionBlock(water.SelectedIndex)??"Можно делиться: закрой панель и нажми R.":"Продолжение доступно за живого потомка.",micro);
             }
+            if(water.Chronicle!=null&&!water.Chronicle.Finished&&water.Tree!=null&&water.Tree.Count>0
+                &&Button(new Rect(6,y,width,34),"Завершить линию · составить хронику","Итог по реальным событиям; живые потомки продолжат линию без вас")){GUI.EndScrollView();water.Chronicle.FinishByPlayer();return;}
             GUI.EndScrollView();
             if(Button(new Rect(r.x+16,r.yMax-54,292,38),"Вернуться к клетке")){development=false;transition=0;}
             if(Button(new Rect(r.x+324,r.yMax-54,300,38),"Взять управление клеткой","Явно начать игру за выбранную живую клетку",false,hasCell&&agent.Alive)){water.PlaySelected();development=false;}

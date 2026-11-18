@@ -19,9 +19,12 @@ namespace Evolution.Runtime
         public const string ChallengeHelp = "F5 — начать/повторить испытание · F6 — выйти";
         public HudDetail Detail;
         public bool HelpVisible, AttackRequested;
-        public bool CapturesCommands=>development||settings||HelpVisible||journal;
+        public bool CapturesCommands=>development||settings||HelpVisible||journal||chronicle;
         public HudPage Page => development ? HudPage.Development : water.Overview.Active ? HudPage.Overview : HudPage.Cell;
-        bool development, settings, journal;
+        bool development, settings, journal, chronicle;
+        ChronicleSummary chronicleSummary;
+        readonly List<LineageRecord> chronicleRecords=new List<LineageRecord>();
+        string huntWarning;
         float requestedScale=1, nextRead, transition, mapRange=45, shownEnergy;
         string identity;
         double assimilated;
@@ -42,7 +45,7 @@ namespace Evolution.Runtime
         float W => Screen.width/Scale;
         float H => Screen.height/Scale;
         Rect Top => new Rect(18,14,W-36,58);
-        Rect Left => new Rect(18,90,272,Page==HudPage.Overview?264:208);
+        Rect Left => new Rect(18,90,272,264);
         Rect Right => new Rect(W-310,264,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-372):356);
         Rect MapBox => new Rect(18,H-310,272,238);
         Rect Actions => new Rect(W/2-258,H-154,516,80);
@@ -50,6 +53,7 @@ namespace Evolution.Runtime
         Rect SettingsBox => new Rect(W-326,80,308,158);
         Rect HelpBox => new Rect(W-326,80,308,222);
         Rect DevelopmentBox => new Rect(W/2-320,90,640,Mathf.Min(480,H-320));
+        Rect ChronicleBox => new Rect(W/2-320,90,640,Mathf.Min(540,H-240));
         Rect ObserverBox => new Rect(306,90,W-632,116);
         Rect ToastBox => new Rect(W-310,88,292,162);
         public bool ThreatMarkerVisible { get; private set; }
@@ -64,6 +68,7 @@ namespace Evolution.Runtime
         }
         public bool CloseOverlay()
         {
+            if(chronicle){chronicle=false;return true;}
             if(settings||HelpVisible||journal){settings=HelpVisible=journal=false;return true;}
             if(development){development=false;transition=0;return true;}
             return false;
@@ -110,6 +115,7 @@ namespace Evolution.Runtime
             var p=new Vector2(pixels.x/Scale,(Screen.height-pixels.y)/Scale);
             return Top.Contains(p)||Left.Contains(p)||Right.Contains(p)||MapBox.Contains(p)||Actions.Contains(p)||Footer.Contains(p)||
                 ((settings&&SettingsBox.Contains(p))||(HelpVisible&&HelpBox.Contains(p)))||(development&&DevelopmentBox.Contains(p))||
+                (chronicle&&ChronicleBox.Contains(p))||
                 OverVisibleNotice(p)||OverObserverButton(p);
         }
         void Update()
@@ -150,6 +156,13 @@ namespace Evolution.Runtime
                     if(water.Milestones.CompletedCount>best)PlayerPrefs.SetInt("OceanMilestones.Best",water.Milestones.CompletedCount);
                 }
             }
+            if(water.Dynasty!=null&&water.Dynasty.ConsumeCompleted(out string era)) {
+                Notify("dynasty-era","Эпоха вашей линии",era,false);
+                water.Chronicle?.MarkEra();
+            }
+            huntWarning=water.HuntEffects?.Warning;
+            if(huntWarning!=null)Notify("hunt-drop","Регион оскудел после охоты",huntWarning,false);
+            if(water.Chronicle!=null&&water.Chronicle.ConsumeFinished(out var summary))OpenChronicle(summary);
             if(readout.Threat>=0)Notify("danger","Рядом опасность!","Хищник в зоне чувствительности",true);
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
             long previousEventTick=eventTick;
@@ -263,7 +276,7 @@ namespace Evolution.Runtime
             GUI.color=new Color(1,1,1,.75f+.25f*transition);
             DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
             if(development)DrawDevelopment();
-            if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else DrawNotices();
+            if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else if(chronicle)DrawChronicle();else DrawNotices();
             if(ShowObserverControls)DrawObserverLinks();
             if(water.FindFood&&!development)DrawWorldLabels();
             string tip=hoverTip??GUI.tooltip;
@@ -305,6 +318,9 @@ namespace Evolution.Runtime
                 var milestones=water.Milestones;
                 if(milestones!=null)GUI.Label(new Rect(r.x+16,r.y+163,r.width-32,42),
                     "Путь жизни "+milestones.CompletedCount+"/"+LifeMilestones.Total+" · "+(milestones.ChainComplete?"весь путь пройден":milestones.CurrentTitle+" — "+milestones.CurrentProgress),micro);
+                var dynasty=water.Dynasty;
+                if(dynasty!=null&&!dynasty.Completed)GUI.Label(new Rect(r.x+16,r.y+206,r.width-32,46),
+                    "Династия: "+dynasty.Progress,micro);
                 return;
             }
             Label(r.x+16,r.y+58,r.width-32,"Организмов: "+living,title);
@@ -432,6 +448,7 @@ namespace Evolution.Runtime
             }
             string depth=miniLayer>0?MiniLayerName+" · Y="+(water.Overview.FullDepth?ChunkKey.At(center).Y:water.Overview.SliceIndex)*20:water.Overview.FullDepth?"Вся толща · цвет = высота":"Срез Y "+water.Overview.SliceIndex*20+"…"+(water.Overview.SliceIndex+1)*20;
             Label(r.x+12,r.y+170,r.width-24,depth,micro);
+            if(huntWarning!=null)GUI.Label(new Rect(map.x+4,map.y+4,map.width-8,24),huntWarning,micro);
             if(Button(new Rect(r.x+10,r.y+198,128,30),water.Overview.FullDepth?"Выбрать слой":"Вся толща","Срез по высоте 20 условных единиц")){water.Overview.SetSlice(!water.Overview.FullDepth,ChunkKey.At(center).Y);}
             if(Button(new Rect(r.x+142,r.y+198,35,30),"−","Ниже на 20"))water.Overview.SetSlice(false,water.Overview.SliceIndex-1);
             if(Button(new Rect(r.x+181,r.y+198,35,30),"+","Выше на 20"))water.Overview.SetSlice(false,water.Overview.SliceIndex+1);
@@ -446,7 +463,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,152),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nF3 / F4 — скорость времени ×1…×8\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\n"+ChallengeHelp+"\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,152),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — потомок (ещё раз — следующий)\nF3 / F4 — скорость времени ×1…×8\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\n"+ChallengeHelp+"\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
@@ -468,6 +485,38 @@ namespace Evolution.Runtime
             }
             GUI.Label(new Rect(r.x+12,r.y+118,r.width-24,40),NicheReadout.Trend(water.Overview.Survey.NicheHistory),micro);
         }
+        // One chronicle per finished line: persisted locally, best score remembered.
+        void OpenChronicle(in ChronicleSummary summary)
+        {
+            chronicleSummary=summary;chronicle=true;
+            int best=PlayerPrefs.GetInt("LineageChronicle.Best",0);
+            if(summary.Score>best)PlayerPrefs.SetInt("LineageChronicle.Best",summary.Score);
+            if(!string.IsNullOrEmpty(water.RecordsPath))LineageRecords.Append(water.RecordsPath,new LineageRecord {
+                Seed=water.Seed,Name=summary.FounderName,Generations=summary.Generations,Niches=summary.Niches,
+                Divisions=summary.Divisions,Hunts=summary.Hunts,Era=summary.Era,End=(int)summary.End,Seconds=summary.Seconds});
+            chronicleRecords.Clear();
+            if(!string.IsNullOrEmpty(water.RecordsPath))foreach(var record in LineageRecords.Load(water.RecordsPath))
+                if(record.Seed==water.Seed)chronicleRecords.Add(record);
+        }
+        void DrawChronicle()
+        {
+            var r=ChronicleBox;Box(r,"Хроника линии · "+chronicleSummary.FounderName);
+            float y=r.y+58;
+            GUI.Label(new Rect(r.x+16,y,r.width-32,30),"Поколений: "+chronicleSummary.Generations+" · Делений: "+chronicleSummary.Divisions+" · Укусов: "+chronicleSummary.Hunts,text);y+=34;
+            GUI.Label(new Rect(r.x+16,y,r.width-32,30),"Ниш освоено: "+chronicleSummary.Niches+"/"+DynastyGoal.NichesRequired+" · Время линии: "+chronicleSummary.Seconds.ToString("F0")+" с"+(chronicleSummary.Era?" · Эпоха вашей линии достигнута":""),text);y+=34;
+            GUI.Label(new Rect(r.x+16,y,r.width-32,64),chronicleSummary.EndText,micro);y+=72;
+            GUI.Label(new Rect(r.x+16,y,r.width-32,28),"Лучший результат: "+PlayerPrefs.GetInt("LineageChronicle.Best",0)+" очков (поколения ×10 + ниши)",muted);y+=32;
+            GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Попытки на этом зерне ("+chronicleRecords.Count+"):",muted);y+=28;
+            int shown=0;
+            for(int i=chronicleRecords.Count-1;i>=0&&shown<4;i--,shown++) {
+                var record=chronicleRecords[i];
+                GUI.Label(new Rect(r.x+16,y,r.width-32,26),record.Name+" · поколений "+record.Generations+" · ниш "+record.Niches+" · "+EndShort((ChronicleEnd)record.End),micro);y+=26;
+            }
+            if(shown==0){GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Пока пусто — эта линия первая.",micro);y+=26;}
+            if(Button(new Rect(r.x+16,r.yMax-52,200,38),"Закрыть","Хроника сохранена локально рядом с миром"))chronicle=false;
+            if(Button(new Rect(r.x+r.width-260,r.yMax-52,244,38),"Сыграть этот seed снова","Мир детерминирован: то же зерно — тот же океан. Превзойди свою прошлую линию")){chronicle=false;water.RestartSameSeed();}
+        }
+        static string EndShort(ChronicleEnd end)=>end==ChronicleEnd.Extinct?"конец линии":end==ChronicleEnd.PlayerExit?"выход из роли":"—";
         void DrawWorldLabels()
         {
             if(readout.Threat>=0)ThreatMarkerVisible=WorldLabel(water.World.Get(readout.Threat).Position,"Опасность · хищник",new Color(1,.55f,.5f),true);

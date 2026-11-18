@@ -19,6 +19,11 @@ namespace Evolution.Runtime
         public OceanOverview Overview {get;private set;}
         public FriendlyOceanHud Hud {get;private set;}
         public LifeMilestones Milestones {get;private set;}
+        public LineageTree Tree {get;private set;}
+        public LineageChronicle Chronicle {get;private set;}
+        public HuntConsequences HuntEffects {get;private set;}
+        public DynastyGoal Dynasty {get;private set;}
+        public string RecordsPath {get;private set;}
         Vector3? moveTarget;
         public int SelectedIndex=>selected;
         public CellLineagePlay EvolutionPlay {get;}=new CellLineagePlay();
@@ -51,6 +56,8 @@ namespace Evolution.Runtime
             Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
             Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
             Milestones=new LifeMilestones();
+            Tree=new LineageTree();Chronicle=new LineageChronicle();HuntEffects=new HuntConsequences();Dynasty=new DynastyGoal();
+            RecordsPath=Path.Combine(Application.persistentDataPath,"ExperimentalWater","lineage-records.tsv");
             Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;PlaySelected();
         }
         // Time pace only: scale never changes the tick sequence for a given seed.
@@ -76,6 +83,10 @@ namespace Evolution.Runtime
             Rig.FocusOn(VolumePainter.V(Selection.Position),Mathf.Clamp(Selection.Biology.Genes.Size*3,2.8f,8));
             Hud?.RefreshNow();return true;
         }
+        // Determinism makes the same seed the same ocean: a clean scene restart is the
+        // base of the local records. The region archive keeps its memory of the seed.
+        // The scene path works in the Editor even without Build Settings entry.
+        public void RestartSameSeed()=>UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)clock.Blend),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
@@ -121,7 +132,10 @@ namespace Evolution.Runtime
             if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0)following=false;}
             int steps=clock.Advance(Time.unscaledDeltaTime,Paused);
             while(steps>0) {
-                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);Milestones.Record(World,World.Controlled);int count=OrganismsVisible?NearestFlows():0;
+                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);Milestones.Record(World,World.Controlled);
+                Tree.Record(World,World.Controlled);Chronicle.Record(World,World.Controlled);
+                HuntEffects.Record(World,Ocean.Survey,Tree);Dynasty.Record(World,World.Controlled,Milestones.ChainComplete,Ocean.Survey,Tree);
+                int count=OrganismsVisible?NearestFlows():0;
                 Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);
                 steps--;
             }
