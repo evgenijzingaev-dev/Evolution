@@ -266,6 +266,7 @@ namespace Evolution.Volume
             var eligibleEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
             var eligibleKind = new Dictionary<string, int>(StringComparer.Ordinal);
             var observed = new HashSet<string>(StringComparer.Ordinal);
+            SettlementHint = null;
             // Resolve confirmed deaths first. Duplicate streamed snapshots of the same
             // biological identity must not inflate living counts or override a death.
             for (int i = 0; i < world.Count; i++) {
@@ -296,6 +297,11 @@ namespace Evolution.Volume
                     if (world.Niches) {
                         float energyFraction = a.Biology.Energy / Math.Max(.001f, Biology.Capacity(a.Biology.Genes));
                         int kind = NicheKind(world.EnvironmentAt(a.Position));
+                        // A real descendant in a foreign niche may be starving before
+                        // becoming eligible for settlement. Explain the blocked goal.
+                        if (a.Identity != FounderIdentity && kind != 0 && kind != founderNiche
+                            && energyFraction < .35f)
+                            SettlementHint = SettlementAdvice(true, energyFraction, true);
                         if (EligibleNiche(founderNiche, kind,
                             a.Identity != FounderIdentity, true, energyFraction)) {
                             eligible.Add(a.Identity);
@@ -312,7 +318,6 @@ namespace Evolution.Volume
             foreach (var key in new List<string>(nicheResidence.Keys))
                 if (!eligible.Contains(key)) { nicheResidence.Remove(key); nicheResidenceKind.Remove(key); nicheEntryEnergy.Remove(key); }
             CurrentNicheSeconds = 0;
-            SettlementHint = null;
             foreach (var key in eligible) {
                 // Use the same identity-validated observation for both energy and niche.
                 // A stale/reused identity elsewhere in the loaded world must not
