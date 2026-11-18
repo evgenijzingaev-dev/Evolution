@@ -116,6 +116,10 @@ namespace Evolution.Volume
         readonly Dictionary<string, float> nicheEntryEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
+        // HUD must not round 14.6 seconds to a misleading 15/15 before victory.
+        public static int DisplayNicheSeconds(double seconds)
+            => double.IsNaN(seconds) || seconds <= 0 ? 0
+                : (int)Math.Floor(Math.Min(RequiredNicheSeconds, seconds));
         public double BestNicheSeconds { get; private set; }
         // Current uninterrupted progress, not a historic peak from a failed attempt.
         public double CurrentNicheSeconds { get; private set; }
