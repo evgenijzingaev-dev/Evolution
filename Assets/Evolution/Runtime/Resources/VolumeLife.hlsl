@@ -8,14 +8,23 @@ UNITY_INSTANCING_BUFFER_START(Props)
     UNITY_DEFINE_INSTANCED_PROP(float4,_InstanceColor)
     UNITY_DEFINE_INSTANCED_PROP(float4,_Phenotype)
     UNITY_DEFINE_INSTANCED_PROP(float,_Visibility)
+    UNITY_DEFINE_INSTANCED_PROP(float,_Fission)
 UNITY_INSTANCING_BUFFER_END(Props)
 float4 _OceanDataCenter;
 struct Attributes {float4 positionOS:POSITION;float3 normalOS:NORMAL;float2 uv:TEXCOORD0;UNITY_VERTEX_INPUT_INSTANCE_ID};
 struct Varyings {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float2 uv:TEXCOORD2;UNITY_VERTEX_INPUT_INSTANCE_ID};
 Varyings Vert(Attributes i) {
     Varyings o;UNITY_SETUP_INSTANCE_ID(i);UNITY_TRANSFER_INSTANCE_ID(i,o);
-    o.world=TransformObjectToWorld(i.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);
-    o.normal=TransformObjectToWorldNormal(i.normalOS);o.uv=i.uv;return o;
+    float fission=UNITY_ACCESS_INSTANCED_PROP(Props,_Fission);
+    // Only the shared membrane neck receives this after a paid biological birth.
+    float3 local=i.positionOS.xyz;
+    float waist=1-fission*.62*exp(-local.x*local.x*45);
+    local.x*=1+fission*.38;local.yz*=waist;
+    // Inverse transpose of the deformation Jacobian keeps the constricted neck lit correctly.
+    float slope=fission*.62*90*i.positionOS.x*exp(-i.positionOS.x*i.positionOS.x*45);
+    float3 normal=float3((i.normalOS.x-slope*dot(i.positionOS.yz,i.normalOS.yz)/waist)/(1+fission*.38),i.normalOS.yz/waist);
+    o.world=TransformObjectToWorld(local);o.positionCS=TransformWorldToHClip(o.world);
+    o.normal=TransformObjectToWorldNormal(normal);o.uv=i.uv;return o;
 }
 half4 Frag(Varyings i):SV_Target {
     UNITY_SETUP_INSTANCE_ID(i);half4 color=UNITY_ACCESS_INSTANCED_PROP(Props,_InstanceColor);
