@@ -27,6 +27,7 @@ namespace Evolution.Volume
         VolumeWorld latest;
         long journalSequence;
         int hunts, divisions, deepestGeneration, lastAlive, lastMissing;
+        long lastHuntTick = long.MinValue;
         int founderGeneration = int.MinValue;
         string founderIdentity;
         double startedAt = double.NaN;
@@ -97,7 +98,11 @@ namespace Evolution.Volume
             // A confirmed bite of the played member is the model's own per-tick fact.
             if (controlled >= 0 && controlled < world.Count) {
                 var a = world.Get(controlled);
-                if (a.Alive && !dead.Contains(a.Identity) && dynasty.Contains(a.Identity) && a.Biology.AttackLastStep > 0) hunts++;
+                if (a.Alive && !dead.Contains(a.Identity) && dynasty.Contains(a.Identity)
+                    && a.Biology.AttackLastStep > 0 && world.Tick != lastHuntTick) {
+                    hunts++;
+                    lastHuntTick = world.Tick;
+                }
             }
             lastMissing = 0;
             foreach (var identity in dynasty) if (!dead.Contains(identity) && !observed.Contains(identity)) lastMissing++;
