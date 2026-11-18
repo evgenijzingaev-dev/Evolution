@@ -126,10 +126,21 @@ namespace Evolution.Volume
         // Last verified obstacle, shown as advice rather than an invented cause of death.
         public string SettlementHint { get; private set; }
         // Show a useful next action once settlement is already underway.
-        public static string SettlementProgressGoal(double currentSeconds, string obstacle)
+        public static string SettlementProgressGoal(double currentSeconds, string obstacle, int founderKind = -1)
             => obstacle ?? (currentSeconds > 0
                 ? "Закрепляйся в новой нише: сохраняй энергию и не покидай её"
-                : "Переведи потомка в другую нишу");
+                : founderKind < 0 ? "Переведи потомка в другую нишу"
+                : "Выбери среду для потомка: " + MigrationChoices(founderKind));
+        // Offer only genuinely different target habitats. This is guidance, not a
+        // teleport or resource grant: the player must still migrate and survive.
+        public static string MigrationChoices(int founderKind)
+        {
+            if (founderKind == 1) return "темнота или термальный источник";
+            if (founderKind == 2) return "светлая вода или термальный источник";
+            if (founderKind == 3) return "светлая вода или темнота";
+            return "светлая вода, темнота или термальный источник";
+        }
+        public int FounderNicheKind => founderNiche;
         public static string SettlementAdvice(bool inNewNiche, float energyFraction, bool sustainable)
         {
             if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
