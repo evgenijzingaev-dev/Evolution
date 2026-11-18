@@ -18,6 +18,7 @@ namespace Evolution.Runtime
         public WaterCamera Rig {get;private set;}
         public OceanOverview Overview {get;private set;}
         public FriendlyOceanHud Hud {get;private set;}
+        public LifeMilestones Milestones {get;private set;}
         Vector3? moveTarget;
         public int SelectedIndex=>selected;
         public CellLineagePlay EvolutionPlay {get;}=new CellLineagePlay();
@@ -29,7 +30,7 @@ namespace Evolution.Runtime
         VolumePainter painter;CrystalWaterLook look;GameObject cameraObject;
         AudioSource ambient,effects;AudioClip ambience,feedSound;
         readonly FlowBody[] flowBodies=new FlowBody[12];readonly float[] flowDistances=new float[12];
-        int selected;bool following=true;double accumulator,lastSound=double.NegativeInfinity;
+        int selected;bool following=true;SimulationClock clock;double lastSound=double.NegativeInfinity;
         void Start()
         {
             IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
@@ -49,8 +50,13 @@ namespace Evolution.Runtime
             feedSound=AudioClip.Create("Volume confirmed intake",pop.Length,1,rate,false);feedSound.SetData(pop,0);
             Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
             Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
+            Milestones=new LifeMilestones();
             Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;PlaySelected();
         }
+        // Time pace only: scale never changes the tick sequence for a given seed.
+        public int TimeScaleIndex=>clock.ScaleIndex;
+        public float TimeScale=>clock.Scale;
+        public bool SetTimeScale(int index)=>clock.SetScale(index);
         public void Observe() {moveTarget=null;World.Controlled=-1;World.Input=default;World.Boost=World.Attack=false;following=false;}
         // Choose a real nearby resident in a naturally populated neighbourhood. No spawning,
         // repositioning, resource injection or mutation is performed for the opening view.
@@ -72,7 +78,7 @@ namespace Evolution.Runtime
         }
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
-        public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
+        public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)clock.Blend),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
         void Update()
         {
             if(World==null)return;
@@ -80,6 +86,9 @@ namespace Evolution.Runtime
             bool over=HudVisible&&Hud!=null&&Hud.OverUi(Input.mousePosition);
             if(Input.GetKeyDown(KeyCode.F1))Hud.HelpVisible=!Hud.HelpVisible;
             if(Input.GetKeyDown(KeyCode.F2))Hud.CycleDetail();
+            // Time pace. F3 speeds the ocean up, F4 slows it back down.
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F3))clock.Faster();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F4))clock.Slower();
             // Optional gameplay challenge. F5 starts with the currently selected living cell; F6 exits.
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5))Challenge.Begin(World,selected);
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6))Challenge.Stop();
@@ -110,15 +119,15 @@ namespace Evolution.Runtime
             Rig.Tick(over||Overview.Typing,following);
             string identity=Selection.Identity;
             if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0)following=false;}
-            if(!Paused)accumulator+=Time.unscaledDeltaTime;
-            int steps=0;
-            while(!Paused&&accumulator>=VolumeWorld.StepSeconds&&steps++<8) {
-                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);int count=OrganismsVisible?NearestFlows():0;
-                Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);accumulator-=VolumeWorld.StepSeconds;
+            int steps=clock.Advance(Time.unscaledDeltaTime,Paused);
+            while(steps>0) {
+                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);Milestones.Record(World,World.Controlled);int count=OrganismsVisible?NearestFlows():0;
+                Water.Step(VolumeWorld.StepSeconds,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,count,World.FlowOffset);
+                steps--;
             }
             if(Paused)Water.Step(0,World.Time,VolumePainter.V(Lens.transform.position),flowBodies,0,World.FlowOffset);
             look.SetFocus(Vector3.Distance(Lens.transform.position,Rig.Focus),CinematicFocus&&following&&OrganismsVisible);
-            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)(accumulator/VolumeWorld.StepSeconds)),OrganismsVisible,ShowCurrents&&HudVisible&&!Overview.Active,ShowTemperature&&HudVisible&&!Overview.Active,selected,FindFood&&HudVisible&&!Overview.Active,Overview.Active,Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
+            painter.Draw(World,Water,Lens,Mathf.Clamp01((float)clock.Blend),OrganismsVisible,ShowCurrents&&HudVisible&&!Overview.Active,ShowTemperature&&HudVisible&&!Overview.Active,selected,FindFood&&HudVisible&&!Overview.Active,Overview.Active,Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
             Overview.Render();
             ambient.volume=SoundVolume<=0?0:Mathf.MoveTowards(ambient.volume,Mathf.Clamp01(SoundVolume)*(Paused?.1f:.6f),Time.unscaledDeltaTime*.5f);
             effects.volume=Mathf.Clamp01(SoundVolume);
