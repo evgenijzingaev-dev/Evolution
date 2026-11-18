@@ -25,6 +25,7 @@ namespace Evolution.Core
     public struct Cell
     {
         public int Id, ParentId, Generation;
+        public int BirthMutationMask; // Actual changed traits relative to the parent at birth.
         public Genome Genes;
         public float X, Z, Heading, Energy, Age;
         // Persistent tree edge uses IDs, never dense array indices. ColonyId is derived.
@@ -75,7 +76,7 @@ namespace Evolution.Core
                     Cell f = founders[i];
                     if (!Multicellularity.ValidFounder(f, config)) throw new ArgumentException("Invalid founder");
                     f.Id = ++nextId; f.ParentId = -1; f.BondParentId = f.ColonyId = f.TissueSlot = 0;
-                    f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
+                    f.BirthMutationMask = 0; f.Specialization = 0; f.Role = CellRole.Generalist; f.BondAngle = 0; f.Generation = 0;
                     cells[Count++] = f; continue;
                 }
                 var g = Genome.Founder(ref random);
@@ -125,6 +126,7 @@ namespace Evolution.Core
                         Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
                     if (Biology.TryDivide(ref c, ref child)) {
+                        child.BirthMutationMask = Observation.MutationMask(c.Genes, child.Genes);
                         child.Id = ++nextId;
                         colonies.Retain(ref c, ref child, i, config, ref random);
                         cells[originalCount + births++] = child; Births++;
