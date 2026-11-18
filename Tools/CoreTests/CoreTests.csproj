@@ -8,6 +8,8 @@
     <Compile Include="../../Assets/Evolution/Presentation/*.cs" />
     <Compile Include="../../Assets/Evolution/Volume/*.cs" />
     <Compile Include="../../Assets/Evolution/Localization/*.cs" />
-    <Compile Include="../../Assets/Evolution/Tests/EditMode/*.cs" />
+    <!-- UnityEngine-dependent HUD tests run only in Unity Edit Mode, not the .NET core harness. -->
+    <Compile Include="../../Assets/Evolution/Tests/EditMode/*.cs"
+             Exclude="../../Assets/Evolution/Tests/EditMode/FriendlyOceanHudInputTests.cs" />
   </ItemGroup>
 </Project>

@@ -40,9 +40,9 @@ print("GL context probe passed; Unity URP rendering is still unverified until th
   exit
 fi
 
-player=build/visual-preview/StandaloneLinux64/EVOLUTION
+player=${EVOLUTION_CAPTURE_PLAYER:-build/visual-preview/StandaloneLinux64/EVOLUTION}
 [[ -x $player ]] || { echo '::error::Visual Preview player missing.'; exit 1; }
-destination="$PWD/artifacts/visual-preview"
+destination=${EVOLUTION_CAPTURE_DESTINATION:-"$PWD/artifacts/visual-preview"}
 mkdir -p "$destination"
 # Private player logs are deliberately excluded from upload (as are Editor/license logs).
 private_log=$(mktemp)

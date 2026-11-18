@@ -72,11 +72,41 @@ namespace Evolution.Runtime
             else if(page==HudPage.Overview){water.Overview.Enter();water.Overview.SetMode(false);}
             else water.Observe();
         }
+        // Input hit areas must match visible overlays: otherwise invisible panels block
+        // picking organisms and issuing movement commands in the 3D ocean.
+        bool ShowObserverControls => !development &&
+            (Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical));
+        // Pure geometry is shared by the runtime and deterministic Edit Mode tests.
+        // The journal covers its whole panel; normal notices only cover drawn cards.
+        public static bool NoticeHit(Vector2 p,Rect area,int count,bool journal,bool coveredBySettings)
+        {
+            if(coveredBySettings)return false;
+            if(journal)return area.Contains(p);
+            for(int i=0;i<Mathf.Min(count,2);i++)
+                if(new Rect(area.x,area.y+i*78,area.width,72).Contains(p))return true;
+            return false;
+        }
+        bool OverVisibleNotice(Vector2 p) =>
+            NoticeHit(p,ToastBox,notices.Count,journal,settings||HelpVisible);
+        // The observer overlay has gaps between its actual buttons. Keep those gaps
+        // clickable so a player can still select organisms behind the overlay.
+        bool OverObserverButton(Vector2 p)
+        {
+            if(!ShowObserverControls)return false;
+            var r=ObserverBox;
+            float half=(r.width-8)/2;
+            return new Rect(r.x,r.y,half,34).Contains(p)||
+                (busiest!=null&&new Rect(r.x+half+8,r.y,half,34).Contains(p))||
+                (foodRegion!=null&&new Rect(r.x,r.y+40,half,32).Contains(p))||
+                (dangerRegion!=null&&new Rect(r.x+half+8,r.y+40,half,32).Contains(p))||
+                (water.Overview.Survey.Events.Count>0&&new Rect(r.x,r.y+80,r.width,32).Contains(p));
+        }
         public bool OverUi(Vector2 pixels)
         {
             var p=new Vector2(pixels.x/Scale,(Screen.height-pixels.y)/Scale);
             return Top.Contains(p)||Left.Contains(p)||Right.Contains(p)||MapBox.Contains(p)||Actions.Contains(p)||Footer.Contains(p)||
-                ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||ToastBox.Contains(p)||((Page==HudPage.Overview||Detail==HudDetail.Observer)&&ObserverBox.Contains(p));
+                ((settings||HelpVisible)&&SettingsBox.Contains(p))||(development&&DevelopmentBox.Contains(p))||
+                OverVisibleNotice(p)||OverObserverButton(p);
         }
         void Update()
         {
@@ -209,7 +239,7 @@ namespace Evolution.Runtime
             DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
             if(development)DrawDevelopment();
             if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else DrawNotices();
-            if(!development&&(Detail==HudDetail.Observer||(Page==HudPage.Overview&&water.Overview.Analytical)))DrawObserverLinks();
+            if(ShowObserverControls)DrawObserverLinks();
             if(water.FindFood&&!development)DrawWorldLabels();
             string tip=hoverTip??GUI.tooltip;
             if(!string.IsNullOrEmpty(tip)){

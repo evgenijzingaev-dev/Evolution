@@ -28,8 +28,9 @@ namespace Evolution.Tests
                 rig.Initialize(lens);rig.FocusOn(new Vector3(3,4,5),7);
                 for(int i=0;i<8;i++) {rig.Orbit(45,i==0?30:i==4?-90:0);rig.ApplyImmediate();
                     Assert.That(Vector3.Distance(lens.transform.position,rig.Focus),Is.EqualTo(7).Within(.001));
-                    Assert.Greater(Vector3.Dot(lens.transform.forward,(rig.Focus-lens.transform.position).normalized),.999f);}
-                Assert.Greater(lens.transform.position.y,rig.Focus.y);
+                    Assert.Greater(Vector3.Dot(lens.transform.forward,(rig.Focus-lens.transform.position).normalized),.999f);
+                    if(i==0) Assert.Greater(lens.transform.position.y,rig.Focus.y,"Positive pitch must orbit above the target");
+                    if(i==4) Assert.Less(lens.transform.position.y,rig.Focus.y,"Negative pitch must orbit below the target");}
             } finally {Object.DestroyImmediate(root);}
         }
         [UnityTest]

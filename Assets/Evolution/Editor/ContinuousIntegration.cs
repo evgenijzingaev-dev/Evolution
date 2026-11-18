@@ -30,7 +30,10 @@ namespace Evolution.Editor
                 throw new BuildFailedException("Linux build module is missing from the selected GameCI image.");
 
             PrototypeSetup.CreatePrototype();
-            var scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            // Retain the legacy startup/input smoke test and include the real 3D
+            // game for the opt-in in-player URP capture in the same IL2CPP build.
+            var scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path)
+                .Concat(new[] { "Assets/Evolution/Scenes/WaterPrototype3D.unity" }).Distinct().ToArray();
             if (scenes.Length == 0 || scenes.Any(scene => !File.Exists(scene)))
                 throw new BuildFailedException("Verification build requires existing, enabled scenes.");
 
@@ -40,6 +43,7 @@ namespace Evolution.Editor
                 throw new BuildFailedException("GameCI must supply -customBuildPath.");
 
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.IL2CPP);
+            VisualPreviewBuild.ConfigurePlayerGraphics();
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
                 scenes = scenes,
                 locationPathName = arguments[index + 1],
