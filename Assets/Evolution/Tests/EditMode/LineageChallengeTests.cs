@@ -137,6 +137,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void StarvingDescendantInForeignNicheGetsActionableAdviceBeforeSettlement()
+        {
+            // Low energy prevents settlement, but must not hide the reason from the player.
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, .30f));
+            StringAssert.Contains("голодает", LineageChallenge.SettlementAdvice(true, .30f, true));
+            Assert.IsTrue(LineageChallenge.EligibleNiche(1, 2, true, true, .40f));
+            Assert.IsNull(LineageChallenge.SettlementAdvice(true, .40f, true));
+        }
+
+        [Test]
         public void NicheSettlementRequiresSustainableEnergyNotJustStoredReserves()
         {
             Assert.IsTrue(LineageChallenge.SustainableResidence(.75f, .70f),
