@@ -11,21 +11,23 @@ namespace Evolution.Volume
         public int MaxGeneration;
         public double Intake,Light,Upkeep,Movement,Growth,Attack,Division,PredationLoss;
         public double ExternalNutrients,Solar,Recycled,RecyclingLoss,DecayLoss,AssimilationLoss;
+        public double Contact,TransportLoss,TransportReceived;
         public double BirthOverhead,PredationDissipation,Unpaid;
         public VolumeDiagnostics Clone()=>(VolumeDiagnostics)MemberwiseClone();
-        public double Dissipated=>Upkeep+Movement+Growth+Attack+BirthOverhead+RecyclingLoss+DecayLoss+AssimilationLoss+PredationDissipation-Unpaid;
+        public double Dissipated=>Contact+TransportLoss+Upkeep+Movement+Growth+Attack+BirthOverhead+RecyclingLoss+DecayLoss+AssimilationLoss+PredationDissipation-Unpaid;
         public long Deaths=>Starved+Predated;
         internal void Write(BinaryWriter w)
         {
-            w.Write(1);w.Write(Births);w.Write(Starved);w.Write(Predated);w.Write(MaxGeneration);w.Write(NextAgentOrder);w.Write(NextFoodOrder);
-            foreach(double v in new[] {Intake,Light,Upkeep,Movement,Growth,Attack,Division,PredationLoss,ExternalNutrients,Solar,Recycled,RecyclingLoss,DecayLoss,AssimilationLoss,BirthOverhead,PredationDissipation,Unpaid})w.Write(v);
+            w.Write(2);w.Write(Births);w.Write(Starved);w.Write(Predated);w.Write(MaxGeneration);w.Write(NextAgentOrder);w.Write(NextFoodOrder);
+            foreach(double v in new[] {Intake,Light,Upkeep,Movement,Growth,Attack,Division,PredationLoss,ExternalNutrients,Solar,Recycled,RecyclingLoss,DecayLoss,AssimilationLoss,BirthOverhead,PredationDissipation,Unpaid,Contact,TransportLoss,TransportReceived})w.Write(v);
         }
         internal static VolumeDiagnostics Read(BinaryReader r)
         {
-            if(r.ReadInt32()!=1)throw new InvalidDataException("Unsupported ecology ledger; original retained.");
-            return new VolumeDiagnostics {Births=r.ReadInt64(),Starved=r.ReadInt64(),Predated=r.ReadInt64(),MaxGeneration=r.ReadInt32(),NextAgentOrder=r.ReadInt64(),NextFoodOrder=r.ReadInt64(),
+            int version=r.ReadInt32();if(version<1||version>2)throw new InvalidDataException("Unsupported ecology ledger; original retained.");
+            var d=new VolumeDiagnostics {Births=r.ReadInt64(),Starved=r.ReadInt64(),Predated=r.ReadInt64(),MaxGeneration=r.ReadInt32(),NextAgentOrder=r.ReadInt64(),NextFoodOrder=r.ReadInt64(),
                 Intake=r.ReadDouble(),Light=r.ReadDouble(),Upkeep=r.ReadDouble(),Movement=r.ReadDouble(),Growth=r.ReadDouble(),Attack=r.ReadDouble(),Division=r.ReadDouble(),PredationLoss=r.ReadDouble(),
                 ExternalNutrients=r.ReadDouble(),Solar=r.ReadDouble(),Recycled=r.ReadDouble(),RecyclingLoss=r.ReadDouble(),DecayLoss=r.ReadDouble(),AssimilationLoss=r.ReadDouble(),BirthOverhead=r.ReadDouble(),PredationDissipation=r.ReadDouble(),Unpaid=r.ReadDouble()};
+            if(version>=2){d.Contact=r.ReadDouble();d.TransportLoss=r.ReadDouble();d.TransportReceived=r.ReadDouble();}return d;
         }
         public void Metabolism(Cell c)
         {
@@ -36,16 +38,19 @@ namespace Evolution.Volume
     }
     public struct VolumeSnapshot
     {
+        public int Solitary,Pairs,SmallColonies,MediumColonies,LargeColonies;
         public int Alive,MaxGeneration,EnergyBlocked,GrowthBlocked,MaturityBlocked,CapacityBlocked;
         public double Substrate,Organic,Energy,Structure;
         public double Stored=>Substrate*Biology.SubstrateEnergy+Organic+Energy+Structure;
-        public void Add(VolumeSnapshot s) {Alive+=s.Alive;EnergyBlocked+=s.EnergyBlocked;GrowthBlocked+=s.GrowthBlocked;MaturityBlocked+=s.MaturityBlocked;CapacityBlocked+=s.CapacityBlocked;MaxGeneration=Math.Max(MaxGeneration,s.MaxGeneration);Substrate+=s.Substrate;Organic+=s.Organic;Energy+=s.Energy;Structure+=s.Structure;}
+        public void Add(VolumeSnapshot s) {Alive+=s.Alive;Solitary+=s.Solitary;Pairs+=s.Pairs;SmallColonies+=s.SmallColonies;MediumColonies+=s.MediumColonies;LargeColonies+=s.LargeColonies;EnergyBlocked+=s.EnergyBlocked;GrowthBlocked+=s.GrowthBlocked;MaturityBlocked+=s.MaturityBlocked;CapacityBlocked+=s.CapacityBlocked;MaxGeneration=Math.Max(MaxGeneration,s.MaxGeneration);Substrate+=s.Substrate;Organic+=s.Organic;Energy+=s.Energy;Structure+=s.Structure;}
         public static VolumeSnapshot Read(VolumeWorld w)
         {
             var s=new VolumeSnapshot();
             for(int k=0;k<w.FoodCount;k++){var f=w.GetFood(k);s.Substrate+=f.Substrate;s.Organic+=f.Organic;}
             for(int i=0;i<w.Count;i++){
-                var a=w.Get(i);if(!a.Alive)continue;var c=a.Biology;s.Alive++;s.Energy+=Math.Max(0,c.Energy);s.Structure+=Biology.StructureEnergy(c.Genes);s.MaxGeneration=Math.Max(s.MaxGeneration,c.Generation);
+                var a=w.Get(i);if(!a.Alive)continue;var c=a.Biology;s.Alive++;
+                if(w.OrganismRoot(i)==i){int size=w.OrganismSize(i);if(size==1)s.Solitary++;else if(size==2)s.Pairs++;else if(size<=4)s.SmallColonies++;else if(size<=8)s.MediumColonies++;else s.LargeColonies++;}
+                s.Energy+=Math.Max(0,c.Energy);s.Structure+=Biology.StructureEnergy(c.Genes);s.MaxGeneration=Math.Max(s.MaxGeneration,c.Generation);
                 if(w.Count>=VolumeWorld.PopulationLimit)s.CapacityBlocked++;
                 else if(c.Generation>0&&c.Growth<1)s.GrowthBlocked++;
                 else if(c.Age<Multicellularity.MaturityAge(c))s.MaturityBlocked++;
