@@ -87,7 +87,8 @@ namespace Evolution.Volume
             for (int i = 0; i < world.Count; i++) {
                 var a = world.Get(i);
                 if (a.Identity == null || !dynasty.Contains(a.Identity)) continue;
-                if (a.Alive) {
+                if (a.Alive && !dead.Contains(a.Identity)) {
+                    // A confirmed death is terminal even if streaming returns a stale live snapshot.
                     observed.Add(a.Identity);
                     lastAlive++;
                     if (a.Biology.Generation > deepestGeneration) deepestGeneration = a.Biology.Generation;
