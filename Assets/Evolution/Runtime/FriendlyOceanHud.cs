@@ -41,13 +41,13 @@ namespace Evolution.Runtime
         float W => Screen.width/Scale;
         float H => Screen.height/Scale;
         Rect Top => new Rect(18,14,W-36,58);
-        Rect Left => new Rect(18,90,272,Page==HudPage.Overview?264:170);
+        Rect Left => new Rect(18,90,272,Page==HudPage.Overview?264:208);
         Rect Right => new Rect(W-310,264,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-372):356);
         Rect MapBox => new Rect(18,H-310,272,238);
         Rect Actions => new Rect(W/2-258,H-154,516,80);
         Rect Footer => new Rect(18,H-58,W-36,42);
         Rect SettingsBox => new Rect(W-326,80,308,158);
-        Rect HelpBox => new Rect(W-326,80,308,190);
+        Rect HelpBox => new Rect(W-326,80,308,206);
         Rect DevelopmentBox => new Rect(W/2-320,90,640,Mathf.Min(480,H-320));
         Rect ObserverBox => new Rect(306,90,W-632,116);
         Rect ToastBox => new Rect(W-310,88,292,162);
@@ -140,6 +140,14 @@ namespace Evolution.Runtime
             if(water.EvolutionPlay.Fallen.HasValue&&water.EvolutionPlay.Fallen.Value.Identity!=lastOwnDeath) {
                 lastOwnDeath=water.EvolutionPlay.Fallen.Value.Identity;
                 Notify("own-death","Твоя клетка погибла","Причина показана в карточке. Потомок может продолжить линию.",true);
+            }
+            if(water.Milestones!=null) {
+                while(water.Milestones.ConsumeCompleted(out string milestone)) {
+                    // Distinct keys: several milestones may complete on the same tick.
+                    Notify("milestone-"+milestone,"Веха: "+milestone,water.Milestones.ChainComplete?"Весь путь жизни пройден":"Следующая: "+water.Milestones.CurrentTitle,false);
+                    int best=PlayerPrefs.GetInt("OceanMilestones.Best",0);
+                    if(water.Milestones.CompletedCount>best)PlayerPrefs.SetInt("OceanMilestones.Best",water.Milestones.CompletedCount);
+                }
             }
             if(readout.Threat>=0)Notify("danger","Рядом опасность!","Хищник в зоне чувствительности",true);
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
@@ -293,6 +301,9 @@ namespace Evolution.Runtime
                 } else hint="F5 — испытание «Сохрани линию»\n"+hint;
                 GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,54),task,title);
                 GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),hint,micro);
+                var milestones=water.Milestones;
+                if(milestones!=null)GUI.Label(new Rect(r.x+16,r.y+163,r.width-32,42),
+                    "Путь жизни "+milestones.CompletedCount+"/"+LifeMilestones.Total+" · "+(milestones.ChainComplete?"весь путь пройден":milestones.CurrentTitle+" — "+milestones.CurrentProgress),micro);
                 return;
             }
             Label(r.x+16,r.y+58,r.width-32,"Организмов: "+living,title);
@@ -383,7 +394,11 @@ namespace Evolution.Runtime
         {
             var r=Footer;Box(r);
             string layer=water.Overview.FullDepth?"Вся толща":"Слой "+water.Overview.SliceIndex*20+"…"+(water.Overview.SliceIndex+1)*20;
-            Label(r.x+16,r.y+9,r.width-180,$"В области: {living}  ·  Линий: {lines.Count}  |  Пища: {readout.Nutrition.ToLowerInvariant()}  ·  Вода: {readout.Temperature.ToLowerInvariant()}  |  {layer}",micro);
+            Label(r.x+16,r.y+9,r.width-380,$"В области: {living}  ·  Линий: {lines.Count}  |  Пища: {readout.Nutrition.ToLowerInvariant()}  ·  Вода: {readout.Temperature.ToLowerInvariant()}  |  {layer}",micro);
+            for(int i=0;i<SimulationClock.Scales.Length;i++)
+                if(Button(new Rect(r.xMax-306+i*38,r.y+5,34,32),"×"+SimulationClock.Scales[i].ToString("0.#"),
+                    "Скорость времени ×"+SimulationClock.Scales[i].ToString("0.#")+". Шаг симуляции и seed те же — меняется только темп; F3/F4",
+                    water.TimeScaleIndex==i))water.SetTimeScale(i);
             if(Button(new Rect(r.xMax-150,r.y+5,138,32),water.Paused?"Продолжить · P":"Пауза · P"))water.Paused=!water.Paused;
         }
         Vector2 MapPoint(V3 p,Rect map,V3 center)=>new Vector2(map.center.x+(p.X-center.X)/mapRange*map.width*.5f,map.center.y-(p.Z-center.Z)/mapRange*map.height*.5f);
@@ -430,7 +445,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,120),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,136),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nF3 / F4 — скорость времени ×1…×8\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
