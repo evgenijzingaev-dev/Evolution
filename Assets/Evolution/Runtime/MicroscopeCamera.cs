@@ -11,7 +11,11 @@ namespace Evolution.Runtime
         Vector3 previousPointer;
         public bool Following { get; private set; }
         public Vector3 FocusPoint => targetFocus;
+        public Vector3 RenderedFocus => focus;
         public float Distance => targetDistance;
+        float MaximumDistance => Mathf.Max(2.5f, Mathf.Min(world * .32f, world * .23f / (Mathf.Tan(24 * Mathf.Deg2Rad) * Mathf.Max(1, lens.aspect))));
+        public Vector3 NearestImage(Vector3 point) => new Vector3(focus.x + Observation.PeriodicDelta(point.x - focus.x, world),
+            point.y, focus.z + Observation.PeriodicDelta(point.z - focus.z, world));
         public void Initialize(Camera camera, float worldSize)
         {
             lens = camera; world = worldSize;
@@ -19,18 +23,16 @@ namespace Evolution.Runtime
             Overview(); focus = targetFocus; distance = targetDistance; yaw = targetYaw; pitch = targetPitch;
             ApplyPose();
         }
-        public void Overview() { Following = false; targetFocus = new Vector3(world * .5f, .5f, world * .5f); targetDistance = world * 1.6f; targetYaw = 0; targetPitch = 75; }
-        public void Zoom(float wheel) { targetDistance = Observation.Zoom(targetDistance, wheel, world); }
-        public void FocusOn(Vector3 point, bool follow, float frameDistance = 5) { targetFocus = Bound(point); targetDistance = Mathf.Clamp(frameDistance, Mathf.Min(2, world * .5f), world * 1.65f); Following = follow; }
+        public void Overview() { Following = false; targetFocus = new Vector3(world * .5f, .5f, world * .5f); targetDistance = MaximumDistance; targetYaw = 0; targetPitch = 75; }
+        public void Zoom(float wheel) { targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-wheel * .15f), 2.5f, MaximumDistance); }
+        public void FocusOn(Vector3 point, bool follow, float frameDistance = 5) { targetFocus = Bound(point); targetDistance = Mathf.Clamp(frameDistance, 2.5f, MaximumDistance); Following = follow; }
         public void StopFollowing() { Following = false; }
         public void FollowPoint(Vector3 point) {
             if (!Following) return;
-            point = Bound(point);
-            if (Mathf.Abs(point.x - targetFocus.x) > world * .5f) focus.x += point.x > targetFocus.x ? world : -world;
-            if (Mathf.Abs(point.z - targetFocus.z) > world * .5f) focus.z += point.z > targetFocus.z ? world : -world;
-            targetFocus = point;
+            targetFocus = Bound(point);
         }
-        Vector3 Bound(Vector3 point) => new Vector3(Mathf.Clamp(point.x, 0, world), .54f, Mathf.Clamp(point.z, 0, world));
+        Vector3 Bound(Vector3 point) => new Vector3(targetFocus.x + Observation.PeriodicDelta(point.x-targetFocus.x,world),
+            .54f,targetFocus.z + Observation.PeriodicDelta(point.z-targetFocus.z,world));
         public Vector3 ControlDirection(Vector2 input) => Quaternion.Euler(0, targetYaw, 0) * new Vector3(input.x, 0, input.y);
         public void Tick(bool pointerOverUI, bool controlling = false)
         {
@@ -55,9 +57,8 @@ namespace Evolution.Runtime
             }
             if (dragging && Input.GetMouseButton(1)) {
                 targetYaw += mouseDelta.x * .1f * 3;
-                targetPitch = Mathf.Clamp(targetPitch - mouseDelta.y * .1f * 2, 30, 85);
+                targetPitch = Mathf.Clamp(targetPitch - mouseDelta.y * .1f * 2, 40, 85);
             }
-            targetFocus = Bound(targetFocus);
             float blend = 1 - Mathf.Exp(-12 * dt);
             focus = Vector3.Lerp(focus, targetFocus, blend); distance = Mathf.Lerp(distance, targetDistance, blend);
             yaw = Mathf.LerpAngle(yaw, targetYaw, blend); pitch = Mathf.Lerp(pitch, targetPitch, blend);

@@ -15,6 +15,16 @@ namespace Evolution.Core
         public float Speed, Size, Uptake, PreferredTemperature, OrganicSpecialization;
         // All colony traits are continuous, inherited and bounded; no evolution stage flag.
         public float Adhesion, ColonySize, Branching, Differentiation, Transport, RolePattern;
+        public float Photosynthesis, Predation, Membrane, Sensitivity, ThermalTolerance, ToxinResistance, EnergyEfficiency;
+        public static Genome EcologicalFounder(Genome g, uint seed)
+        {
+            var rng = new RandomSource(seed ^ 0x85ebca6bu);
+            g.Photosynthesis = rng.Next(); g.Predation = rng.Next() * rng.Next();
+            g.Membrane = rng.Next(); g.Sensitivity = rng.Next();
+            g.ThermalTolerance = rng.Next(); g.ToxinResistance = rng.Next(); g.EnergyEfficiency = rng.Next();
+            g.OrganicSpecialization = rng.Next();
+            return g;
+        }
         public static Genome Founder(ref RandomSource rng)
         {
             var g = new Genome {
@@ -27,7 +37,7 @@ namespace Evolution.Core
             g.Differentiation = traits.Next(); g.Transport = traits.Next(); g.RolePattern = traits.Next();
             return g;
         }
-        public Genome Inherit(ref RandomSource rng, float probability, float strength)
+        public Genome Inherit(ref RandomSource rng, float probability, float strength, bool ecological = true)
         {
             return new Genome {
                 Speed = Mutate(Speed, .1f, 3f, ref rng, probability, strength),
@@ -40,7 +50,14 @@ namespace Evolution.Core
                 Branching = Mutate(Branching, 0, 1, ref rng, probability, strength),
                 Differentiation = Mutate(Differentiation, 0, 1, ref rng, probability, strength),
                 Transport = Mutate(Transport, 0, 1, ref rng, probability, strength),
-                RolePattern = Mutate(RolePattern, 0, 1, ref rng, probability, strength) };
+                RolePattern = Mutate(RolePattern, 0, 1, ref rng, probability, strength),
+                Photosynthesis = ecological ? Mutate(Photosynthesis, 0, 1, ref rng, probability, strength) : Photosynthesis,
+                Predation = ecological ? Mutate(Predation, 0, 1, ref rng, probability, strength) : Predation,
+                Membrane = ecological ? Mutate(Membrane, 0, 1, ref rng, probability, strength) : Membrane,
+                Sensitivity = ecological ? Mutate(Sensitivity, 0, 1, ref rng, probability, strength) : Sensitivity,
+                ThermalTolerance = ecological ? Mutate(ThermalTolerance, 0, 1, ref rng, probability, strength) : ThermalTolerance,
+                ToxinResistance = ecological ? Mutate(ToxinResistance, 0, 1, ref rng, probability, strength) : ToxinResistance,
+                EnergyEfficiency = ecological ? Mutate(EnergyEfficiency, 0, 1, ref rng, probability, strength) : EnergyEfficiency };
         }
         static float Mutate(float v, float min, float max, ref RandomSource rng, float p, float s)
         { return rng.Next() < p ? Math.Max(min, Math.Min(max, v + rng.Range(-s, s) * (max - min))) : v; }

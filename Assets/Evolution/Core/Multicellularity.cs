@@ -20,7 +20,7 @@ namespace Evolution.Core
         {
             float basal = Biology.Cost(c.Genes, temperature);
             // Armor buffers thermal stress, never aging or basal maintenance. Tissues cost energy even in mild conditions.
-            return basal - .025f * Math.Abs(temperature - c.Genes.PreferredTemperature) * Math.Min(.55f, protection)
+            return basal - .025f * Math.Abs(temperature - c.Genes.PreferredTemperature) * (1 - .65f * c.Genes.ThermalTolerance) * Math.Min(.55f, protection)
                 + (c.ColonyId == 0 ? 0 : .055f + .035f * c.Genes.Adhesion + .08f * c.Specialization);
         }
         // Conservative local diffusion: bounded by donor reserves, receiver room, gradient and transport rate.
@@ -48,6 +48,9 @@ namespace Evolution.Core
                 && In(g.PreferredTemperature, 0, 50) && In(g.OrganicSpecialization, 0, 1)
                 && In(g.Adhesion, 0, 1) && In(g.ColonySize, 0, 1) && In(g.Branching, 0, 1)
                 && In(g.Differentiation, 0, 1) && In(g.Transport, 0, 1) && In(g.RolePattern, 0, 1)
+                && In(g.Photosynthesis, 0, 1) && In(g.Predation, 0, 1) && In(g.Membrane, 0, 1)
+                && In(g.Sensitivity, 0, 1) && In(g.ThermalTolerance, 0, 1) && In(g.ToxinResistance, 0, 1)
+                && In(g.EnergyEfficiency, 0, 1)
                 && In(c.Energy, .00001f, Biology.Capacity(g)) && In(c.Age, 0, config.MaxAge)
                 && In(c.X, 0, config.WorldSize - .00001f) && In(c.Z, 0, config.WorldSize - .00001f)
                 && !float.IsNaN(c.Heading) && !float.IsInfinity(c.Heading);
@@ -88,7 +91,7 @@ namespace Evolution.Core
                 int r = root[i];
                 int limit = Multicellularity.SizeLimit(cells[i].Genes, cfg.MaxColonyCells);
                 limits[r] = size[r] == 0 ? limit : Math.Min(limits[r], limit);
-                size[r]++; motors[r] += cells[i].Genes.Speed * Multicellularity.Motor(cells[i]);
+                size[r]++; motors[r] += Ecology.Mobility(cells[i].Genes) * Multicellularity.Motor(cells[i]);
                 if (cells[i].Role == CellRole.Defense) defense[r] += cells[i].Specialization;
             }
             ColonyCount = ColonialCells = 0; LargestColony = 0;
@@ -106,6 +109,7 @@ namespace Evolution.Core
                 || !Multicellularity.Compatible(anchor.Genes, bud.Genes)
                 || anchor.Energy <= Multicellularity.BondCost || bud.Energy <= Multicellularity.BondCost) return false;
             anchor.Energy -= Multicellularity.BondCost; bud.Energy -= Multicellularity.BondCost;
+            anchor.Budget.Contact += Multicellularity.BondCost; bud.Budget.Contact += Multicellularity.BondCost;
             bud.BondParentId = anchor.Id; bud.TissueSlot = anchor.TissueSlot + 1 + children[i];
             bud.BondAngle = anchor.Genes.Branching > .45f ? (children[i] == 0 ? -1 : 1) * (.5f + anchor.Genes.Branching * .6f) : 0;
             children[i]++; size[r]++; limits[r] = Math.Min(limits[r], Multicellularity.SizeLimit(bud.Genes, cfg.MaxColonyCells)); return true;
@@ -157,25 +161,24 @@ namespace Evolution.Core
                 if (c.Specialization == 0) c.Role = CellRole.Generalist;
             }
         }
-        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng, float time = 0, int controlledId = 0, float inputX = 0, float inputZ = 0)
+        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng, float time = 0, int controlledId = 0, float inputX = 0, float inputZ = 0, bool directed = false, float currentScale = 1)
         {
             int controlledRoot = indices.TryGetValue(controlledId, out int controlledIndex) ? root[controlledIndex] : -1;
             for (int i = 0; i < count; i++) if (parent[i] < 0) {
                 float autonomousTurn = rng.Range(-1, 1) * cfg.StepSeconds * 2 / (1 + .15f * (size[i] - 1));
-                if (i != controlledRoot) cells[i].Heading += autonomousTurn;
+                if (i != controlledRoot && !directed) cells[i].TargetHeading += autonomousTurn;
                 float speed = motors[i] / size[i] / (1 + .09f * (size[i] - 1));
                 if (i == controlledRoot) {
                     float throttle = (float)Math.Sqrt(inputX * inputX + inputZ * inputZ);
-                    if (throttle > 0) cells[i].Heading = (float)Math.Atan2(inputZ, inputX);
+                    if (throttle > 0) cells[i].TargetHeading = (float)Math.Atan2(inputZ, inputX);
                     speed *= Math.Min(1, throttle);
                 }
-                cells[i].X = Wrap(cells[i].X + (float)Math.Cos(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
-                cells[i].Z = Wrap(cells[i].Z + (float)Math.Sin(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
-                if (cfg.OceanZones) {
-                    var flow = OceanEnvironment.Sample(cells[i].X, cells[i].Z, cfg.WorldSize, time, cfg.Temperature, true);
-                    cells[i].X = Wrap(cells[i].X + flow.CurrentX * cfg.StepSeconds, cfg.WorldSize);
-                    cells[i].Z = Wrap(cells[i].Z + flow.CurrentZ * cfg.StepSeconds, cfg.WorldSize);
-                }
+                if (cells[i].Energy < Biology.Capacity(cells[i].Genes) * .2f && i != controlledRoot) speed *= .5f;
+                if (cells[i].Boosting) speed *= 1.8f;
+                if (cells[i].Defending) speed *= .35f;
+                var flow = cfg.OceanZones ? OceanEnvironment.Sample(cells[i].X, cells[i].Z, cfg.WorldSize, time, cfg.Temperature, true) : default;
+                CellMotion.Integrate(ref cells[i], speed, flow.CurrentX * currentScale, flow.CurrentZ * currentScale, cfg.StepSeconds, size[i]);
+                cells[i].X = Wrap(cells[i].X, cfg.WorldSize); cells[i].Z = Wrap(cells[i].Z, cfg.WorldSize);
             }
             Layout(cells, count, cfg.WorldSize);
         }
@@ -184,7 +187,9 @@ namespace Evolution.Core
             for (int i = 0; i < count; i++) if (parent[i] >= 0) {
                 Cell p = cells[parent[i]];
                 float h = p.Heading + cells[i].BondAngle, distance = .29f * (p.Genes.Size + cells[i].Genes.Size);
-                cells[i].Heading = h;
+                cells[i].Heading = h; cells[i].TargetHeading = h;
+                cells[i].VelocityX = p.VelocityX; cells[i].VelocityZ = p.VelocityZ;
+                cells[i].SwimSpeed = p.SwimSpeed; cells[i].AngularVelocity = p.AngularVelocity;
                 cells[i].X = Wrap(p.X + (float)Math.Cos(h) * distance, worldSize);
                 cells[i].Z = Wrap(p.Z + (float)Math.Sin(h) * distance, worldSize);
             }
@@ -193,8 +198,16 @@ namespace Evolution.Core
         {
             float received = 0;
             // One bounded pass over real edges. Senescent cells cannot siphon energy before dying.
-            for (int i = 0; i < count; i++) if (parent[i] >= 0 && cells[i].Age < maxAge && cells[parent[i]].Age < maxAge)
-                received += Multicellularity.Transfer(ref cells[parent[i]], ref cells[i], dt);
+            for (int i = 0; i < count; i++) if (parent[i] >= 0 && cells[i].Age < maxAge && cells[parent[i]].Age < maxAge && !cells[i].Consumed && !cells[parent[i]].Consumed)
+            {
+                float direction = cells[parent[i]].Energy / Biology.Capacity(cells[parent[i]].Genes)
+                    >= cells[i].Energy / Biology.Capacity(cells[i].Genes) ? 1 : -1;
+                float a = cells[parent[i]].Energy, b = cells[i].Energy;
+                float transfer = Multicellularity.Transfer(ref cells[parent[i]], ref cells[i], dt);
+                cells[parent[i]].Budget.Transport += cells[parent[i]].Energy - a;
+                cells[i].Budget.Transport += cells[i].Energy - b;
+                cells[i].TransportLastStep = direction * transfer; received += transfer;
+            }
             return received;
         }
         int Bucket(float position, float width) => Math.Min(contactGrid - 1, (int)(position / width));

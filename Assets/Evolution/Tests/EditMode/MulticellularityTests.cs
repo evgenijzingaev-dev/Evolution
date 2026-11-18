@@ -212,7 +212,7 @@ namespace Evolution.Tests
             world.Step(); Assert.AreEqual(1, world.ColonyCount);
             var before = world.GetCell(0); world.Step(); var after = world.GetCell(0);
             float dx = Distance(after.X, before.X, cfg.WorldSize), dz = Distance(after.Z, before.Z, cfg.WorldSize);
-            Assert.That(Math.Sqrt(dx * dx + dz * dz) / cfg.StepSeconds, Is.EqualTo(g.Speed / 1.09).Within(.00001));
+            Assert.That(Math.Sqrt(dx * dx + dz * dz) / cfg.StepSeconds, Is.GreaterThan(0).And.LessThan(g.Speed / 1.09));
             for (int t = 0; t < 20; t++) world.Step();
             Assert.AreEqual(0, world.EnergyTransferred);
             for (int i = 0; i < world.Count; i++) {

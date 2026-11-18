@@ -2,6 +2,22 @@ using System;
 using System.Diagnostics;
 using Evolution.Core;
 
+// A short stage E workload, separate from the older throughput/stress scenarios below.
+if (Array.IndexOf(args, "--stage-e") >= 0) {
+    foreach (int count in new[] { 1440, 4096 }) {
+        var cfg = new SimulationConfig { Ecosystem = true, OceanZones = true, NaturalEvents = true,
+            WorldSize = 120, GridSize = 96, Capacity = 4096, InitialPopulation = count };
+        var sim = new Simulation(cfg,42);
+        for (int i = 0; i < 20; i++) sim.Step();
+        GC.Collect(); long startBytes = GC.GetAllocatedBytesForCurrentThread();
+        var timer = Stopwatch.StartNew();
+        for (int i = 0; i < 100; i++) sim.Step();
+        timer.Stop();
+        Console.WriteLine($"stage_e initial={count} final={sim.Count} mean_ms_per_step={timer.Elapsed.TotalMilliseconds/100:F4} allocated_bytes={GC.GetAllocatedBytesForCurrentThread()-startBytes} ticks=100 warmup=20 world=120 grid=96 seed=42");
+    }
+    return;
+}
+
 // Core throughput only: this cannot measure Unity rendering, frame time or Mono/IL2CPP.
 foreach (int count in new[] { 1000, 4096, 10000 }) {
     var config = new SimulationConfig { Capacity = count, InitialPopulation = count, GridSize = 64,

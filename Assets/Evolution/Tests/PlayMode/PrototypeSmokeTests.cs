@@ -1,5 +1,6 @@
 using System.Collections;
 using Evolution.Runtime;
+using Evolution.Core;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -81,15 +82,24 @@ namespace Evolution.Tests
         }
 
         [UnityTest]
-        public IEnumerator CameraBoundsAndResetClearStaleSelection()
+        public IEnumerator PeriodicCameraAndResetPreserveThePopulation()
         {
             runner.IsPaused = true;
             runner.SelectCell(runner.World.GetCell(0).Id);
+            var world = runner.World; long tick = world.Tick; uint random = world.RandomState;
+            int count = world.Count; var first = world.GetCell(0);
+            Vector3 before = runner.CameraRig.FocusPoint;
             runner.CameraRig.FocusOn(new Vector3(-100, -20, 10000), true);
-            Assert.That(runner.CameraRig.FocusPoint.x, Is.Zero);
-            Assert.That(runner.CameraRig.FocusPoint.z, Is.EqualTo(runner.Settings.WorldSize));
+            Assert.That(Mathf.Abs(runner.CameraRig.FocusPoint.x-before.x), Is.LessThanOrEqualTo(world.Config.WorldSize*.5f));
+            Assert.That(Mathf.Abs(runner.CameraRig.FocusPoint.z-before.z), Is.LessThanOrEqualTo(world.Config.WorldSize*.5f));
+            Vector3 focus = runner.CameraRig.FocusPoint;
+            runner.CameraRig.FocusOn(focus + new Vector3(world.Config.WorldSize*3,0,-world.Config.WorldSize*2),true);
+            Assert.That(Vector3.Distance(focus,runner.CameraRig.FocusPoint),Is.LessThan(.001f));
+            yield return null;
+            Assert.AreEqual(tick,world.Tick); Assert.AreEqual(random,world.RandomState);
+            Assert.AreEqual(count,world.Count); Assert.AreEqual(first,world.GetCell(0));
             runner.CameraRig.Zoom(10000);
-            Assert.That(runner.CameraRig.Distance, Is.GreaterThanOrEqualTo(2));
+            Assert.That(runner.CameraRig.Distance, Is.GreaterThanOrEqualTo(2.5f));
             runner.ResetWorld();
             Assert.That(runner.SelectedId, Is.Zero); Assert.That(runner.CameraRig.Following, Is.False);
             Assert.That(Resources.Load<Shader>("CellMembrane"), Is.Not.Null);
@@ -109,6 +119,19 @@ namespace Evolution.Tests
             runner.ObserveWorld(); Assert.IsFalse(runner.IsControlling);
             Assert.AreSame(world, runner.World); Assert.Greater(runner.SelectedId, 0);
             runner.PlaySelected(); runner.ResetWorld(); Assert.IsFalse(runner.IsControlling);
+        }
+
+        [UnityTest]
+        public IEnumerator HiddenHudAndDetailSettingDoNotChangePausedBiology()
+        {
+            runner.IsPaused = true; var world = runner.World;
+            var before = world.GetCell(0); long tick = world.Tick; uint random = world.RandomState;
+            runner.HudVisible = false; runner.DetailedOrganisms = false; runner.SoundVolume = 0;
+            runner.SelectCell(before.Id); runner.FocusSelected(true);
+            yield return null; yield return null;
+            Assert.AreEqual(tick,world.Tick); Assert.AreEqual(random,world.RandomState);
+            Assert.AreEqual(before,world.GetCell(0));
+            Assert.IsNotNull(Camera.main.GetComponent<AudioListener>());
         }
 
         [UnityTearDown]
