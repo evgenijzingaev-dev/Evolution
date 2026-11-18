@@ -140,6 +140,24 @@ namespace Evolution.Tests
             Assert.AreEqual(0, chronicle.Divisions);
         }
         [Test]
+        public void RepeatedHudReadsCannotAwardMultipleHuntsInOneTick()
+        {
+            var world = Ready();
+            var chronicle = new LineageChronicle();
+            chronicle.Record(world, 0);
+            var founder = world.Get(0);
+            founder.Biology.AttackLastStep = 1;
+            chronicle.Record(world, 0);
+            chronicle.Record(world, 0);
+            Assert.AreEqual(1, chronicle.Hunts,
+                "Reading the same simulation tick twice must not manufacture hunts.");
+            var rebound = new VolumeWorld(new[] { founder },
+                System.Array.Empty<FoodCloud>(), System.Array.Empty<V3>(), world.Tick, default);
+            chronicle.Record(rebound, 0);
+            Assert.AreEqual(1, chronicle.Hunts,
+                "Rebinding the streamed world at the same tick must not replay the hunt.");
+        }
+        [Test]
         public void WorldRebindDoesNotReplayOldDivisions()
         {
             var world = Ready();
