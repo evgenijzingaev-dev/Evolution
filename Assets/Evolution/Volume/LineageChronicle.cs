@@ -53,9 +53,9 @@ namespace Evolution.Volume
             if (!ReferenceEquals(world, latest)) { latest = world; journalSequence = 0; }
             if (controlled >= 0 && controlled < world.Count) {
                 var a = world.Get(controlled);
-                if (a.Alive && !string.IsNullOrEmpty(a.Identity)) {
+                if (founderGeneration == int.MinValue && a.Alive && !string.IsNullOrEmpty(a.Identity)) {
                     dynasty.Add(a.Identity);
-                    if (founderGeneration == int.MinValue) {
+                    {
                         founderIdentity = a.Identity;
                         founderGeneration = a.Biology.Generation;
                         deepestGeneration = a.Biology.Generation;
@@ -99,7 +99,7 @@ namespace Evolution.Volume
             // A confirmed bite of the played member is the model's own per-tick fact.
             if (controlled >= 0 && controlled < world.Count) {
                 var a = world.Get(controlled);
-                if (a.Alive && dynasty.Contains(a.Identity) && a.Biology.AttackLastStep > 0) hunts++;
+                if (a.Alive && !dead.Contains(a.Identity) && dynasty.Contains(a.Identity) && a.Biology.AttackLastStep > 0) hunts++;
             }
             lastMissing = 0;
             foreach (var identity in dynasty) if (!dead.Contains(identity) && !observed.Contains(identity)) lastMissing++;
