@@ -28,7 +28,7 @@ namespace Evolution.Runtime
         readonly List<Notice> notices=new List<Notice>(3);
         readonly Dictionary<string,float> cooldown=new Dictionary<string,float>();
         struct Notice { public string Text, Sub; public float Until; public bool Danger; }
-        GUISkin skin; GUIStyle text, title, micro, centered, button, panel, activeButton, muted, valueText;
+        GUISkin skin; GUIStyle text, title, micro, centered, compactAction, button, panel, activeButton, muted, valueText;
         Texture2D chrome, chromeActive, white, dot;
         readonly List<Rect> occupied=new List<Rect>(10);
         Vector2 scienceScroll;
@@ -41,7 +41,7 @@ namespace Evolution.Runtime
         float H => Screen.height/Scale;
         Rect Top => new Rect(18,14,W-36,58);
         Rect Left => new Rect(18,90,272,Page==HudPage.Overview?264:170);
-        Rect Right => new Rect(W-310,Page==HudPage.Overview?242:252,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-360):300);
+        Rect Right => new Rect(W-310,264,292,Detail==HudDetail.Scientific?Mathf.Min(420,H-372):300);
         Rect MapBox => new Rect(18,H-310,272,238);
         Rect Actions => new Rect(W/2-258,H-154,516,80);
         Rect Footer => new Rect(18,H-58,W-36,42);
@@ -49,7 +49,9 @@ namespace Evolution.Runtime
         Rect HelpBox => new Rect(W-326,80,308,158);
         Rect DevelopmentBox => new Rect(W/2-270,102,540,Mathf.Min(420,H-286));
         Rect ObserverBox => new Rect(306,90,W-632,116);
-        Rect ToastBox => new Rect(W-310,88,292,150);
+        Rect ToastBox => new Rect(W-310,88,292,162);
+        public bool ThreatMarkerVisible { get; private set; }
+        public float ThreatConnectorLength { get; private set; }
         public PlayerReadout Readout => readout;
         public int NotificationCount => notices.Count;
         public void RefreshNow(){nextRead=0;Update();}
@@ -83,7 +85,7 @@ namespace Evolution.Runtime
             if(coveredBySettings)return false;
             if(journal)return area.Contains(p);
             for(int i=0;i<Mathf.Min(count,2);i++)
-                if(new Rect(area.x,area.y+i*78,area.width,72).Contains(p))return true;
+                if(new Rect(area.x,area.y+i*84,area.width,78).Contains(p))return true;
             return false;
         }
         bool OverVisibleNotice(Vector2 p) =>
@@ -127,11 +129,12 @@ namespace Evolution.Runtime
                 if(identity!=a.Identity){identity=a.Identity;assimilated=a.Biology.AssimilatedEnergy;AttackRequested=false;}
                 else if(a.Biology.AssimilatedEnergy>assimilated+.01){Notify("food","Организм получил энергию","Пища усваивается автоматически рядом с источником",false);assimilated=a.Biology.AssimilatedEnergy;}
             }
-            if(readout.Threat>=0)Notify("danger","Рядом опасность!","Хищник в пределах чувствительности клетки",true);
+            if(readout.Threat>=0)Notify("danger","Рядом опасность!","Хищник в зоне чувствительности",true);
             if(readout.FoodRate>=readout.Need*2)Notify("abundance","Обнаружено много пищи","Золотая отметка показывает подходящий источник",false);
             long previousEventTick=eventTick;
             foreach(var e in water.Overview.Survey.Events)if(e.Tick>previousEventTick){
-                if(e.Kind==SurveyEventKind.KnownLineageLost)Notify("line","Линия исчезла из известной области","Подтверждено наблюдавшейся гибелью",true);
+                if(e.Kind==SurveyEventKind.Division)Notify("birth","Родился потомок","Геном и линия унаследованы",false);
+                else if(e.Kind==SurveyEventKind.KnownLineageLost)Notify("line","Линия исчезла из известной области","Подтверждено наблюдавшейся гибелью",true);
                 else if(e.Kind==SurveyEventKind.PopulationChange&&e.Count<0)Notify("decline","В регионе стало меньше жизни","Изменение наблюдаемой численности",false);
                 eventTick=Math.Max(eventTick,e.Tick);
             }
@@ -170,8 +173,9 @@ namespace Evolution.Runtime
             text=new GUIStyle(skin.label){font=skin.font,fontSize=16,wordWrap=true,richText=false};text.normal.textColor=new Color(.88f,.96f,1);
             title=new GUIStyle(text){fontSize=19,fontStyle=FontStyle.Bold};
             valueText=new GUIStyle(text){fontSize=14};
-            micro=new GUIStyle(text){fontSize=13};micro.normal.textColor=new Color(.64f,.80f,.88f);
+            micro=new GUIStyle(text){fontSize=14};micro.normal.textColor=new Color(.80f,.91f,.96f);
             centered=new GUIStyle(text){alignment=TextAnchor.MiddleCenter};
+            compactAction=new GUIStyle(centered){fontSize=14,wordWrap=false};
             muted=new GUIStyle(micro){alignment=TextAnchor.MiddleCenter};
             button=new GUIStyle(skin.button){font=skin.font,fontSize=15,wordWrap=true,border=new RectOffset(13,13,13,13),padding=new RectOffset(7,7,5,5)};
             button.normal.background=button.hover.background=button.active.background=button.focused.background=chrome;
@@ -196,7 +200,7 @@ namespace Evolution.Runtime
         bool Action(Rect r,int icon,string name,string tip,bool selected=false,bool enabled=true)
         {
             bool clicked=Button(r,"",tip,selected,enabled);
-            var old=GUI.color;GUI.color=enabled?Color.white:new Color(1,1,1,.35f);
+            var old=GUI.color;GUI.color=enabled?Color.white:new Color(1,1,1,.7f);
             var c=new Vector2(r.center.x,r.y+26);Color ink=new Color(.65f,.9f,1);
             if(icon==0){
                 for(int wave=0;wave<3;wave++)for(int i=0;i<12;i++){
@@ -217,7 +221,7 @@ namespace Evolution.Runtime
                 }
                 if(icon==2){Line(c+Vector2.left*16,c+Vector2.right*16,ink);Line(c+Vector2.up*16,c+Vector2.down*16,ink);}
             }
-            GUI.Label(new Rect(r.x+3,r.y+47,r.width-6,25),name,centered);GUI.color=old;return clicked;
+            GUI.Label(new Rect(r.x+3,r.y+47,r.width-6,25),name,name.Length>10?compactAction:centered);GUI.color=old;return clicked;
         }
         string hoverTip;
         void Label(float x,float y,float width,string value,GUIStyle style=null)=>GUI.Label(new Rect(x,y,width,28),value,style??text);
@@ -232,7 +236,7 @@ namespace Evolution.Runtime
         public void Draw()
         {
             if(readWorld!=water.World||readIndex!=water.SelectedIndex)RefreshNow();
-            Prepare();occupied.Clear();hoverTip=null;
+            Prepare();occupied.Clear();hoverTip=null;ThreatMarkerVisible=false;ThreatConnectorLength=0;
             var matrix=GUI.matrix;var oldSkin=GUI.skin;var oldColor=GUI.color;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);GUI.skin=skin;
             GUI.color=new Color(1,1,1,.75f+.25f*transition);
@@ -243,8 +247,9 @@ namespace Evolution.Runtime
             if(water.FindFood&&!development)DrawWorldLabels();
             string tip=hoverTip??GUI.tooltip;
             if(!string.IsNullOrEmpty(tip)){
-                float x=Mathf.Clamp(Event.current.mousePosition.x-150,18,W-338),y=Mathf.Clamp(Event.current.mousePosition.y+22,80,H-140);
-                var r=new Rect(x,y,320,70);GUI.Box(r,GUIContent.none,panel);GUI.Label(new Rect(x+12,y+9,296,54),tip,micro);
+                float height=Mathf.Min(H-100,Mathf.Max(54,micro.CalcHeight(new GUIContent(tip),296))+18);
+                float x=Mathf.Clamp(Event.current.mousePosition.x-150,18,W-338),y=Mathf.Clamp(Event.current.mousePosition.y+22,80,H-height-18);
+                var r=new Rect(x,y,320,height);GUI.Box(r,GUIContent.none,panel);GUI.Label(new Rect(x+12,y+9,296,height-18),tip,micro);
             }
             GUI.color=oldColor;GUI.matrix=matrix;GUI.skin=oldSkin;
         }
@@ -294,7 +299,10 @@ namespace Evolution.Runtime
             Row(r,3,"Температура",readout.Temperature,"Комфорт определяется эффективностью обмена с учётом любимой температуры и устойчивости клетки.");
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
             Row(r,5,"Свет",readout.Illumination,"Доступность света в этой точке воды; особенно важна для фотосинтеза.");
-            GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":"Деление в 3D пока недоступно",micro);
+            int offspring=water.Ocean.Find(water.World.LastOffspringIdentity);
+            if(offspring>=0&&water.World.Get(offspring).Alive&&water.World.Get(offspring).Identity.StartsWith(a.Identity+"/b",StringComparison.Ordinal)) {
+                if(Button(new Rect(r.x+12,r.y+252,r.width-24,36),"Наблюдать потомка")){water.Select(offspring);return;}
+            } else GUI.Label(new Rect(r.x+16,r.y+255,r.width-32,38),readout.Threat>=0?"Опасность: рядом хищник":water.World.DivisionBlock(water.SelectedIndex)??"Можно разделиться · R",micro);
         }
         void DrawScience(Rect r,VolumeAgent a)
         {
@@ -310,6 +318,7 @@ namespace Evolution.Runtime
             b.AppendLine($"Budget dt {a.RenderDuration:F3}: intake {c.Budget.Intake:F4} · net {c.Budget.Net:F4}");
             b.AppendLine($"Substrate {c.Budget.Substrate:F4} · Organic {c.Budget.Organic:F4} · Light {c.Budget.Light:F4} · Prey {c.Budget.Prey:F4}");
             b.AppendLine($"Upkeep {c.Budget.Upkeep:F4} · Movement {c.Budget.Movement:F4} · Attack {c.Budget.Attack:F4} · Loss {c.Budget.PredationLoss:F4}");
+            b.AppendLine($"Division {c.Budget.Division:F4} · Growth {c.Budget.Growth:F4}");
             b.AppendLine("Геном (только чтение):");
             foreach(var f in typeof(Genome).GetFields())b.AppendLine(f.Name+": "+((float)f.GetValue(g)).ToString("F3"));
             if(readout.Food>=0){var f=water.World.GetFood(readout.Food);b.AppendLine($"Food {f.Identity}: S {f.Substrate:F3} · O {f.Organic:F3} · concentration {f.Concentration:F4}");}
@@ -325,7 +334,24 @@ namespace Evolution.Runtime
             bool canAttack=readout.Alive&&water.World.Controlled>=0&&water.World.Get(water.SelectedIndex).Biology.Genes.Predation>.2f&&water.World.Get(water.SelectedIndex).Biology.Energy>.5f;
             string why=!readout.Alive?"Выбери живую клетку":water.World.Controlled<0?"Сначала возьми управление":water.World.Get(water.SelectedIndex).Biology.Genes.Predation<=.2f?"Эта способность отсутствует":"Недостаточно энергии";
             if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Разрешить укусы в пределах досягаемости. Также можно удерживать Space":why,AttackRequested,canAttack))AttackRequested=!AttackRequested;
-            Action(new Rect(r.x+312,r.y,cell,76),3,"Деление","Деление пока реализовано только в 2D",false,false);
+            string blocked=water.World.DivisionBlock(water.SelectedIndex);
+            if(water.Paused)blocked="Продолжи симуляцию";
+            else if(water.World.Controlled!=water.SelectedIndex&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Alive)blocked="Сначала возьми управление";
+            float divisionCost=0;
+            string divisionTip=blocked??"Рождение самостоятельного потомка";
+            if(water.SelectedIndex>=0) {
+                var c=water.World.Get(water.SelectedIndex).Biology;
+                float construction=Biology.StructureEnergy(c.Genes)+Biology.BirthOverhead(c.Genes);
+                float provision=Mathf.Max(c.Energy,water.World.DivisionThreshold(water.SelectedIndex));
+                float cost=construction+Mathf.Min((provision-construction)*.5f,Biology.Capacity(c.Genes)*.5f);divisionCost=cost;
+                divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка.";
+            }
+            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
+            if(water.SelectedIndex>=0) {
+                var energyInfo=new Rect(r.x+34,r.y-54,r.width-68,46);
+                Box(energyInfo);
+                GUI.Label(new Rect(energyInfo.x+8,energyInfo.y+3,energyInfo.width-16,40),"Нужно "+water.World.DivisionThreshold(water.SelectedIndex).ToString("F1")+" · Расход ≈ "+divisionCost.ToString("F1")+" энергии\n"+(blocked??"Готово · R"),muted);
+            }
             if(Action(new Rect(r.x+416,r.y,cell,76),4,"Развитие","Просмотреть наследуемые черты",development))SetPage(HudPage.Development);
         }
         void DrawFooter()
@@ -372,12 +398,12 @@ namespace Evolution.Runtime
         {
             var r=DevelopmentBox;Box(r,"Развитие твоего организма");
             if(water.SelectedIndex<0)return;var c=water.World.Get(water.SelectedIndex).Biology;var g=c.Genes;
-            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nДеление, новые мутации и редактор пока недоступны.",text);
+            GUI.Label(new Rect(r.x+20,r.y+62,r.width-40,60),"В 3D доступны существующие наследуемые черты.\nПотомки наследуют геном; возможны небольшие мутации.",text);
             Row(r,2,"Линия",c.LineageId.ToString(),"Генетическая линия выбранного организма");
             Row(r,3,"Питание",g.Photosynthesis>.5f?"Фотосинтез":g.Predation>.5f?"Хищничество":"Смешанное","Преобладающая стратегия существующего генома");
             Row(r,4,"Оболочка",g.Membrane>.7f?"Плотная":"Гибкая","Мембрана пассивно участвует в защите. Отдельная активная защита в 3D отсутствует.");
             Row(r,5,"Подвижность",g.Speed>1.18f?"Быстрая":"Умеренная","Наследуемая скорость организма");
-            Row(r,6,"Поколение",c.Generation.ToString(),"Реальное поколение модели. Прогресс размножения в 3D не имитируется.");
+            Row(r,6,"Поколение",c.Generation.ToString(),"Поколение увеличивается при реальном рождении потомка. Деление расходует энергию; геном наследуется с возможными мутациями.");
             if(Button(new Rect(r.x+20,r.yMax-64,240,42),"Наблюдать генетическую линию")){development=false;water.Overview.Enter();water.Overview.ChooseOrganism(water.SelectedIndex,false);water.Overview.SelectLineage();water.Overview.SetMode(true);water.Overview.FollowSelection();}
             if(Button(new Rect(r.x+280,r.yMax-64,240,42),"Вернуться к клетке"))SetPage(HudPage.Cell);
         }
@@ -390,15 +416,15 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,96),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,96),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
             if(journal){DrawJournal();return;}
             var r=ToastBox;int n=0;
-            foreach(var notice in notices){if(n==2)break;var b=new Rect(r.x,r.y+n*78,r.width,72);Box(b);
+            foreach(var notice in notices){if(n==2)break;var b=new Rect(r.x,r.y+n*84,r.width,78);Box(b);
                 Fill(new Rect(b.x+3,b.y+14,3,40),notice.Danger?new Color(1,.42f,.4f):new Color(.5f,.9f,.65f));
-                GUI.Label(new Rect(b.x+14,b.y+6,b.width-24,26),notice.Text,text);GUI.Label(new Rect(b.x+14,b.y+33,b.width-24,36),notice.Sub,micro);n++;}
+                GUI.Label(new Rect(b.x+14,b.y+6,b.width-24,26),notice.Text,text);GUI.Label(new Rect(b.x+14,b.y+33,b.width-24,42),notice.Sub,micro);n++;}
         }
         void DrawJournal()
         {
@@ -413,16 +439,39 @@ namespace Evolution.Runtime
         }
         void DrawWorldLabels()
         {
+            if(readout.Threat>=0)ThreatMarkerVisible=WorldLabel(water.World.Get(readout.Threat).Position,"Опасность · хищник",new Color(1,.55f,.5f),true);
             if(readout.Food>=0){var food=water.World.GetFood(readout.Food);WorldLabel(food.Position,"Пища · подплыви ближе",new Color(.95f,.83f,.4f));}
-            if(readout.Threat>=0)WorldLabel(water.World.Get(readout.Threat).Position,"Опасность · хищник",new Color(1,.55f,.5f));
         }
-        void WorldLabel(V3 point,string value,Color colour)
+        // Screen-space projection in HUD units, with camera depth kept in z. Never
+        // clamp the target: a hidden/off-screen organism must not get a false marker.
+        public static bool TryWorldLabel(Vector3 projection,Rect viewport,IReadOnlyList<Rect> blockers,out Rect label,out Vector2 anchor)
         {
-            var p=water.Lens.WorldToScreenPoint(VolumePainter.V(point));if(p.z<=0)return;
-            var r=new Rect(Mathf.Clamp(p.x/Scale-104,305,W-530),Mathf.Clamp((Screen.height-p.y)/Scale-65,90,H-220),208,40);
-            foreach(var box in occupied)if(r.Overlaps(box))return;
+            label=default;anchor=default;
+            var p=new Vector2(projection.x,projection.y);
+            if(projection.z<=0||!viewport.Contains(p))return false;
+            for(int side=0;side<4;side++) {
+                var r=side==0?new Rect(p.x-112,p.y-60,224,42):side==1?new Rect(p.x-112,p.y+18,224,42):
+                    side==2?new Rect(p.x-242,p.y-21,224,42):new Rect(p.x+18,p.y-21,224,42);
+                if(r.xMin<viewport.xMin||r.xMax>viewport.xMax||r.yMin<viewport.yMin||r.yMax>viewport.yMax)continue;
+                var end=side==0?new Vector2(p.x,r.yMax):side==1?new Vector2(p.x,r.yMin):
+                    side==2?new Vector2(r.xMax,p.y):new Vector2(r.xMin,p.y);
+                var line=Rect.MinMaxRect(Mathf.Min(p.x,end.x)-4,Mathf.Min(p.y,end.y)-4,Mathf.Max(p.x,end.x)+4,Mathf.Max(p.y,end.y)+4);
+                bool blocked=false;
+                foreach(var box in blockers)if(r.Overlaps(box)||line.Overlaps(box)){blocked=true;break;}
+                if(blocked)continue;
+                label=r;anchor=end;return true;
+            }
+            return false;
+        }
+        bool WorldLabel(V3 point,string value,Color colour,bool threat=false)
+        {
+            var screen=water.Lens.WorldToScreenPoint(VolumePainter.V(point));
+            var p=new Vector3(screen.x/Scale,(Screen.height-screen.y)/Scale,screen.z);
+            if(!TryWorldLabel(p,new Rect(18,80,W-36,H-152),occupied,out var r,out var anchor))return false;
             var old=GUI.color;GUI.color=colour;GUI.Box(r,GUIContent.none,panel);GUI.Label(r,value,centered);GUI.color=old;
-            Line(new Vector2(r.center.x,r.yMax),new Vector2(Mathf.Clamp(p.x/Scale,18,W-18),Mathf.Clamp((Screen.height-p.y)/Scale,80,H-72)),colour);
+            var target=new Vector2(p.x,p.y);Line(anchor,target,colour,1.5f);Dot(target,4,colour);occupied.Add(r);
+            if(threat)ThreatConnectorLength=Vector2.Distance(anchor,target);
+            return true;
         }
         static readonly string[] Layers={"Генетические линии","Формы жизни","Способы питания","Угрозы","Плотность жизни","Запасы пищи","Температура","Течения","Свет"};
         void DrawObserverLinks()
@@ -435,7 +484,7 @@ namespace Evolution.Runtime
             int count=water.Overview.Survey.Events.Count;
             if(count>0){var e=water.Overview.Survey.Events[count-1];if(Button(new Rect(r.x,r.y+80,r.width,32),"События: "+count+" · "+EventName(e.Kind),"Показать журнал последних наблюдений"))journal=!journal;}
         }
-        static string EventName(SurveyEventKind kind)=>kind==SurveyEventKind.Predation?"атака":kind==SurveyEventKind.Death?"гибель клетки":kind==SurveyEventKind.Migration?"перемещение группы":kind==SurveyEventKind.KnownLineageLost?"исчезновение линии":"изменение численности";
+        static string EventName(SurveyEventKind kind)=>kind==SurveyEventKind.Division?"рождение потомка":kind==SurveyEventKind.Predation?"атака":kind==SurveyEventKind.Death?"гибель клетки":kind==SurveyEventKind.Migration?"перемещение группы":kind==SurveyEventKind.KnownLineageLost?"исчезновение линии":"изменение численности";
         void OnDestroy(){Destroy(skin);Destroy(chrome);Destroy(chromeActive);Destroy(white);Destroy(dot);}
     }
 }

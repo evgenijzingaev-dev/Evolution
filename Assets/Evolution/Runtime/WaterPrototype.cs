@@ -81,6 +81,7 @@ namespace Evolution.Runtime
                     else if(World.Controlled>=0) {var plane=new Plane(-Lens.transform.forward,VolumePainter.V(Selection.Position));var ray=Lens.ScreenPointToRay(Input.mousePosition);if(plane.Raycast(ray,out float along))moveTarget=ray.GetPoint(along);}}
             }
             World.Input=default;World.Boost=World.Attack=false;
+            if(!Overview.Typing&&!Paused&&Input.GetKeyDown(KeyCode.R))World.RequestDivision();
             if(World.Controlled>=0&&!Paused&&!over&&Application.isFocused) {
                 Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;

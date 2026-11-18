@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from check_visual_preview import EXPECTED, validate
+from check_visual_preview import EXPECTED, SMALL_FRAMES, validate
 from select_visual_preview import visual_change
 
 
@@ -32,8 +32,13 @@ class EvidenceTests(unittest.TestCase):
         self.report["screenshots"][10].update(analytical=True,fullDepth=False,markerMinY=1,markerMaxY=19)
         self.report["screenshots"][13]["hudPage"]=1
         self.report["screenshots"][16]["hudDetail"]=2
-        self.report["screenshots"][-1]["hudPage"]=2
-        self.images = {f: b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", *((1366,768) if f=="19-ui-1366x768.png" else (2560,1440) if f=="20-ui-2560x1440.png" else (1920,1080))) + bytes([i]) * 24000
+        self.report["screenshots"][19]["hudPage"]=2
+        self.report["screenshots"][20]["hudPage"]=2
+        for index in (15,17,18):
+            self.report["screenshots"][index].update(threatIndex=4,threatMarkerVisible=True,threatConnectorLength=18,divisionBlock="Продолжи симуляцию")
+        self.report["screenshots"][21].update(threatIndex=4,threatMarkerVisible=False)
+        self.report["screenshots"][22].update(threatIndex=-1,threatMarkerVisible=False)
+        self.images = {f: b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", *((1366,768) if f in SMALL_FRAMES else (2560,1440) if f=="20-ui-2560x1440.png" else (1920,1080))) + bytes([i]) * 24000
                        for i, f in enumerate(EXPECTED)}
 
     def check(self):
@@ -50,6 +55,15 @@ class EvidenceTests(unittest.TestCase):
                            ("revision", "older-sha"), ("scene", "CellPrototype")]:
             with self.subTest(key=key):
                 self.report = dict(original, **{key: value})
+                with self.assertRaises(ValueError): self.check()
+
+    def test_long_false_or_missing_threat_markers_are_rejected(self):
+        original=copy.deepcopy(self.report)
+        for index, changes in [(17,dict(threatConnectorLength=400)),(15,dict(threatMarkerVisible=False)),
+                               (21,dict(threatMarkerVisible=True)),(22,dict(threatIndex=3)),(17,dict(divisionBlock=""))]:
+            with self.subTest(index=index,changes=changes):
+                self.report=copy.deepcopy(original)
+                self.report["screenshots"][index].update(changes)
                 with self.assertRaises(ValueError): self.check()
 
     def test_missing_view(self):

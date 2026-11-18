@@ -47,7 +47,7 @@ mkdir -p "$destination"
 # Private player logs are deliberately excluded from upload (as are Editor/license logs).
 private_log=$(mktemp)
 trap 'rm -f "$private_log"' EXIT
-if ! timeout --signal=TERM --kill-after=15s 360s "$player" \
+if ! timeout --signal=TERM --kill-after=15s 900s "$player" \
     -force-glcore -popupwindow -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 \
     -evolution-visual-preview "$destination" -logFile "$private_log"; then
   echo '::error::Real Unity render failed or timed out. No substitute images were produced. See docs/VISUAL_PREVIEW.md for GPU setup.'
@@ -70,3 +70,6 @@ PY
 fi
 python3 Tools/ci/check_visual_preview.py "$destination"
 
+
+python3 Tools/ci/check_division_capture.py "$destination"
+ffmpeg -hide_banner -loglevel error -y -framerate 20 -i "$destination/division-%03d.png" -c:v libx264 -pix_fmt yuv420p "$destination/division.mp4"

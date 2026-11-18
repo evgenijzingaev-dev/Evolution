@@ -9,21 +9,21 @@ namespace Evolution.Volume
     {
         public float Energy, Integrity, ThermalEfficiency, FlowRatio, Light, FoodRate, Need;
         public int Food, Threat;
-        public bool Alive;
+        public bool Alive,ReadyToDivide;
         public bool EnoughFood => FoodRate >= Need;
         public string Temperature => ThermalEfficiency >= .85f ? "Комфортно" : ThermalEfficiency >= .65f ? "Прохладно / жарко" : "Некомфортно";
         public string Current => FlowRatio < .35f ? "Слабое" : FlowRatio < 1 ? "Умеренное" : "Сильное";
         public string Nutrition => FoodRate < Need ? "Мало" : FoodRate < Need * 2 ? "Достаточно" : "Много";
         public string Illumination => Light < .2f ? "Темно" : Light < .7f ? "Достаточно света" : "Ярко";
         public string Condition => !Alive ? "Жизнь завершилась" : Integrity < .4f ? "Повреждена" : Integrity < .8f ? "Есть повреждения" : Energy < .2f ? "Нужна энергия" : "Хорошее";
-        public string Goal => !Alive ? "Выбери другую живую клетку" : Threat >= 0 ? "Отплыви от хищника" : !EnoughFood ? "Найди подходящую пищу" : Energy < .8f ? "Подплыви к пище и накопи энергию" : "Исследуй воду и береги энергию";
+        public string Goal => !Alive ? "Выбери другую живую клетку" : Threat >= 0 ? "Отплыви от хищника" : ReadyToDivide ? "Пора разделиться" : !EnoughFood ? "Найди подходящую пищу" : Energy < .8f ? "Подплыви к пище и накопи энергию" : "Исследуй воду и береги энергию";
         public static PlayerReadout Read(VolumeWorld world, int index)
         {
             var r = new PlayerReadout { Food = -1, Threat = -1 };
             if (index < 0 || index >= world.Count) return r;
             var a = world.Get(index); var c = a.Biology; var g = c.Genes;
             var sample = world.Sample(a.Position);
-            r.Alive = a.Alive; r.Energy = Math.Max(0, Math.Min(1, c.Energy / Biology.Capacity(g)));
+            r.Alive = a.Alive; r.ReadyToDivide=world.DivisionBlock(index)==null; r.Energy = Math.Max(0, Math.Min(1, c.Energy / Biology.Capacity(g)));
             r.Integrity = c.Integrity; r.Light = sample.Light;
             r.ThermalEfficiency = Biology.Efficiency(g, sample.Temperature);
             r.FlowRatio = world.Current(a.Position).Length / Math.Max(.01f, Ecology.Mobility(g));

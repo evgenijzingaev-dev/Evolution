@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Evolution.Volume;
+using Evolution.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -19,7 +20,6 @@ namespace Evolution.Runtime
         bool failed,navigationChecked;
         RenderTexture target;
         int renderedFrames;
-        float yaw, pitch = 15;
         readonly List<Shot> shots = new List<Shot>();
 
         [Serializable] public sealed class Shot
@@ -35,6 +35,9 @@ namespace Evolution.Runtime
             public bool currents, temperature, food, hudVisible;
             public int width=Width,height=Height,hudDetail,hudPage,threatIndex=-1,foodIndex=-1,notificationCount;
             public bool friendlyHud,layoutFits;
+            public bool threatMarkerVisible;
+            public float threatConnectorLength;
+            public string divisionBlock;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
         [Serializable] sealed class Report
@@ -223,9 +226,12 @@ namespace Evolution.Runtime
                 water.World.Step();
                 if(step%20==19){danger=FindThreat();yield return null;}
             }
-            if(danger>=0)water.Select(danger);
-            else {int living=water.ScenicSelection();if(living>=0)water.Select(living);}
+            Require(danger>=0,"no factual threat for HUD regression capture");water.Select(danger);
             water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;water.Hud.RefreshNow();
+            water.Observe();
+            var threatPoint=ToVector(water.World.Get(water.Hud.Readout.Threat).Position);
+            // Frame the existing predator itself, without changing model state.
+            water.Rig.FocusOn(threatPoint,7);
             water.Rig.ApplyImmediate();
             yield return Capture("17-danger-food-ui");
             water.Hud.Detail=HudDetail.Scientific;
@@ -243,9 +249,94 @@ namespace Evolution.Runtime
             for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
             water.Hud.SetPage(HudPage.Development);
             yield return Capture("21-development-ui");
-            Require(!failed&&shots.Count==20,"incomplete friendly HUD capture");
+            Screen.SetResolution(1366,768,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            yield return Capture("22-development-1366x768");
+            water.Hud.SetPage(HudPage.Cell);water.Observe();
+            water.Rig.FocusOn(threatPoint,7);water.Rig.ApplyImmediate();
+            // The selected cell still senses the real threat, now behind the camera.
+            // Look away from the focus instead of relocating any organism.
+            var away=water.Rig.View;away.Focus=threatPoint-water.Lens.transform.forward*14;
+            away.Yaw+=180;away.Pitch=-away.Pitch;water.Rig.Restore(away);water.Rig.ApplyImmediate();
+            yield return Capture("23-offscreen-threat-1366x768");
+            int safe=-1;
+            for(int i=0;i<water.World.Count;i++)if(water.World.Get(i).Alive&&PlayerReadout.Read(water.World,i).Threat<0){safe=i;break;}
+            Require(safe>=0,"no real threat-free resident for HUD regression");
+            water.Select(safe);water.Hud.SetPage(HudPage.Cell);water.Observe();water.Hud.RefreshNow();water.Rig.ApplyImmediate();
+            yield return Capture("24-no-threat-1366x768");
+            Screen.SetResolution(Width,Height,FullScreenMode.Windowed);
+            for(int frame=0;frame<12;frame++)yield return new WaitForEndOfFrame();
+            Require(!failed&&shots.Count==23,"incomplete friendly HUD capture");
             File.WriteAllText(Path.Combine(destination,"manifest.json"),JsonUtility.ToJson(Context(shots.ToArray(),true),true));
+            yield return CaptureDivision();
             Application.Quit(0);
+        }
+        [Serializable] sealed class DivisionEvidence
+        {
+            public string unity,pipeline,parent,child,revision;
+            public long birthTick;
+            public int lineage,generation,mutationMask;
+            public float parentBefore,parentAfter,childEnergy,divisionCost,construction;
+            public bool paid,inheritance,independent;
+        }
+        IEnumerator CaptureDivision()
+        {
+            water.Hud.SetPage(HudPage.Cell);water.Hud.Detail=HudDetail.Normal;
+            water.OrganismsVisible=true;water.Paused=true;
+            // Find an existing resident able to earn a surplus at its real food cloud.
+            // No fixtures, teleports, genome edits or energy/resource injection.
+            int candidate=-1;float best=-1;
+            for(int i=0;i<water.World.Count;i++) {
+                var a=water.World.Get(i);if(!a.Alive||a.Biology.Generation>0)continue;
+                for(int k=0;k<water.World.FoodCount;k++) {
+                    var f=water.World.GetFood(k);float d=(f.Position-a.Position).Length;
+                    float gain=water.World.FoodPotential(k,a.Biology)-Biology.Cost(a.Biology.Genes,water.World.Temperature(a.Position));
+                    float score=gain/(1+d);if(score>best){best=score;candidate=i;}
+                }
+            }
+            Require(candidate>=0,"no feeding resident for paid division");water.Select(candidate);water.PlaySelected();
+            string parent=water.World.Get(candidate).Identity;
+            int ticks=0;
+            while(ticks++<2400) {
+                candidate=water.Ocean.Find(parent);Require(candidate>=0,"division resident streamed away");
+                if(water.World.DivisionBlock(candidate)==null)break;
+                var a=water.World.Get(candidate);Require(a.Alive,"division resident died before provisioning");
+                var read=PlayerReadout.Read(water.World,candidate);
+                Require(read.Food>=0,"division resident has no sensed edible resources");
+                var food=water.World.GetFood(read.Food);V3 delta=food.Position-a.Position;
+                water.World.Input=delta.Length>food.Radius*.45f?delta.Unit:default;
+                water.World.Step();if(ticks%20==0)yield return null;
+            }
+            Require(water.World.DivisionBlock(candidate)==null,"resident did not earn division energy");
+            water.World.Input=default;
+            var before=water.World.Get(candidate);var focus=ToVector(before.Position);
+            float heading=Mathf.Atan2(before.Direction.X,before.Direction.Z)*Mathf.Rad2Deg+90;
+            SetView(focus,4.5f,heading,12,false,false,false,true);water.HudVisible=true;water.Hud.RefreshNow();
+            yield return Capture("division-before",false);
+            candidate=water.Ocean.Find(parent);Require(candidate>=0,"division parent missing after camera move");
+            Require(water.World.RequestDivision(),"paid division request rejected");water.World.Step();
+            int childIndex=water.Ocean.Find(water.World.LastOffspringIdentity);
+            Require(childIndex>=0,"model did not create a daughter");
+            var daughter=water.World.Get(childIndex);string childIdentity=daughter.Identity;var after=water.World.Get(candidate);
+            var evidence=new DivisionEvidence {unity=Application.unityVersion,pipeline=GraphicsSettings.currentRenderPipeline.GetType().Name,
+                revision=Context(new Shot[0],true).revision,parent=parent,child=daughter.Identity,birthTick=water.World.Tick,
+                lineage=daughter.Biology.LineageId,generation=daughter.Biology.Generation,mutationMask=daughter.Biology.BirthMutationMask,
+                parentBefore=after.Biology.Budget.Start,parentAfter=after.Biology.Energy,childEnergy=daughter.Biology.Energy,
+                divisionCost=after.Biology.Budget.Division,construction=Biology.StructureEnergy(daughter.Biology.Genes)+Biology.BirthOverhead(daughter.Biology.Genes),
+                paid=after.Biology.Budget.Division>daughter.Biology.Energy,
+                inheritance=daughter.Biology.ParentId==after.Biology.Id&&daughter.Biology.LineageId==after.Biology.LineageId&&daughter.Biology.ParentGenes.Equals(after.Biology.Genes)};
+            Require(evidence.paid&&evidence.inheritance,"division model accounting/inheritance failed");
+            V3 childStart=daughter.Position;
+            // Every PNG is an ordinary rendered frame after exactly one real fixed model tick.
+            for(int frame=0;frame<49;frame++) {
+                water.Hud.RefreshNow();
+                yield return Capture("division-"+frame.ToString("D3"),false);
+                water.World.Step();
+            }
+            childIndex=water.Ocean.Find(childIdentity);Require(childIndex>=0,"daughter missing after capture");
+            evidence.independent=(water.World.Get(childIndex).Position-childStart).Length>.01f;
+            Require(evidence.independent&&water.World.Get(childIndex).Alive,"daughter did not begin independent life");
+            File.WriteAllText(Path.Combine(destination,"division.json"),JsonUtility.ToJson(evidence,true));
         }
         int FindThreat()
         {
@@ -288,7 +379,7 @@ namespace Evolution.Runtime
             water.HudVisible = currents || temperature || food;
             water.ShowCurrents = currents; water.ShowTemperature = temperature; water.FindFood = food;
             water.Rig.FocusOn(point, distance);
-            water.Rig.Orbit(heading - yaw, tilt - pitch); yaw = heading; pitch = tilt;
+            var view=water.Rig.View;water.Rig.Orbit(heading-view.Yaw,tilt-view.Pitch);
             water.Rig.ApplyImmediate();
         }
         Shot Measure(string file)
@@ -299,7 +390,9 @@ namespace Evolution.Runtime
                 hudVisible = water.HudVisible, width=Screen.width,height=Screen.height,
                 friendlyHud=water.HudVisible&&water.Hud!=null,layoutFits=water.Hud!=null&&water.Hud.LayoutFits,
                 hudDetail=(int)water.Hud.Detail,hudPage=(int)water.Hud.Page,threatIndex=water.Hud.Readout.Threat,
-                foodIndex=water.Hud.Readout.Food,notificationCount=water.Hud.NotificationCount };
+                foodIndex=water.Hud.Readout.Food,notificationCount=water.Hud.NotificationCount,
+                threatMarkerVisible=water.Hud.ThreatMarkerVisible,threatConnectorLength=water.Hud.ThreatConnectorLength,
+                divisionBlock=water.Paused?"Продолжи симуляцию":water.World.DivisionBlock(water.SelectedIndex) };
             for (int i = 0; i < water.World.Count; i++) {
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
@@ -385,6 +478,10 @@ namespace Evolution.Runtime
                 else if(name=="12-horizontal-slice"&&(shot.fullDepth||shot.organismMarkers<1||shot.markerMinY<shot.sliceIndex*20-.01f||shot.markerMaxY>(shot.sliceIndex+1)*20+.01f))error="slice contains wrong depth data";
             }
             if(name.CompareTo("13-")>=0&&(!shot.friendlyHud||!shot.layoutFits))error="friendly HUD is missing or layout overlaps";
+            if((name=="17-danger-food-ui"||name=="19-ui-1366x768"||name=="20-ui-2560x1440")&&
+                (shot.threatIndex<0||!shot.threatMarkerVisible||Mathf.Abs(shot.threatConnectorLength-18)>.01f))error="real short threat marker missing";
+            if(name=="23-offscreen-threat-1366x768"&&(shot.threatIndex<0||shot.threatMarkerVisible))error="offscreen threat must not draw a marker";
+            if(name=="24-no-threat-1366x768"&&(shot.threatIndex>=0||shot.threatMarkerVisible))error="threat-free cell has false warning marker";
             if (error != null) {
                 var diagnostic = Path.Combine(destination, "diagnostics"); Directory.CreateDirectory(diagnostic);
                 File.WriteAllBytes(Path.Combine(diagnostic, shot.file), image.EncodeToPNG());

@@ -62,8 +62,9 @@ namespace Evolution.Volume
         public bool Stream(V3 camera)
         {
             var next=ChunkKey.At(camera);
-            if(initialized&&next.Equals(center)) {World.ActiveCenter=camera;return false;}
+            if(initialized&&next.Equals(center)&&!World.NeedsCompaction) {World.ActiveCenter=camera;return false;}
             string controlled=World!=null&&World.Controlled>=0?World.Get(World.Controlled).Identity:null;
+            string divisionRequest=World?.DivisionRequest,offspring=World?.LastOffspringIdentity;
             V3 input=World?.Input??default;bool boost=World?.Boost??false,attack=World?.Attack??false;
             long tick=World?.Tick??archive.Clock;
             if(initialized){Survey.Refresh(World,loaded.Keys);Synchronize();}
@@ -81,7 +82,7 @@ namespace Evolution.Volume
             foreach(var key in keys) {agents.AddRange(loaded[key].Agents);food.AddRange(loaded[key].Food);var rng=new RandomSource(key.Seed(seed)^0x3817u);
                 obstacles.Add(key.Origin+new V3(rng.Range(3,17),rng.Range(3,17),rng.Range(3,17)));}
             for(int i=0;i<agents.Count;i++){var a=agents[i];a.FoodCloud=0;if(a.FoodIdentity!=null)for(int k=0;k<food.Count;k++)if(food[k].Identity==a.FoodIdentity){a.FoodCloud=k;break;}agents[i]=a;}
-            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack};
+            World=new VolumeWorld(agents.ToArray(),food.ToArray(),obstacles.ToArray(),tick,offset) {ActiveCenter=camera,Input=input,Boost=boost,Attack=attack,DivisionRequest=divisionRequest,LastOffspringIdentity=offspring};
             agentOwners.Clear();foodOwners.Clear();foreach(var a in agents)agentOwners[a.Identity]=ChunkKey.At(a.Position);foreach(var f in food)foodOwners[f.Identity]=ChunkKey.At(f.Position);
             if(controlled!=null)for(int i=0;i<World.Count;i++)if(World.Get(i).Identity==controlled){World.Controlled=i;break;}
             archive.Clock=tick;center=next;initialized=true;Survey.Refresh(World,loaded.Keys);
@@ -104,7 +105,7 @@ namespace Evolution.Volume
                 r=archive.TryLoad(key,out var saved)?saved:Generate(key,World.Tick);CatchUp(r,World.Tick);outbound.Add(key,r);return r;
             }
             for(int i=0;i<World.Count;i++) {
-                var a=World.Get(i);var key=ChunkKey.At(a.Position);
+                var a=World.Get(i);if(!a.Alive&&World.Time-a.DiedAt>VolumeWorld.DivisionSeconds)continue;var key=ChunkKey.At(a.Position);
                 if(agentOwners.TryGetValue(a.Identity,out var old)&&!old.Equals(key)&&!loaded.ContainsKey(old))DestinationKey(old).Agents.RemoveAll(v=>v.Identity==a.Identity);
                 var region=DestinationKey(key);int index=region.Agents.FindIndex(v=>v.Identity==a.Identity);
                 if(index<0)region.Agents.Add(a);else region.Agents[index]=a;agentOwners[a.Identity]=key;
