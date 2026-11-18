@@ -160,6 +160,19 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void ExtinctionSummaryExplainsDifferentNextDecisionsBeforeAndAfterDivision()
+        {
+            string before = LineageChallenge.OutcomeSummary(LineageChallengeState.Extinct, 0, 0);
+            StringAssert.Contains("до первого деления", before);
+            StringAssert.Contains("накопи энергию", before);
+            string after = LineageChallenge.OutcomeSummary(LineageChallengeState.Extinct, 2, 0);
+            StringAssert.Contains("потомки не выжили", after);
+            StringAssert.Contains("Рождений: 2", after);
+            StringAssert.Contains("другую нишу", after);
+            Assert.IsNull(LineageChallenge.OutcomeSummary(LineageChallengeState.Growing, 0, 1));
+        }
+
+        [Test]
         public void SettlementAdviceExplainsRealEnergyRiskWithoutInventingRewards()
         {
             StringAssert.Contains("Переведи", LineageChallenge.SettlementAdvice(false, .8f, true));
