@@ -2,7 +2,8 @@
   "name": "Evolution.Tests",
   "references": [
     "Evolution.Core",
-    "Evolution.Localization"
+    "Evolution.Localization",
+    "Evolution.Presentation"
   ],
   "includePlatforms": [
     "Editor"

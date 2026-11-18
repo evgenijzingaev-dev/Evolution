@@ -4,6 +4,7 @@
     "Evolution.Core",
     "Evolution.Localization",
     "Unity.RenderPipelines.Universal.Runtime",
-    "Unity.RenderPipelines.Core.Runtime"
+    "Unity.RenderPipelines.Core.Runtime",
+    "Evolution.Presentation"
   ]
 }
