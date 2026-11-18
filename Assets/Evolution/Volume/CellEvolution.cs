@@ -334,7 +334,8 @@ namespace Evolution.Volume
                         // A real descendant in a foreign niche may be starving before
                         // becoming eligible for settlement. Explain the blocked goal.
                         if (a.Identity != FounderIdentity && kind != 0 && kind != founderNiche
-                            && energyFraction < .35f)
+                            && (float.IsNaN(energyFraction) || float.IsInfinity(energyFraction)
+                                || energyFraction < .35f || energyFraction > 1f))
                             SettlementHint = MoreUrgentSettlementHint(SettlementHint, SettlementAdvice(true, energyFraction, true));
                         if (EligibleNiche(founderNiche, kind,
                             a.Identity != FounderIdentity, true, energyFraction)) {
