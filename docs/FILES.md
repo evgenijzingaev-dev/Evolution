@@ -5,12 +5,18 @@
 - `Assets/Evolution/Core/Biology.cs`
 - `Assets/Evolution/Core/Simulation.cs`
 - `Assets/Evolution/Core/Multicellularity.cs`
+- `Assets/Evolution/Core/Observation.cs`
 - `Assets/Evolution/Editor/Evolution.Editor.asmdef`
 - `Assets/Evolution/Editor/PrototypeSetup.cs`
 - `Assets/Evolution/Runtime/Evolution.Runtime.asmdef`
 - `Assets/Evolution/Runtime/EvolutionRunner.cs`
 - `Assets/Evolution/Runtime/OrganismRenderer.cs`
+- `Assets/Evolution/Runtime/MicroscopeCamera.cs`
+- `Assets/Evolution/Runtime/MicroscopeHud.cs`
+- `Assets/Evolution/Runtime/MicroMeshes.cs`
 - `Assets/Evolution/Runtime/Resources/InstancedCells.shader`
+- `Assets/Evolution/Runtime/Resources/CellMembrane.shader`
+- `Assets/Evolution/Runtime/Resources/MicroHabitat.shader`
 - `Assets/Evolution/Localization/Evolution.Localization.asmdef`
 - `Assets/Evolution/Localization/GameText.cs`
 - `Assets/Evolution/Scenes/CellPrototype.unity`
@@ -18,6 +24,7 @@
 - `Assets/Evolution/Tests/EditMode/ResourceCycleTests.cs`
 - `Assets/Evolution/Tests/EditMode/LocalizationTests.cs`
 - `Assets/Evolution/Tests/EditMode/MulticellularityTests.cs`
+- `Assets/Evolution/Tests/EditMode/ObservationTests.cs`
 - `Assets/Evolution/Tests/EditMode/Evolution.Tests.asmdef`
 - `Packages/manifest.json`
 - `ProjectSettings/EditorBuildSettings.asset`
@@ -32,5 +39,6 @@
 - `docs/FILES.md`
 - `docs/ROADMAP.md`
 - `docs/VALIDATION.md`
+- `docs/STAGE1.md`
 
 Для всех файлов и каталогов внутри Assets также созданы `.meta` с постоянными GUID. README.md и .gitignore обновлены. URP assets в Assets/Evolution/Settings генерируются редактором при первом открытии; стандартные отсутствующие ProjectSettings создаст Unity.
