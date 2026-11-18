@@ -150,6 +150,9 @@ namespace Evolution.Core
                 c.FoodLastStep = Math.Max(0, c.Energy - beforeFood); c.AssimilatedEnergy += c.FoodLastStep;
                 c.Budget.Upkeep = Multicellularity.Cost(c, localTemperature, colonies.Protection(i)) * dt;
                 c.Budget.Movement = CellMotion.Cost(c) * dt;
+                c.Budget.Swimming = CellMotion.SwimmingCost(c) * dt;
+                c.Budget.Turning = CellMotion.TurningCost(c) * dt;
+                c.Budget.Boost = Math.Max(0, c.Budget.Movement - c.Budget.Swimming - c.Budget.Turning);
                 c.Budget.Defense = c.Defending ? (.3f + .5f * c.Genes.Membrane) * dt : 0;
                 c.Energy -= c.Budget.Upkeep + c.Budget.Movement + c.Budget.Defense;
                 if (config.Ecosystem) {

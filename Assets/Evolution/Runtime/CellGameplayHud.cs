@@ -38,6 +38,7 @@ namespace Evolution.Runtime
                 GUILayout.Label(GameText.Format(TextKey.EnergySources, b.Substrate/dt, b.Organic/dt, b.Light/dt, b.Prey/dt));
                 GUILayout.Label(GameText.Format(TextKey.EnergyMaintenance, b.Upkeep/dt, b.Stress/dt));
                 GUILayout.Label(GameText.Format(TextKey.EnergyMovement, b.Movement/dt));
+                GUILayout.Label(GameText.Format(TextKey.EnergyMotionBreakdown,b.Swimming/dt,b.Turning/dt,b.Boost/dt));
                 GUILayout.Label(GameText.Format(TextKey.EnergyRecovery, b.Defense/dt, b.Repair/dt, b.Growth/dt, b.Attack/dt));
                 GUILayout.Label(GameText.Format(TextKey.EnergyTransport, b.Transport/dt));
                 GUILayout.Label(GameText.Format(TextKey.EnergyDivision, b.Division, b.Contact));

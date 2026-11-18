@@ -8,7 +8,7 @@ namespace Evolution.Runtime
     internal sealed class OceanRenderer
     {
         readonly Mesh plane, mote;
-        readonly Material water, cloud, particles, minerals;
+        readonly Material water, cloud, particles, minerals, shafts;
         readonly Texture2D resources, ecology;
         readonly Color[] pixels, ecologyPixels;
         readonly Matrix4x4[] matrices = new Matrix4x4[512];
@@ -26,6 +26,7 @@ namespace Evolution.Runtime
         {
             this.world = world; this.grid = grid; this.nutrientCapacity = nutrientCapacity; this.plane = plane; this.mote = mote;
             minerals = Create("InstancedCells"); water = Create("MicroHabitat"); cloud = Create("OceanCloud"); particles = Create("OceanParticles");
+            shafts = Create("OceanLightShafts");
             resources = new Texture2D(grid, grid, TextureFormat.RGBA32, false, true) {
                 name = "Living ocean resources", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Repeat
             };
@@ -41,6 +42,7 @@ namespace Evolution.Runtime
             }
             water.SetTexture("_Resources", resources); cloud.SetTexture("_Resources", resources);
             water.SetTexture("_Ecology", ecology); cloud.SetTexture("_Ecology", ecology);
+            shafts.SetTexture("_Ecology", ecology);
         }
         static Material Create(string shader) => new Material(Resources.Load<Shader>(shader)) { enableInstancing = true };
         public void Draw(Simulation simulation, Camera camera, float time, Vector3 focus)
@@ -59,6 +61,7 @@ namespace Evolution.Runtime
             }
             water.SetFloat("_OceanTime", time); cloud.SetFloat("_OceanTime", time);
             water.SetFloat("_WorldSize", world); cloud.SetFloat("_WorldSize", world);
+            shafts.SetFloat("_WorldSize", world); shafts.SetFloat("_OceanTime", time);
             water.SetFloat("_Temperature", simulation.Temperature);
             Graphics.DrawMesh(plane, Matrix4x4.TRS(new Vector3(focus.x, -12, focus.z), Quaternion.identity,
                 new Vector3(world * 9, 1, world * 9)), water, 0, camera, 0, null, ShadowCastingMode.Off, false);
@@ -66,6 +69,12 @@ namespace Evolution.Runtime
                 properties.SetFloat("_Layer", layer);
                 Graphics.DrawMesh(plane, Matrix4x4.TRS(new Vector3(focus.x, -1.5f - layer * 3.3f, focus.z),
                     Quaternion.identity, new Vector3(world * 7, 1, world * 7)), cloud, 0, camera, 0, properties, ShadowCastingMode.Off, false);
+            }
+            // Faint scattering above and below life gives parallax without outlining a map border.
+            for (int layer = 0; layer < 3; layer++) {
+                properties.Clear(); properties.SetFloat("_Layer", layer);
+                Graphics.DrawMesh(plane, Matrix4x4.TRS(new Vector3(focus.x, -5 + layer * 4, focus.z),
+                    Quaternion.identity, new Vector3(world * 7, 1, world * 7)), shafts, 0, camera, 0, properties, ShadowCastingMode.Off, false);
             }
             // A deterministic visual field: never consumes the simulation's random source.
             for (int i = 0; i < matrices.Length; i++) {
@@ -85,6 +94,20 @@ namespace Evolution.Runtime
             lastTime = time;
             properties.Clear(); properties.SetVectorArray("_InstanceColor", colors);
             Graphics.DrawMeshInstanced(mote, 0, particles, matrices, matrices.Length, properties, ShadowCastingMode.Off, false, 0, camera);
+            // Inert marine snow is distinct from green/amber resource particles. No biological energy.
+            for (int i = 0; i < 192; i++) {
+                float depth = -9 + Mathf.Repeat(i * 1.713f - time * .035f, 17);
+                float x = Mathf.Repeat(i * 9.731f + time * .017f, world);
+                float z = Mathf.Repeat(i * 13.173f + time * .011f, world);
+                var point = new Vector3(focus.x + Observation.PeriodicDelta(x-focus.x,world), depth,
+                    focus.z + Observation.PeriodicDelta(z-focus.z,world));
+                float size = .018f + i % 5 * .009f;
+                matrices[i] = Matrix4x4.TRS(point,Quaternion.Euler(i*37+time*2,i*53,i*19),
+                    new Vector3(size * (i % 9 == 0 ? 4 : 1),size*.35f,size));
+                colors[i] = new Color(.57f,.68f,.66f,.12f + (i%3)*.025f);
+            }
+            properties.Clear(); properties.SetVectorArray("_InstanceColor", colors);
+            Graphics.DrawMeshInstanced(mote,0,particles,matrices,192,properties,ShadowCastingMode.Off,false,0,camera);
         }
         public void DrawVents(Simulation simulation, Vector3 focus, float time)
         {
@@ -116,7 +139,7 @@ namespace Evolution.Runtime
         }
         public void Dispose()
         {
-            Object.Destroy(minerals); Object.Destroy(water); Object.Destroy(cloud); Object.Destroy(particles); Object.Destroy(resources); Object.Destroy(ecology);
+            Object.Destroy(minerals); Object.Destroy(water); Object.Destroy(cloud); Object.Destroy(particles); Object.Destroy(shafts); Object.Destroy(resources); Object.Destroy(ecology);
         }
     }
 }

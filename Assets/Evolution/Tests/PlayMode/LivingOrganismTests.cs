@@ -58,6 +58,25 @@ namespace Evolution.Tests
             renderer.Draw(world,3,12,1,.05f,.5f,40,new Vector3(4,.54f,4),false);
             Assert.AreEqual(before,world.GetCell(0)); Assert.AreEqual(random,world.RandomState); Assert.AreEqual(tick,world.Tick);
         }
+        [Test]
+        public void AtmosphereShadersLoadAndOceanCannotModifyPausedBiology()
+        {
+            foreach (string name in new[] { "MicroHabitat", "OceanCloud", "OceanLightShafts", "OceanParticles" }) {
+                var shader=Resources.Load<Shader>(name); Assert.IsNotNull(shader,name); Assert.IsTrue(shader.isSupported,name);
+#if UNITY_EDITOR
+                Assert.IsFalse(UnityEditor.ShaderUtil.ShaderHasError(shader),name);
+#endif
+            }
+            var world=World(); var before=world.GetCell(0); uint random=world.RandomState;
+            var plane=Evolution.Runtime.MicroMeshes.Habitat();
+            var cameraObject=new GameObject("Ocean validation camera",typeof(Camera));
+            var ocean=new Evolution.Runtime.OceanRenderer(12,32,plane,low,8);
+            try {
+                ocean.Draw(world,cameraObject.GetComponent<Camera>(),0,new Vector3(4,0,4));
+                ocean.Draw(world,cameraObject.GetComponent<Camera>(),0,new Vector3(16,0,4));
+                Assert.AreEqual(before,world.GetCell(0)); Assert.AreEqual(random,world.RandomState); Assert.AreEqual(0,world.Tick);
+            } finally { ocean.Dispose(); Object.DestroyImmediate(plane); Object.DestroyImmediate(cameraObject); }
+        }
         [TearDown]
         public void TearDown()
         {
