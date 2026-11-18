@@ -110,6 +110,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void HudNeverDisplaysCompletedSettlementBeforeActualVictory()
+        {
+            Assert.AreEqual(0, LineageChallenge.DisplayNicheSeconds(0));
+            Assert.AreEqual(14, LineageChallenge.DisplayNicheSeconds(14.99));
+            Assert.AreEqual(15, LineageChallenge.DisplayNicheSeconds(15));
+            Assert.AreEqual(15, LineageChallenge.DisplayNicheSeconds(100));
+            Assert.AreEqual(0, LineageChallenge.DisplayNicheSeconds(double.NaN));
+        }
+
+        [Test]
         public void SettlementGoalChangesWhenMigrationBecomesActiveResidence()
         {
             StringAssert.Contains("Переведи", LineageChallenge.SettlementProgressGoal(0, null));
