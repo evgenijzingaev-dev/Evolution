@@ -5,6 +5,7 @@
     "Evolution.Localization",
     "Unity.RenderPipelines.Universal.Runtime",
     "Unity.RenderPipelines.Core.Runtime",
-    "Evolution.Presentation"
+    "Evolution.Presentation",
+    "Evolution.Volume"
   ]
 }
