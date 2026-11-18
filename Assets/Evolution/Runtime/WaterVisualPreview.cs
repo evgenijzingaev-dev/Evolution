@@ -28,7 +28,7 @@ namespace Evolution.Runtime
             public Vector3 cameraPosition, cameraEuler;
             public long tick;
             public int visibleOrganisms, cameraFrames;
-            public float nearestDepth, farthestDepth, luminanceRange, luminanceDeviation;
+            public float nearestDepth, farthestDepth, projectedCoverage, luminanceRange, luminanceDeviation;
             public bool currents, temperature, food, hudVisible;
             public float temperatureC, currentSpeed, foodSubstrate, foodOrganic;
         }
@@ -114,29 +114,35 @@ namespace Evolution.Runtime
             while (water.World == null || water.World.Tick < 20) yield return null;
             Debug.Log("Visual Preview phase: simulation initialized");
             water.Paused = true;
-            int selected = -1; float nearest = float.PositiveInfinity;
-            for (int i = 0; i < water.World.Count; i++) {
-                var a = water.World.Get(i);
-                if (a.Alive && a.Position.Sqr < nearest) { selected = i; nearest = a.Position.Sqr; }
-            }
+            int selected = water.ScenicSelection(); float nearest;
             Require(selected >= 0, "no living organism");
             water.Select(selected);
             string identity = water.World.Get(selected).Identity;
             var focus = ToVector(water.World.Get(selected).Position);
 
-            SetView(focus, 23, 25, 22, false, false, false);
+            float openingYaw = 25, openingScore = -1;
+            for(int angle=0;angle<360;angle+=15) {
+                SetView(focus,10,angle,8,false,false,false);
+                var view=Measure("opening-probe");
+                float side=Mathf.Abs(Vector3.Dot(water.Lens.transform.forward,ToVector(water.World.Get(selected).Direction).normalized));
+                float score=view.projectedCoverage*100+view.visibleOrganisms*.25f+(view.farthestDepth>20?.5f:0)+(side<.6f?.5f:0);
+                if(score>openingScore){openingScore=score;openingYaw=angle;}
+            }
+            SetView(focus, 10, openingYaw, 8, false, false, false);
             yield return Capture("01-ocean");
             water.Select(water.Ocean.Find(identity));
-            SetView(focus, 3.6f, 55, 10, false, false, false, true);
+            var direction=ToVector(water.World.Get(water.Ocean.Find(identity)).Direction);
+            float profileHeading=Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg+90;
+            SetView(focus, 3.6f, profileHeading, 10, false, false, false, true);
             yield return Capture("02-cell-close");
 
             // Find a view of existing organisms with actual camera-space depth separation.
             float best = -1, bestYaw = 0;
-            for (int angle = 0; angle < 360; angle += 45) {
+            for (int angle = 0; angle < 360; angle += 15) {
                 SetView(focus, 20, angle, 12, false, false, false);
                 var measure = Measure("probe");
                 if (measure.visibleOrganisms < 3 || measure.farthestDepth - measure.nearestDepth < 3) continue;
-                float score = measure.visibleOrganisms + Mathf.Min(15, measure.farthestDepth - measure.nearestDepth);
+                float score = measure.projectedCoverage*100+measure.visibleOrganisms*.25f+Mathf.Min(15,measure.farthestDepth-measure.nearestDepth)*.05f;
                 if (score > best) { best = score; bestYaw = angle; }
             }
             SetView(focus, 20, bestYaw, 12, false, false, false);
@@ -155,6 +161,10 @@ namespace Evolution.Runtime
 
             Require(!failed && shots.Count == 5, "incomplete capture");
             File.WriteAllText(Path.Combine(destination, "manifest.json"), JsonUtility.ToJson(Context(shots.ToArray(), true), true));
+            // A separate evidence frame for the water itself; not an invented population or backdrop fixture.
+            water.OrganismsVisible = false;
+            SetView(focus, 23, 25, 22, false, false, false);
+            yield return Capture("06-water-only", false);
             Application.Quit(0);
         }
         Report Context(Shot[] frames, bool passed)
@@ -187,6 +197,7 @@ namespace Evolution.Runtime
                 var a = water.World.Get(i); if (!a.Alive) continue;
                 var v = water.Lens.WorldToViewportPoint(ToVector(a.Position));
                 if (v.z < 1 || v.z > 30 || v.x < .05f || v.x > .95f || v.y < .05f || v.y > .95f) continue;
+                shot.projectedCoverage += a.Biology.Genes.Size*a.Biology.Genes.Size/(v.z*v.z);
                 shot.visibleOrganisms++; shot.nearestDepth = Mathf.Min(shot.nearestDepth, v.z);
                 shot.farthestDepth = Mathf.Max(shot.farthestDepth, v.z);
             }
@@ -200,7 +211,7 @@ namespace Evolution.Runtime
             }
             return shot;
         }
-        IEnumerator Capture(string name)
+        IEnumerator Capture(string name,bool record=true)
         {
             // Ordinary URP camera frames, including post effects and 3D diagnostic layers.
             // WaitForEndOfFrame is deliberately used in a windowed player, never a batch-mode Editor.
@@ -253,7 +264,7 @@ namespace Evolution.Runtime
                 Require(false, error);
             }
             File.WriteAllBytes(Path.Combine(destination, shot.file), image.EncodeToPNG());
-            Destroy(image); shots.Add(shot);
+            Destroy(image); if(record)shots.Add(shot);
             Debug.Log("Visual Preview phase: saved " + name);
         }
     }

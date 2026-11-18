@@ -11,6 +11,7 @@ on:
       - 'Assets/Evolution/Editor/PrototypeSetup.cs'
       - 'Assets/Evolution/Settings/**'
       - 'Assets/Evolution/Presentation/CrystalForms.cs'
+      - 'Assets/Evolution/Presentation/WaterOptics.cs'
       - 'Assets/Evolution/Volume/WaterSpace.cs'
       - 'Assets/Evolution/Runtime/WaterVisualPreview.cs'
       - 'Assets/Evolution/Runtime/WaterPrototype.cs'
@@ -151,6 +152,7 @@ jobs:
             artifacts/visual-preview/03-depth-ensemble.png
             artifacts/visual-preview/04-currents.png
             artifacts/visual-preview/05-temperature-food.png
+            artifacts/visual-preview/06-water-only.png
             artifacts/visual-preview/manifest.json
           if-no-files-found: error
           retention-days: 14
