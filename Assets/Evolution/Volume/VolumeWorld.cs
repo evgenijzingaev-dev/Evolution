@@ -19,6 +19,9 @@ namespace Evolution.Volume
         public double DivisionAt;
         public V3 DivisionOrigin,DivisionAxis;
         public bool DivisionChild;
+        public DevelopmentDirection PlannedDevelopment,InheritedDevelopment;
+        public float DevelopmentPaid;
+        public int NaturalMutationMask;
     }
     // Spatial ecology shares Core physiology, inheritance and paid reproduction.
     public sealed class VolumeWorld
@@ -187,16 +190,21 @@ namespace Evolution.Volume
             }
             Tick++;
         }
-        public float DivisionThreshold(int index)=>Biology.Capacity(agents[index].Biology.Genes)*Multicellularity.DivisionThreshold(agents[index].Biology);
+        public float DivisionThreshold(int index)=>Biology.Capacity(agents[index].Biology.Genes)*Multicellularity.DivisionThreshold(agents[index].Biology)+CellEvolution.Cost(agents[index].Biology,agents[index].PlannedDevelopment);
+        public bool PlanDevelopment(DevelopmentDirection direction)
+        {
+            if(Controlled<0||Controlled>=Count||!agents[Controlled].Alive||!CellEvolution.Available(agents[Controlled].Biology,direction))return false;
+            var a=agents[Controlled];a.PlannedDevelopment=direction;agents[Controlled]=a;return true;
+        }
         public string DivisionBlock(int index)
         {
             if(index<0||index>=Count||!agents[index].Alive)return "Выбери живую клетку";
             var a=agents[index];var c=a.Biology;
             if(Count>=PopulationLimit)return "Область заполнена организмами";
             if(a.DivisionAt>0&&Time-a.DivisionAt<DivisionSeconds)return "Деление ещё завершается";
-            if(c.Generation>0&&c.Growth<1)return "Потомок ещё растёт";
-            if(c.Age<Multicellularity.MaturityAge(c))return "Клетка ещё не созрела";
-            if(!Biology.CanDivide(c))return "Накопи энергию: "+c.Energy.ToString("F1")+" / "+DivisionThreshold(index).ToString("F1");
+            if(c.Generation>0&&c.Growth<1)return "Потомок ещё растёт: "+(c.Growth*100).ToString("F0")+"%. Нужен запас выше 35%";
+            if(c.Age<Multicellularity.MaturityAge(c))return "До зрелости "+Math.Max(0,Multicellularity.MaturityAge(c)-c.Age).ToString("F1")+" с";
+            if(!Biology.CanDivide(c)||c.Energy<DivisionThreshold(index))return "Накопи энергию: "+c.Energy.ToString("F1")+" / "+DivisionThreshold(index).ToString("F1");
             return null;
         }
         public bool RequestDivision()
@@ -214,23 +222,28 @@ namespace Evolution.Volume
             random.Next();int id=(int)(random.State&0x7fffffffu);if(id==0)id=1;
             bool collision;
             do {collision=false;for(int i=0;i<Count;i++)if(agents[i].Biology.Id==id){id=id==int.MaxValue?1:id+1;collision=true;break;}}while(collision);
+            var template=CellEvolution.Template(c.Genes,a.PlannedDevelopment);
+            float developmentCost=CellEvolution.Cost(c,a.PlannedDevelopment);
             var child=new Cell {Id=id,ParentId=c.Id,ParentGenes=c.Genes,Generation=c.Generation+1,
-                LineageId=c.LineageId,Integrity=1,Genes=c.Genes.Inherit(ref random,.15f,.06f,true)};
+                LineageId=c.LineageId,Integrity=1,Genes=template.Inherit(ref random,.15f,.06f,true)};
+            c.Energy-=developmentCost;
             if(!Biology.TryDivide(ref c,ref child))return;
-            c.Budget.Division=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+child.Energy;
+            c.Budget.Division=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+child.Energy+developmentCost;
             child.Budget.Start=child.Energy;child.BirthMutationMask=Observation.MutationMask(c.Genes,child.Genes);
             // Division follows the existing body axis; independent steering starts next tick.
             V3 axis=a.Direction.Unit;
             V3 origin=a.Position;
             double at=(Tick+1)*(double)StepSeconds;
+            var development=a.PlannedDevelopment;a.PlannedDevelopment=DevelopmentDirection.Natural;
             a.Biology=c;a.DivisionAt=at;a.DivisionOrigin=origin;a.DivisionAxis=axis;a.DivisionChild=false;
             a.Position=origin-axis*c.Genes.Size*.35f;agents[index]=a;
             var daughter=new VolumeAgent {Order=++Diagnostics.NextAgentOrder,Identity=identity,Biology=child,Alive=true,
                 Position=origin+axis*c.Genes.Size*.35f,Previous=origin,Direction=axis,PreviousDirection=axis,
                 Velocity=a.Velocity+axis*.15f,RenderTime=at,RenderDuration=StepSeconds,
                 DivisionAt=at,DivisionOrigin=origin,DivisionAxis=axis,DivisionChild=true,
+                InheritedDevelopment=development,DevelopmentPaid=developmentCost,NaturalMutationMask=Observation.MutationMask(template,child.Genes),
                 FedAt=double.NegativeInfinity,BitAt=double.NegativeInfinity,DiedAt=double.NegativeInfinity};
-            agents.Add(daughter);Births++;Diagnostics.Births++;Diagnostics.MaxGeneration=Math.Max(Diagnostics.MaxGeneration,child.Generation);Diagnostics.BirthOverhead+=Biology.BirthOverhead(child.Genes);Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes);if(index==Controlled)LastOffspringIdentity=identity;
+            agents.Add(daughter);Births++;Diagnostics.Births++;Diagnostics.MaxGeneration=Math.Max(Diagnostics.MaxGeneration,child.Generation);Diagnostics.BirthOverhead+=Biology.BirthOverhead(child.Genes)+developmentCost;Diagnostics.Division+=Biology.StructureEnergy(child.Genes)+Biology.BirthOverhead(child.Genes)+developmentCost;if(index==Controlled)LastOffspringIdentity=identity;
         }
         V3 Steer(int i,out int cloud)
         {

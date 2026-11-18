@@ -49,7 +49,7 @@ namespace Evolution.Volume
                 if(w.Count>=VolumeWorld.PopulationLimit)s.CapacityBlocked++;
                 else if(c.Generation>0&&c.Growth<1)s.GrowthBlocked++;
                 else if(c.Age<Multicellularity.MaturityAge(c))s.MaturityBlocked++;
-                else if(!Biology.CanDivide(c))s.EnergyBlocked++;
+                else if(!Biology.CanDivide(c)||c.Energy<w.DivisionThreshold(i))s.EnergyBlocked++;
             }
             return s;
         }

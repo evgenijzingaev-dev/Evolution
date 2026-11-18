@@ -86,6 +86,24 @@ namespace Evolution.Tests
             yield return null;
         }
         [UnityTest]
+        public IEnumerator DevelopmentOverlayKeepsOwnedCellAndDoesNotSpendWhilePaused()
+        {
+            var root=new GameObject("Directed inheritance UI regression");var water=root.AddComponent<WaterPrototype>();
+            water.PersistRegions=false;water.ParticleCount=512;water.SoundVolume=0;water.Paused=true;
+            yield return null;
+            try {
+                int index=water.SelectedIndex;Assert.GreaterOrEqual(index,0);var before=water.World.Get(index);
+                Assert.AreEqual(index,water.World.Controlled);water.Hud.SetPage(HudPage.Development);
+                Assert.IsTrue(water.Hud.CapturesCommands);Assert.AreEqual(index,water.World.Controlled);Assert.IsTrue(water.Hud.LayoutFits);
+                Assert.IsTrue(water.World.PlanDevelopment(DevelopmentDirection.Organic));yield return null;
+                Assert.AreEqual(0,water.World.Tick);Assert.AreEqual(before.Biology.Genes,water.World.Get(index).Biology.Genes);
+                Assert.AreEqual(before.Biology.Energy,water.World.Get(index).Biology.Energy);Assert.AreEqual(0,water.World.Births);
+                water.Hud.SetPage(HudPage.Cell);Assert.IsFalse(water.Hud.CapturesCommands);
+                Assert.AreEqual(DevelopmentDirection.Organic,water.World.Get(index).PlannedDevelopment);
+            } finally {Object.Destroy(root);}
+            yield return null;
+        }
+        [UnityTest]
         public IEnumerator FastCameraFlightStaysWithinStreamingVisibilityMargin()
         {
             var root=new GameObject("Fast volume camera");var lens=root.AddComponent<Camera>();var rig=root.AddComponent<WaterCamera>();rig.Initialize(lens);
