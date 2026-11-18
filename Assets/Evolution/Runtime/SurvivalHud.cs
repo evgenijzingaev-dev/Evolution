@@ -17,26 +17,23 @@ namespace Evolution.Runtime
             TextKey.AdviceFood, TextKey.AdviceLight, TextKey.AdviceRecover, TextKey.AdviceDivide, TextKey.AdviceGrow };
         void DrawTactical(Cell c)
         {
-            // A single local scan per four biological ticks, also valid on a paused selection.
-            if (survivalId != c.Id || survivalTick < 0 || simulation.Tick < survivalTick || simulation.Tick >= survivalTick + 4) {
-                survival = simulation.ReadSurvival(c); survivalId = c.Id; survivalTick = simulation.Tick;
-            }
+            RefreshSurvival(c);
             float dt = simulation.StepSeconds;
+            GUILayout.Label(GameText.Format(c.ColonyId==0?TextKey.StyleSoloIdentity:TextKey.StyleIdentity,GameText.Get(StrategyKeys[(int)Ecology.Strategy(c)]),
+                GameText.Get(RoleKeys[(int)c.Role])),hintStyle);
+            GUILayout.Label(GameText.Get(DietKey(c)),hintStyle);
             GUILayout.Label(GameText.Format(TextKey.EnergyReserve,c.Energy,Biology.Capacity(c.Genes)),titleStyle);
             DrawMeter(c.Energy/Biology.Capacity(c.Genes));
             GUILayout.Label(GameText.Format(TextKey.TacticalVitals,c.Integrity,c.Growth),hintStyle);
             GUILayout.Label(GameText.Format(TextKey.TacticalBalance,c.Budget.Net/dt));
-            GUILayout.Label(GameText.Format(TextKey.TacticalSource,GameText.Get(SourceKeys[(int)survival.Source])),hintStyle);
+            GUILayout.Label(GameText.Format(TextKey.SourceAndDrain,GameText.Get(SourceKeys[(int)survival.Source]),GameText.Get(DrainKeys[(int)survival.Drain])),hintStyle);
             DrawIncomeBar(c.Budget,dt);
-            GUILayout.Label(GameText.Format(TextKey.TacticalDrain,GameText.Get(DrainKeys[(int)survival.Drain])),hintStyle);
             GUILayout.Label(GameText.Get(AdviceKeys[(int)survival.Advice]));
-            DrawSenseCompass(c);
+            DrawReproductionReadiness(c);
+            if(!IsControlling || !WorldHints || showSelectionDetails) DrawSenseCompass(c);
             if (IsControlling) {
-                Rect actions=GUILayoutUtility.GetRect(0,26,GUILayout.ExpandWidth(true));
-                GUI.Label(actions,new GUIContent(GameText.Get(TextKey.ActionStrip),GameText.Format(TextKey.TacticalActions,
-                    GameText.Get(BlockKeys[(int)simulation.ActionStatus(CellAction.Attack)]),
-                    GameText.Get(BlockKeys[(int)simulation.ActionStatus(CellAction.Defend)]),
-                    GameText.Get(BlockKeys[(int)simulation.ActionStatus(CellAction.Boost)]))),hintStyle);
+                DrawActionIcons(c);
+                if (GUILayout.Button(GameText.Get(CautiousSwimming ? TextKey.CautiousOn : TextKey.CautiousOff))) CautiousSwimming=!CautiousSwimming;
             }
             if (GUILayout.Button(GameText.Get(showSelectionDetails ? TextKey.InspectorClose : TextKey.InspectorOpen))) showSelectionDetails = !showSelectionDetails;
         }

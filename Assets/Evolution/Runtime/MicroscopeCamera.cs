@@ -23,8 +23,8 @@ namespace Evolution.Runtime
             Overview(); focus = targetFocus; distance = targetDistance; yaw = targetYaw; pitch = targetPitch;
             ApplyPose();
         }
-        public void Overview() { Following = false; targetFocus = new Vector3(world * .5f, .5f, world * .5f); targetDistance = MaximumDistance; targetYaw = 0; targetPitch = 75; }
-        public void Zoom(float wheel) { targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-wheel * .15f), 2.5f, MaximumDistance); }
+        public void Overview() { Following = false; targetFocus = new Vector3(world * .5f, .5f, world * .5f); targetDistance = MaximumDistance; targetYaw = 0; targetPitch = 65; }
+        public void Zoom(float wheel) { targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-wheel * .15f), 1.8f, MaximumDistance); }
         public void FocusOn(Vector3 point, bool follow, float frameDistance = 5) { targetFocus = Bound(point); targetDistance = Mathf.Clamp(frameDistance, 2.5f, MaximumDistance); Following = follow; }
         public void StopFollowing() { Following = false; }
         public void FollowPoint(Vector3 point) {
@@ -33,7 +33,7 @@ namespace Evolution.Runtime
         }
         Vector3 Bound(Vector3 point) => new Vector3(targetFocus.x + Observation.PeriodicDelta(point.x-targetFocus.x,world),
             .54f,targetFocus.z + Observation.PeriodicDelta(point.z-targetFocus.z,world));
-        public Vector3 ControlDirection(Vector2 input) => Quaternion.Euler(0, targetYaw, 0) * new Vector3(input.x, 0, input.y);
+        public Vector3 ControlDirection(Vector2 input) => Quaternion.Euler(0, yaw, 0) * new Vector3(input.x, 0, input.y);
         public void Tick(bool pointerOverUI, bool controlling = false)
         {
             if (!lens || !Application.isFocused) return;

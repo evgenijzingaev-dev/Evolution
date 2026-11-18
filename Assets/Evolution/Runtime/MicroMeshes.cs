@@ -23,13 +23,20 @@ namespace Evolution.Runtime
             var mesh = new Mesh { name = "Micro cell (low polygon)" };
             mesh.SetVertices(vertices); mesh.SetNormals(normals); mesh.SetUVs(0, uv); mesh.SetTangents(tangents); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds();
             // Includes inherited axial growth plus the largest animated division stretch.
-            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 3.6f); return mesh;
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 4.2f); return mesh;
         }
         public static Mesh Habitat()
         {
             var mesh = new Mesh { name = "Continuous habitat tile" };
             mesh.vertices = new[] { new Vector3(-.5f, 0, -.5f), new Vector3(-.5f, 0, .5f), new Vector3(.5f, 0, .5f), new Vector3(.5f, 0, -.5f) };
             mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 }; mesh.RecalculateNormals(); mesh.RecalculateBounds(); return mesh;
+        }
+        public static Mesh LightSheet()
+        {
+            var mesh=new Mesh { name="Soft water light volume" };
+            mesh.vertices=new[] { new Vector3(-.5f,-.5f,0),new Vector3(-.5f,.5f,0),new Vector3(.5f,.5f,0),new Vector3(.5f,-.5f,0) };
+            mesh.uv=new[] { new Vector2(0,0),new Vector2(0,1),new Vector2(1,1),new Vector2(1,0) };
+            mesh.triangles=new[] { 0,1,2,0,2,3 }; mesh.RecalculateBounds(); return mesh;
         }
     }
 }

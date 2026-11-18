@@ -7,12 +7,13 @@ namespace Evolution.Runtime
     // Continuous, bilinearly sampled resources. No geometry or pattern at simulation tile edges.
     internal sealed class OceanRenderer
     {
-        readonly Mesh plane, mote;
-        readonly Material water, cloud, particles, minerals, shafts;
+        readonly Mesh plane, mote, lightSheet;
+        readonly Material water, cloud, particles, minerals, shafts, volumeLight;
         readonly Texture2D resources, ecology;
         readonly Color[] pixels, ecologyPixels;
         readonly Matrix4x4[] matrices = new Matrix4x4[512];
         readonly Vector4[] colors = new Vector4[512];
+        readonly Vector4[] lightColors = new Vector4[24];
         readonly MaterialPropertyBlock properties = new MaterialPropertyBlock();
         readonly float world;
         readonly Vector3[] motes = new Vector3[512];
@@ -27,6 +28,7 @@ namespace Evolution.Runtime
             this.world = world; this.grid = grid; this.nutrientCapacity = nutrientCapacity; this.plane = plane; this.mote = mote;
             minerals = Create("InstancedCells"); water = Create("MicroHabitat"); cloud = Create("OceanCloud"); particles = Create("OceanParticles");
             shafts = Create("OceanLightShafts");
+            lightSheet=MicroMeshes.LightSheet(); volumeLight=Create("OceanLightVolume");
             resources = new Texture2D(grid, grid, TextureFormat.RGBA32, false, true) {
                 name = "Living ocean resources", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Repeat
             };
@@ -76,6 +78,17 @@ namespace Evolution.Runtime
                 Graphics.DrawMesh(plane, Matrix4x4.TRS(new Vector3(focus.x, -5 + layer * 4, focus.z),
                     Quaternion.identity, new Vector3(world * 7, 1, world * 7)), shafts, 0, camera, 0, properties, ShadowCastingMode.Off, false);
             }
+            volumeLight.SetFloat("_OceanTime",time);
+            for(int i=0;i<24;i++) {
+                float x=Mathf.Repeat(i*19.319f+world*.12f,world),z=Mathf.Repeat(i*31.713f+world*.08f,world);
+                float light=simulation.EnvironmentAt(x,z).Light;
+                var point=new Vector3(focus.x+Observation.PeriodicDelta(x-focus.x,world),2,
+                    focus.z+Observation.PeriodicDelta(z-focus.z,world));
+                matrices[i]=Matrix4x4.TRS(point,Quaternion.Euler(0,camera.transform.eulerAngles.y,-17),new Vector3(2+i%3,20+i%5,1));
+                lightColors[i]=new Color(.45f,.73f,.62f,Mathf.Clamp01(light)*.055f);
+            }
+            properties.Clear(); properties.SetVectorArray("_InstanceColor",lightColors);
+            Graphics.DrawMeshInstanced(lightSheet,0,volumeLight,matrices,24,properties,ShadowCastingMode.Off,false,0,camera);
             // A deterministic visual field: never consumes the simulation's random source.
             for (int i = 0; i < matrices.Length; i++) {
                 var point = motes[i]; var flow = simulation.EnvironmentAt(point.x, point.z);
@@ -140,6 +153,7 @@ namespace Evolution.Runtime
         public void Dispose()
         {
             Object.Destroy(minerals); Object.Destroy(water); Object.Destroy(cloud); Object.Destroy(particles); Object.Destroy(shafts); Object.Destroy(resources); Object.Destroy(ecology);
+            Object.Destroy(volumeLight); Object.Destroy(lightSheet);
         }
     }
 }

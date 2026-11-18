@@ -99,7 +99,7 @@ namespace Evolution.Tests
             Assert.AreEqual(tick,world.Tick); Assert.AreEqual(random,world.RandomState);
             Assert.AreEqual(count,world.Count); Assert.AreEqual(first,world.GetCell(0));
             runner.CameraRig.Zoom(10000);
-            Assert.That(runner.CameraRig.Distance, Is.GreaterThanOrEqualTo(2.5f));
+            Assert.That(runner.CameraRig.Distance, Is.GreaterThanOrEqualTo(1.8f));
             runner.ResetWorld();
             Assert.That(runner.SelectedId, Is.Zero); Assert.That(runner.CameraRig.Following, Is.False);
             Assert.That(Resources.Load<Shader>("CellMembrane"), Is.Not.Null);

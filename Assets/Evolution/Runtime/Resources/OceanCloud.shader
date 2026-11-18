@@ -29,8 +29,8 @@ Shader "Evolution/OceanCloud"
                 float2 drift = float2(_OceanTime * .025, _Layer * 7);
                 float n = OceanNoise(p * .08 + drift);
                 float filaments = OceanNoise(p * float2(.11,.38) + n * 2 - drift * .4);
-                float wisps = smoothstep(.4,.85,n*filaments) * (.09 + food.r * .24 + food.g * .2);
-                half3 tint = lerp(half3(.06,.27,.22), half3(.28,.21,.12),food.g);
+                float wisps = smoothstep(.25,.75,n*filaments) * (.12 + food.r * .3 + food.g * .26);
+                half3 tint = lerp(half3(.10,.36,.29), half3(.37,.28,.15),food.g);
                 tint = lerp(tint, tint * half3(1.3,1,.8), food.b * .4);
                 tint *= .6 + .4 * habitatData.r;
                 tint = lerp(tint, half3(.29,.12,.37), habitatData.g * .6);

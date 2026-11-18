@@ -10,7 +10,7 @@ float OceanNoise(float2 p) {
 half3 OceanFog(half3 color, float3 positionWS) {
     float distanceInWater = length(positionWS - GetCameraPositionWS());
     // Modest scattering retains readable organisms even at the overview zoom.
-    half mist = 1 - exp(-distanceInWater * .006);
-    return lerp(color, half3(.035,.19,.23), min(.65,mist));
+    half mist = 1 - exp(-distanceInWater * .0045);
+    return lerp(color, half3(.055,.22,.25), min(.6,mist));
 }
 #endif
