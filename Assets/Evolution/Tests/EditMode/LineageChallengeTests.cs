@@ -183,6 +183,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void InvalidSimulationTimeCannotCompleteNicheChallenge()
+        {
+            Assert.AreEqual(0, LineageChallenge.AdvanceNicheResidence(14, true, double.PositiveInfinity));
+            Assert.AreEqual(0, LineageChallenge.AdvanceNicheResidence(14, true, double.NaN));
+            Assert.AreEqual(0, LineageChallenge.AdvanceNicheResidence(double.PositiveInfinity, true, .1));
+            Assert.AreEqual(0, LineageChallenge.AdvanceNicheResidence(14, true, 0));
+            Assert.AreEqual(14.1, LineageChallenge.AdvanceNicheResidence(14, true, .1), 1e-9);
+        }
+
+        [Test]
         public void NicheResidenceRequiresAnUninterruptedEligibleStreak()
         {
             double seconds = LineageChallenge.AdvanceNicheResidence(0, true, .1);
