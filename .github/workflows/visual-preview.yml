@@ -17,6 +17,7 @@ on:
       - 'Assets/Evolution/Runtime/WaterVisualPreview.cs'
       - 'Assets/Evolution/Runtime/WaterPrototype.cs'
       - 'Assets/Evolution/Runtime/WaterCamera.cs'
+      - 'Assets/Evolution/Runtime/FriendlyOceanHud.cs'
       - 'Assets/Evolution/Runtime/VolumePainter.cs'
       - 'Assets/Evolution/Runtime/CrystalWaterLook.cs'
       - 'Assets/Evolution/Runtime/CrystalMeshes.cs'
@@ -30,9 +31,6 @@ permissions:
   contents: read
 
 # Share the license lock with Unity Editor CI, including manual runs.
-concurrency:
-  group: evolution-unity-personal
-  cancel-in-progress: false
 
 jobs:
   select:
@@ -55,6 +53,11 @@ jobs:
         run: python3 -B Tools/ci/select_visual_preview.py
 
   render:
+    # Only jobs that use Unity enter the license queue. Skipped draft checks
+    # must not replace a pending Visual Preview run in GitHub concurrency.
+    concurrency:
+      group: evolution-unity-personal
+      cancel-in-progress: false
     needs: select
     if: needs.select.outputs.run == 'true'
     runs-on: ${{ fromJSON(vars.VISUAL_PREVIEW_RUNNER || '["ubuntu-24.04"]') }}
@@ -160,6 +163,15 @@ jobs:
             artifacts/visual-preview/10-depth-distribution.png
             artifacts/visual-preview/11-selected-organism.png
             artifacts/visual-preview/12-horizontal-slice.png
+            artifacts/visual-preview/13-cell-play-ui.png
+            artifacts/visual-preview/14-cell-info-ui.png
+            artifacts/visual-preview/15-cinematic-ui.png
+            artifacts/visual-preview/16-analytical-ui.png
+            artifacts/visual-preview/17-danger-food-ui.png
+            artifacts/visual-preview/18-scientific-ui.png
+            artifacts/visual-preview/19-ui-1366x768.png
+            artifacts/visual-preview/20-ui-2560x1440.png
+            artifacts/visual-preview/21-development-ui.png
             artifacts/visual-preview/manifest.json
           if-no-files-found: error
           retention-days: 14
@@ -178,6 +190,15 @@ jobs:
             artifacts/visual-preview/10-depth-distribution.png
             artifacts/visual-preview/11-selected-organism.png
             artifacts/visual-preview/12-horizontal-slice.png
+            artifacts/visual-preview/13-cell-play-ui.png
+            artifacts/visual-preview/14-cell-info-ui.png
+            artifacts/visual-preview/15-cinematic-ui.png
+            artifacts/visual-preview/16-analytical-ui.png
+            artifacts/visual-preview/17-danger-food-ui.png
+            artifacts/visual-preview/18-scientific-ui.png
+            artifacts/visual-preview/19-ui-1366x768.png
+            artifacts/visual-preview/20-ui-2560x1440.png
+            artifacts/visual-preview/21-development-ui.png
             artifacts/visual-preview/manifest.json
             artifacts/visual-preview/diagnostics/*.png
             artifacts/visual-preview/diagnostics/*.json
@@ -227,7 +248,7 @@ jobs:
           import json, os, urllib.request
           body = 'Visual Preview — `' + os.environ['HEAD_SHA'] + '`\n\n'
           if os.environ['RESULT'] == 'success' and os.environ.get('ARTIFACT_URL'):
-              body += '[Пять настоящих кадров Unity / URP и данные рендера](' + os.environ['ARTIFACT_URL'] + ').\n'
+              body += '[Кадры океана и нового интерфейса Unity / URP и данные рендера](' + os.environ['ARTIFACT_URL'] + ').\n'
               body += 'Общий океан, клетка крупно, разные глубины, течения, температура и пища. Художественную оценку нужно выполнить по изображениям.\n'
           else:
               body += 'Проверка не завершилась успешно. Полного подтверждённого набора нет; заглушки не создаются. Причина указана в отчёте запуска; настройка лицензии/runner описана в docs/VISUAL_PREVIEW.md.\n'
@@ -241,7 +262,6 @@ jobs:
           with urllib.request.urlopen(request, timeout=30) as response:
               print('PR visual report published:', response.status)
           PY
-
   publish-public-previews:
     needs: render
     if: >-
