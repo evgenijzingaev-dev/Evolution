@@ -195,7 +195,9 @@ namespace Evolution.Volume
             if (state == LineageChallengeState.Won)
                 return "Успех: потомок закрепился в новой нише. Рождений: " + births + " · Живых: " + living;
             if (state == LineageChallengeState.Extinct)
-                return "Поражение: все подтверждённые члены линии погибли. Рождений: " + births;
+                return births == 0
+                    ? "Поражение: основатель погиб до первого деления. Найди пищу и накопи энергию перед размножением."
+                    : "Поражение: потомки не выжили. Рождений: " + births + ". Попробуй другую нишу или источник питания.";
             if (state == LineageChallengeState.Unobserved)
                 return "Исход неизвестен: линия вне наблюдения. Вернись к её области.";
             return null;
