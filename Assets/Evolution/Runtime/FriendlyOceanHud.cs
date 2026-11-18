@@ -16,6 +16,7 @@ namespace Evolution.Runtime
     {
         WaterPrototype water;
         VolumeWorld readWorld;int readIndex=-2;
+        public const string ChallengeHelp = "F5 — начать/повторить испытание · F6 — выйти";
         public HudDetail Detail;
         public bool HelpVisible, AttackRequested;
         public bool CapturesCommands=>development||settings||HelpVisible||journal||chronicle;
@@ -50,7 +51,7 @@ namespace Evolution.Runtime
         Rect Actions => new Rect(W/2-258,H-154,516,80);
         Rect Footer => new Rect(18,H-58,W-36,42);
         Rect SettingsBox => new Rect(W-326,80,308,158);
-        Rect HelpBox => new Rect(W-326,80,308,206);
+        Rect HelpBox => new Rect(W-326,80,308,222);
         Rect DevelopmentBox => new Rect(W/2-320,90,640,Mathf.Min(480,H-320));
         Rect ChronicleBox => new Rect(W/2-320,90,640,Mathf.Min(540,H-240));
         Rect ObserverBox => new Rect(306,90,W-632,116);
@@ -307,7 +308,7 @@ namespace Evolution.Runtime
                 if(challenge.Active) {
                     task=challenge.State==LineageChallengeState.Won?"Победа! Потомок освоил новую среду":challenge.State==LineageChallengeState.Extinct?"Линия вымерла":challenge.State==LineageChallengeState.Unobserved?
                         "Линия вне наблюдения":challenge.State==LineageChallengeState.OffspringAlive?
-                        LineageChallenge.SettlementProgressGoal(challenge.CurrentNicheSeconds, challenge.SettlementHint):"Создай живого потомка";
+                        LineageChallenge.SettlementProgressGoal(challenge.CurrentNicheSeconds, challenge.SettlementHint, challenge.FounderNicheKind):"Создай живого потомка";
                     string outcome=LineageChallenge.OutcomeSummary(challenge.State,challenge.VerifiedBirths,challenge.LivingKnown);
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nСтарт: "+challenge.FounderNicheName+" · Новая ниша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
@@ -462,7 +463,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,136),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — потомок (ещё раз — следующий)\nF3 / F4 — скорость времени ×1…×8\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,152),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — потомок (ещё раз — следующий)\nF3 / F4 — скорость времени ×1…×8\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\n"+ChallengeHelp+"\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
