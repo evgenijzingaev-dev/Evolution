@@ -119,6 +119,16 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void CorruptEnergyCannotGrantFreeNicheVictory()
+        {
+            // The challenge must not reward invalid energy snapshots as survival.
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, float.NaN));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, float.PositiveInfinity));
+            Assert.IsFalse(LineageChallenge.EligibleNiche(1, 2, true, true, 1.1f));
+            Assert.IsTrue(LineageChallenge.EligibleNiche(1, 2, true, true, .75f));
+        }
+
+        [Test]
         public void HudNeverDisplaysCompletedSettlementBeforeActualVictory()
         {
             Assert.AreEqual(0, LineageChallenge.DisplayNicheSeconds(0));
