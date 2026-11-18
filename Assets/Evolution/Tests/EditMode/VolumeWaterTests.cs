@@ -59,6 +59,31 @@ namespace Evolution.Tests
             float temperature=WaterField.Temperature(a.Position,0);
             Assert.That(a.Biology.Budget.Upkeep,Is.EqualTo(Biology.Cost(a.Biology.Genes,temperature)*VolumeWorld.StepSeconds).Within(.00001));
         }
+        [Test] public void ManualHuntMissPaysEnergyButSuccessfulBitePaysOnlyOnce()
+        {
+            var hunter=Agent(default,1,0,1.6f);
+            var idle=new VolumeWorld(1,42,new[] {hunter}) {Controlled=0,ActiveCenter=default};
+            var missed=new VolumeWorld(1,42,new[] {hunter}) {Controlled=0,Attack=true,ActiveCenter=default};
+            idle.Step();missed.Step();
+            float cost=(.18f+.3f*hunter.Biology.Genes.Predation)*VolumeWorld.StepSeconds;
+            Assert.That(idle.Get(0).Biology.Energy-missed.Get(0).Biology.Energy,Is.EqualTo(cost).Within(.0001f),
+                "A missed deliberate attack must cost real energy, not just change the HUD.");
+            Assert.That(missed.Get(0).Biology.Budget.Attack,Is.EqualTo(cost).Within(.00001f));
+            Assert.That(missed.Diagnostics.Attack,Is.EqualTo(cost).Within(.00001f));
+            Assert.AreEqual(0,idle.Get(0).Biology.Budget.Attack);
+
+            var prey=Agent(new V3(.3f,0,0));
+            var contact=new VolumeWorld(2,42,new[] {hunter,prey}) {Controlled=0,Attack=true,ActiveCenter=default};
+            contact.Step();
+            Assert.Greater(contact.Get(0).Biology.Budget.Prey,0,"Contact should still yield real predation.");
+            Assert.That(contact.Get(0).Biology.Budget.Attack,Is.EqualTo(cost).Within(.00001f),
+                "A real bite already pays its attack cost and must not pay the missed-swing cost too.");
+
+            var nonHunter=new VolumeWorld(1,42,new[] {Agent(default)}) {Controlled=0,Attack=true,ActiveCenter=default};
+            nonHunter.Step();
+            Assert.AreEqual(0,nonHunter.Get(0).Biology.Budget.Attack,
+                "Organisms without predation cannot spend energy on a nonexistent ability.");
+        }
         [Test] public void HuntingUsesSphericalContactIncludingVerticalSeparation()
         {
             var far=new VolumeWorld(2,42,new[] {Agent(default,1,0,1.6f),Agent(new V3(.3f,5,0))}) {Controlled=0,Attack=true};far.Step();
