@@ -2,14 +2,23 @@
 # Run the actual IL2CPP player with a software OpenGL display. Capture only the
 # player window; never upload activation/Editor logs or runner home directories.
 set -euo pipefail
-mkdir -p artifacts/visual
+# GameCI Docker may leave artifacts/ owned by root.
+# Give only the capture output directory to the runner, not the entire checkout.
+sudo install -d -o "$(id -u)" -g "$(id -g)" artifacts/visual
 player=$(find build/StandaloneLinux64 -type f \( -name '*.x86_64' -o -name 'EVOLUTION' \) -print -quit)
 if [[ -z "$player" ]]; then
   echo '::error::No built Linux player executable found.'
   exit 1
 fi
-chmod +x "$player"
-export EVOLUTION_CAPTURE_PLAYER="$player"
+# GameCI creates the Linux build as root; chmod as runner fails with EPERM.
+# Change only the built executable mode, leaving checkout ownership untouched.
+sudo chmod +x "$player"
+export EVOLUTION_CAPTURE_PLAYER="$PWD/$player"
+# First require actual 3D URP frames from this IL2CPP player, using the same
+# strict in-player evidence validator as Visual Preview. Keep the legacy
+# external-input smoke test below as an additional, independent check.
+export EVOLUTION_CAPTURE_DESTINATION="$PWD/artifacts/visual"
+bash Tools/ci/visual_preview.sh
 xvfb-run -a -s '-screen 0 2560x1440x24 +extension GLX' bash <<'CAPTURE'
 set -euo pipefail
 export LIBGL_ALWAYS_SOFTWARE=1
