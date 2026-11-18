@@ -173,7 +173,9 @@ namespace Evolution.Volume
         public static bool SustainableResidence(float entryFraction, float currentFraction)
             => currentFraction >= entryFraction - .10f;
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
-            => isDescendant && alive && currentKind != 0 && currentKind != founderKind && energyFraction >= .35f;
+            => isDescendant && alive && currentKind != 0 && currentKind != founderKind
+                && !float.IsNaN(energyFraction) && !float.IsInfinity(energyFraction)
+                && energyFraction >= .35f && energyFraction <= 1f;
         long recordedTick;
         double startedAt;
         // Player-facing outcome uses only verified observations, never guessed death causes.
