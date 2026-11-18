@@ -23,6 +23,9 @@ namespace Evolution.Tests
             }
         }
         [TestCase(42u)] [TestCase(7u)] [TestCase(123u)] [TestCase(2026u)]
+        // Unity's instrumented Editor/Mono needs 292-385 s on the hosted runner;
+        // retain all 12000 steps and ledger assertions instead of the default 180 s cap.
+        [Timeout(1200000)]
         public void FixedSeedsContinuePaidLifecycleFor600SecondsAndBalanceEnergy(uint seed)
         {
             var ocean=new ChunkOcean(seed,new MemoryRegionArchive());double initial=VolumeSnapshot.Read(ocean.World).Stored;
@@ -70,7 +73,8 @@ namespace Evolution.Tests
             Assert.AreEqual(0,VolumeSnapshot.Read(w).Alive);Assert.AreEqual(0,w.Diagnostics.Births);Assert.AreEqual(1,w.Diagnostics.Starved);
             Assert.AreEqual(1,w.Count);
         }
-        [Test] public void FullReplayIsDeterministicIncludingArchivesAndDiagnostics()
+        // The full two-world replay took 759 s in real Unity, versus ~100 s in .NET.
+        [Test, Timeout(1200000)] public void FullReplayIsDeterministicIncludingArchivesAndDiagnostics()
         {
             var a=new ChunkOcean(42,new MemoryRegionArchive());var b=new ChunkOcean(42,new MemoryRegionArchive());
             for(int i=0;i<12000;i++) {
@@ -168,3 +172,4 @@ namespace Evolution.Tests
         }
     }
 }
+

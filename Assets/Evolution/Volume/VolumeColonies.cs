@@ -13,7 +13,7 @@ namespace Evolution.Volume
         public bool ControlColony;
         readonly Dictionary<string,int> colonyIndices=new Dictionary<string,int>();
         int[] bondParent=Array.Empty<int>(),colonyRoot=Array.Empty<int>(),colonySize=Array.Empty<int>(),sockets=Array.Empty<int>();
-        float[] colonyMass=Array.Empty<float>(),colonyMotor=Array.Empty<float>(),colonyDefense=Array.Empty<float>();
+        float[] colonyEffort=Array.Empty<float>(),colonyMass=Array.Empty<float>(),colonyMotor=Array.Empty<float>(),colonyDefense=Array.Empty<float>();
         bool[] colonyNear=Array.Empty<bool>();
         V3[] colonyVelocity=Array.Empty<V3>(),colonyDirection=Array.Empty<V3>();
         public int OrganismRoot(int index)=>index>=0&&index<Count?colonyRoot[index]:-1;
@@ -25,7 +25,7 @@ namespace Evolution.Volume
         {
             if(colonyRoot.Length<Count) {
                 int n=Math.Max(Count,PopulationLimit);bondParent=new int[n];colonyRoot=new int[n];colonySize=new int[n];sockets=new int[n];
-                colonyMass=new float[n];colonyMotor=new float[n];colonyDefense=new float[n];colonyNear=new bool[n];colonyVelocity=new V3[n];colonyDirection=new V3[n];
+                colonyEffort=new float[n];colonyMass=new float[n];colonyMotor=new float[n];colonyDefense=new float[n];colonyNear=new bool[n];colonyVelocity=new V3[n];colonyDirection=new V3[n];
             }
             colonyIndices.Clear();Array.Clear(colonySize,0,Count);Array.Clear(sockets,0,Count);
             Array.Clear(colonyMass,0,Count);Array.Clear(colonyMotor,0,Count);Array.Clear(colonyDefense,0,Count);Array.Clear(colonyNear,0,Count);
@@ -128,3 +128,4 @@ namespace Evolution.Volume
         }
     }
 }
+

@@ -43,13 +43,21 @@ fi
 player=${EVOLUTION_CAPTURE_PLAYER:-build/visual-preview/StandaloneLinux64/EVOLUTION}
 [[ -x $player ]] || { echo '::error::Visual Preview player missing.'; exit 1; }
 destination=${EVOLUTION_CAPTURE_DESTINATION:-"$PWD/artifacts/visual-preview"}
+mode=${EVOLUTION_CAPTURE_MODE:-standard}
+extra=()
+case "$mode" in
+  standard) ;;
+  ecology) extra=(-evolution-ecology) ;;
+  living) extra=(-evolution-living-cells) ;;
+  *) echo '::error::Unknown biological capture mode.'; exit 1 ;;
+esac
 mkdir -p "$destination"
 # Private player logs are deliberately excluded from upload (as are Editor/license logs).
 private_log=$(mktemp)
 trap 'rm -f "$private_log"' EXIT
 if ! timeout --signal=TERM --kill-after=15s 900s "$player" \
     -force-glcore -popupwindow -screen-fullscreen 0 -screen-width 1920 -screen-height 1080 \
-    -evolution-visual-preview "$destination" -logFile "$private_log"; then
+    -evolution-visual-preview "$destination" "${extra[@]}" -logFile "$private_log"; then
   echo '::error::Real Unity render failed or timed out. No substitute images were produced. See docs/VISUAL_PREVIEW.md for GPU setup.'
   # Print only known diagnostic categories, never arbitrary log contents.
   python3 - "$private_log" <<'PY'
@@ -68,8 +76,20 @@ for category in ("Visual Preview:", "Shader error", "Failed to initialize graphi
 PY
   exit 1
 fi
-python3 Tools/ci/check_visual_preview.py "$destination"
+if [[ $mode == ecology || $mode == living ]]; then
+  python3 Tools/ci/check_biological_capture.py "$destination" "$mode"
+else
+  python3 Tools/ci/check_visual_preview.py "$destination"
+fi
+
+if [[ $mode == ecology ]]; then exit 0; fi
 
 
 python3 Tools/ci/check_division_capture.py "$destination"
 ffmpeg -hide_banner -loglevel error -y -framerate 20 -i "$destination/division-%03d.png" -c:v libx264 -pix_fmt yuv420p "$destination/division.mp4"
+if [[ $mode == living ]]; then
+  for form in amoeboid ciliate spindle death; do
+    ffmpeg -hide_banner -loglevel error -y -framerate 20 -i "$destination/living-$form-%03d.png" -c:v libx264 -pix_fmt yuv420p "$destination/living-$form.mp4"
+  done
+fi
+

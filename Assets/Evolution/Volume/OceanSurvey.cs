@@ -5,17 +5,19 @@ using Evolution.Core;
 namespace Evolution.Volume
 {
     public enum SurveyEventKind { LineageBorn, KnownLineageLost, Division, Death, Migration, PopulationChange, Predation }
-    public enum SurveyLayer { Lineage, Form, Diet, Threat, Density, Food, Temperature, Current, Light }
+    public enum SurveyLayer { Lineage, Form, Diet, Threat, Density, Food, Temperature, Current, Light, Nutrients, Oxygen, Chemistry, Adaptation }
     public sealed class SurveyRegion
     {
         public ChunkKey Key; public long Tick; public bool Loaded;
+        public float Nutrients,Oxygen,MeanTolerance,MeanGeneration,MeanOptimum;
         public int Living, Dead, Attacks; public float Substrate, Organic, Temperature, Light;
         public V3 Center, Current;public readonly int[] Forms=new int[6],Diets=new int[4]; public readonly Dictionary<int,int> Lineages=new Dictionary<int,int>();
         public SurveyRegion Clone() {return CopyTo(new SurveyRegion());}
         SurveyRegion CopyTo(SurveyRegion r) {r.Key=Key;r.Tick=Tick;r.Loaded=Loaded;r.Living=Living;r.Dead=Dead;r.Attacks=Attacks;
+            r.Nutrients=Nutrients;r.Oxygen=Oxygen;r.MeanTolerance=MeanTolerance;r.MeanGeneration=MeanGeneration;r.MeanOptimum=MeanOptimum;
             r.Substrate=Substrate;r.Organic=Organic;r.Temperature=Temperature;r.Light=Light;r.Center=Center;r.Current=Current;
             Array.Copy(Forms,r.Forms,6);Array.Copy(Diets,r.Diets,4);foreach(var p in Lineages)r.Lineages[p.Key]=p.Value;return r;}
-        public void Reset(long tick,V3 offset) {Tick=tick;Loaded=true;Living=Dead=Attacks=0;Substrate=Organic=0;Lineages.Clear();Array.Clear(Forms,0,6);Array.Clear(Diets,0,4);Center=Key.Origin+new V3(10,10,10);
+        public void Reset(long tick,V3 offset) {Tick=tick;Loaded=true;Living=Dead=Attacks=0;Nutrients=Oxygen=MeanTolerance=MeanGeneration=MeanOptimum=0;Substrate=Organic=0;Lineages.Clear();Array.Clear(Forms,0,6);Array.Clear(Diets,0,4);Center=Key.Origin+new V3(10,10,10);
             Temperature=WaterField.Temperature(Center+offset,tick*VolumeWorld.StepSeconds);Light=WaterField.Light(Center);Current=WaterField.Current(Center+offset,tick*VolumeWorld.StepSeconds);}
     }
     public struct SurveyAgent
@@ -43,6 +45,7 @@ namespace Evolution.Volume
         readonly HashSet<ChunkKey> touched=new HashSet<ChunkKey>();
         readonly List<VolumeAgent> source=new List<VolumeAgent>(512);readonly List<FoodCloud> food=new List<FoodCloud>(512);
         readonly List<string> expired=new List<string>();readonly Dictionary<ChunkKey,Movement> migrations=new Dictionary<ChunkKey,Movement>();
+        public readonly List<NicheHistoryPoint> NicheHistory=new List<NicheHistoryPoint>(NicheHistoryStore.Limit);
         public readonly List<SurveyRegion> Regions=new List<SurveyRegion>(256);
         public readonly List<SurveyAgent> Agents=new List<SurveyAgent>(512);
         public readonly List<SurveyEvent> Events=new List<SurveyEvent>(EventLimit);
@@ -57,6 +60,10 @@ namespace Evolution.Volume
         {
             source.Clear();food.Clear();for(int i=0;i<world.Count;i++)source.Add(world.Get(i));for(int i=0;i<world.FoodCount;i++)food.Add(world.GetFood(i));
             Observe(source,food,loaded,world.Tick,world.FlowOffset);
+            if(world.Niches) {
+                foreach(var r in Regions)if(r.Loaded){var sample=world.Sample(r.Center);r.Temperature=sample.Temperature;r.Light=sample.Light;r.Current=world.Current(r.Center);}
+                RecordNiches(world);
+            }
         }
         public void Observe(IReadOnlyList<VolumeAgent> cells,IReadOnlyList<FoodCloud> resources,IEnumerable<ChunkKey> loaded,long tick,V3 offset)
         {
@@ -66,7 +73,7 @@ namespace Evolution.Volume
             for(int i=0;i<cells.Count;i++) {
                 var a=cells[i];var key=ChunkKey.At(a.Position);var r=Touch(key,offset);var c=a.Biology;
                 if(!r.Lineages.ContainsKey(c.LineageId))r.Lineages[c.LineageId]=0;
-                if(a.Alive){r.Living++;ActiveLiving++;r.Forms[Form(c.Genes)]++;r.Diets[Diet(c.Genes)]++;r.Lineages.TryGetValue(c.LineageId,out int n);r.Lineages[c.LineageId]=n+1;}
+                if(a.Alive){r.MeanTolerance+=c.Genes.ThermalTolerance;r.MeanGeneration+=c.Generation;r.MeanOptimum+=c.Genes.PreferredTemperature;r.Living++;ActiveLiving++;r.Forms[Form(c.Genes)]++;r.Diets[Diet(c.Genes)]++;r.Lineages.TryGetValue(c.LineageId,out int n);r.Lineages[c.LineageId]=n+1;}
                 else r.Dead++;
                 bool seen=history.TryGetValue(a.Identity??"",out var before);
                 if(a.Alive)Agents.Add(new SurveyAgent {Identity=a.Identity,Id=c.Id,Lineage=c.LineageId,Position=a.Position,Previous=seen?(before.Tick==tick?before.Previous:before.Position):a.Position,
@@ -86,15 +93,26 @@ namespace Evolution.Volume
                     Add(SurveyEventKind.Division,a.DivisionOrigin,c.LineageId,1,a.Identity);
                 if(seen||history.Count<AgentHistoryLimit)history[a.Identity??""]=new Seen {Position=a.Position,Previous=seen?(before.Tick==tick?before.Previous:before.Position):a.Position,Tick=tick,Alive=a.Alive,Bite=a.BitAt,Lineage=c.LineageId};
             }
-            for(int i=0;i<resources.Count;i++){var f=resources[i];var r=Touch(ChunkKey.At(f.Position),offset);r.Substrate+=f.Substrate;r.Organic+=f.Organic;}
+            for(int i=0;i<resources.Count;i++){var f=resources[i];var r=Touch(ChunkKey.At(f.Position),offset);r.Substrate+=f.Substrate;r.Organic+=f.Organic+f.Dissolved;r.Nutrients+=f.Nutrients;r.Oxygen+=f.Oxygen;}
             foreach(var key in touched) {var r=byRegion[key];if(r.Living==0)continue;
                 // Centroids are accumulated below in one linear pass, not a cells-by-regions search.
                 r.Center=default;}
             for(int i=0;i<Agents.Count;i++){var a=Agents[i];byRegion[ChunkKey.At(a.Position)].Center+=a.Position;}
-            foreach(var key in touched){var r=byRegion[key];if(r.Living>0)r.Center/=r.Living;}
+            foreach(var key in touched){var r=byRegion[key];if(r.Living>0){r.Center/=r.Living;r.MeanTolerance/=r.Living;r.MeanGeneration/=r.Living;r.MeanOptimum/=r.Living;}}
             foreach(var key in touched)if(oldPopulation.TryGetValue(key,out int old)&&Math.Abs(byRegion[key].Living-old)>=Math.Max(4,old*.25f))
                 Add(SurveyEventKind.PopulationChange,byRegion[key].Center,0,byRegion[key].Living-old,null);
             Trim();Recount(advanced);Revision++;
+        }
+        void RecordNiches(VolumeWorld world)
+        {
+            var scope=ChunkKey.At(world.ActiveCenter);
+            if(NicheHistory.Count>0) {var last=NicheHistory[NicheHistory.Count-1];if(last.Tick==world.Tick||last.Scope.Equals(scope)&&world.Tick-last.Tick<200)return;}
+            var p=new NicheHistoryPoint {Tick=world.Tick,Scope=scope,Living=ActiveLiving,Births=world.Diagnostics.Births,Deaths=world.Diagnostics.Deaths};
+            for(int i=0;i<world.Count;i++){var a=world.Get(i);if(!a.Alive)continue;var g=a.Biology.Genes;
+                if(g.Photosynthesis>.6f)p.Photo++;if(g.OrganicSpecialization>.6f)p.Organic++;if(g.PreferredTemperature>32)p.Hot++;if(g.EnergyEfficiency>.7f)p.Frugal++;p.Generation+=a.Biology.Generation;}
+            if(p.Living>0){p.Photo/=p.Living;p.Organic/=p.Living;p.Hot/=p.Living;p.Frugal/=p.Living;p.Generation/=p.Living;}
+            for(int k=0;k<world.FoodCount;k++){var f=world.GetFood(k);p.Nutrients+=f.Nutrients;p.Oxygen+=f.Oxygen;}
+            if(NicheHistory.Count==NicheHistoryStore.Limit)NicheHistory.RemoveAt(0);NicheHistory.Add(p);
         }
         static bool IsRecent(double time,long tick,float seconds)=>!double.IsNaN(time)&&!double.IsInfinity(time)&&tick*VolumeWorld.StepSeconds-time>=0&&tick*VolumeWorld.StepSeconds-time<seconds;
         SurveyRegion Touch(ChunkKey key,V3 offset)
@@ -139,3 +157,4 @@ namespace Evolution.Volume
         public static int Diet(Genome g)=>g.Photosynthesis>.5f?0:g.Predation>.5f?1:g.OrganicSpecialization>.5f?2:3;
     }
 }
+

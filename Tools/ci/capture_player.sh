@@ -2,6 +2,7 @@
 # Run the actual IL2CPP player with a software OpenGL display. Capture only the
 # player window; never upload activation/Editor logs or runner home directories.
 set -euo pipefail
+python3 -B Tools/ci/test_biological_capture.py
 # GameCI Docker may leave artifacts/ owned by root.
 # Give only the capture output directory to the runner, not the entire checkout.
 sudo install -d -o "$(id -u)" -g "$(id -g)" artifacts/visual
@@ -19,6 +20,9 @@ export EVOLUTION_CAPTURE_PLAYER="$PWD/$player"
 # external-input smoke test below as an additional, independent check.
 export EVOLUTION_CAPTURE_DESTINATION="$PWD/artifacts/visual"
 bash Tools/ci/visual_preview.sh
+for mode in ecology living; do
+  EVOLUTION_CAPTURE_MODE="$mode" EVOLUTION_CAPTURE_DESTINATION="$PWD/artifacts/visual/$mode" bash Tools/ci/visual_preview.sh
+done
 xvfb-run -a -s '-screen 0 2560x1440x24 +extension GLX' bash <<'CAPTURE'
 set -euo pipefail
 export LIBGL_ALWAYS_SOFTWARE=1
@@ -94,3 +98,4 @@ if grep -Ei 'NullReferenceException|ArgumentException|InvalidOperationException|
 fi
 printf 'Actual Linux IL2CPP player rendered under Xvfb with software OpenGL.\nScreenshots: 1920x1080 and 2560x1440.\nInputs exercised: pause, selection, focus, wheel, follow, orbit, keyboard pan, overview.\nHuman review of the PNGs is still required.\n' > artifacts/visual/RESULT.txt
 CAPTURE
+

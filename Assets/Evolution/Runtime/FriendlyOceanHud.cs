@@ -312,7 +312,7 @@ namespace Evolution.Runtime
             Row(r,3,"Температура",readout.Temperature,"Комфорт определяется эффективностью обмена с учётом любимой температуры и устойчивости клетки.");
             Row(r,4,"Течение",readout.Current,"Скорость воды относительно собственной подвижности организма.");
             Row(r,5,"Роль",ColonyRoleName(c.Role),"Специализация: "+(c.Specialization*100).ToString("F0")+"%. Управление, связи и общий запас — в панели развития.");
-            GUI.Label(new Rect(r.x+16,r.y+252,r.width-32,58),CellEvolution.EnergyReason(water.World,water.SelectedIndex),micro);
+            GUI.Label(new Rect(r.x+16,r.y+252,r.width-32,58),NicheReadout.Explain(water.World,water.SelectedIndex),micro);
             var children=CellEvolution.Offspring(water.World,water.EvolutionPlay.Identity);
             if(Button(new Rect(r.x+12,r.y+314,r.width-24,32),children.Count>0?"Потомки: "+children.Count+" · выбрать · Y":"Организм / наследование"))SetPage(HudPage.Development);
         }
@@ -333,7 +333,7 @@ namespace Evolution.Runtime
             b.AppendLine($"Division {c.Budget.Division:F4} · Growth {c.Budget.Growth:F4}");
             b.AppendLine("Геном (только чтение):");
             foreach(var f in typeof(Genome).GetFields())b.AppendLine(f.Name+": "+((float)f.GetValue(g)).ToString("F3"));
-            if(readout.Food>=0){var f=water.World.GetFood(readout.Food);b.AppendLine($"Food {f.Identity}: S {f.Substrate:F3} · O {f.Organic:F3} · concentration {f.Concentration:F4}");}
+            if(readout.Food>=0){var f=water.World.GetFood(readout.Food);b.AppendLine($"Food {f.Identity}: chemical {f.Substrate:F3} · organic {f.Organic+f.Dissolved:F3}");b.AppendLine($"Minerals {f.Nutrients:F3} · oxygen {f.Oxygen:F3} · body matter {a.Matter:F3} + reserve {a.MineralReserve:F3}");}
             b.AppendLine($"Tick {water.World.Tick} · loaded chunks {water.Ocean.LoadedCount} · particles {water.Water.Count}");
             scienceScroll=GUI.BeginScrollView(new Rect(r.x+12,r.y+58,r.width-24,r.height-72),scienceScroll,new Rect(0,0,r.width-48,1100));
             GUI.Label(new Rect(0,0,r.width-52,1100),b.ToString(),micro);GUI.EndScrollView();
@@ -378,18 +378,20 @@ namespace Evolution.Runtime
         Vector2 MapPoint(V3 p,Rect map,V3 center)=>new Vector2(map.center.x+(p.X-center.X)/mapRange*map.width*.5f,map.center.y-(p.Z-center.Z)/mapRange*map.height*.5f);
         void DrawMap()
         {
-            var r=MapBox;Box(r);Label(r.x+12,r.y+8,210,"Карта экосистемы",title);
+            var r=MapBox;Box(r);Label(r.x+12,r.y+8,100,"Экология",title);
+            if(Button(new Rect(r.x+113,r.y+7,147,28),MiniLayerName,"Слои показывают реальные запасы выбранной глубины; цвет клеток — наследуемые склонности"))miniLayer=(miniLayer+1)%8;
             var map=new Rect(r.x+12,r.y+42,r.width-24,126);var center=VolumePainter.V(water.Rig.Focus);
             Fill(map,new Color(.015f,.07f,.12f,.65f));
             for(int n=1;n<4;n++){Line(new Vector2(map.x+n*map.width/4,map.y),new Vector2(map.x+n*map.width/4,map.yMax),new Color(.25f,.55f,.7f,.18f));}
+            DrawNicheMapTiles(map,center);
             for(int k=0;k<water.World.FoodCount;k++){
-                var f=water.World.GetFood(k);if(!InLayer(f.Position)||f.Substrate+f.Organic<=.01f)continue;
+                var f=water.World.GetFood(k);if(!InLayer(f.Position)||f.Substrate+f.Organic+f.Dissolved<=.01f)continue;
                 var p=MapPoint(f.Position,map,center);if(map.Contains(p))Dot(p,2,new Color(.95f,.8f,.3f,.8f));
             }
             var aSel=water.SelectedIndex>=0?water.World.Get(water.SelectedIndex):default;
             foreach(var a in water.Overview.Survey.Agents){if(!InLayer(a.Position))continue;var p=MapPoint(a.Position,map,center);if(!map.Contains(p))continue;
                 bool selected=a.Identity==aSel.Identity;bool threat=water.SelectedIndex>=0&&readout.Threat>=0&&a.Identity==water.World.Get(readout.Threat).Identity;
-                Dot(p,selected?5:2.2f,selected?Color.white:threat||a.Threat?new Color(1,.4f,.4f):Color.Lerp(new Color(.15f,.6f,.85f),new Color(.55f,.95f,.7f),Mathf.InverseLerp(center.Y-40,center.Y+40,a.Position.Y)));
+                Dot(p,selected?5:2.2f,selected?Color.white:miniLayer==7?MiniDietColour(a.Diet):threat||a.Threat?new Color(1,.4f,.4f):Color.Lerp(new Color(.15f,.6f,.85f),new Color(.55f,.95f,.7f),Mathf.InverseLerp(center.Y-40,center.Y+40,a.Position.Y)));
             }
             Vector2 eye=MapPoint(VolumePainter.V(water.Lens.transform.position),map,center);var forward=water.Lens.transform.forward;Vector2 dir=new Vector2(forward.x,-forward.z).normalized;
             if(map.Contains(eye)){Line(eye,eye+dir*14,Color.white,2);Line(eye+dir*14,eye+dir*6+new Vector2(-dir.y,dir.x)*5,Color.white);}
@@ -401,7 +403,7 @@ namespace Evolution.Runtime
                 if(chosen>=0)water.Overview.ChooseOrganism(chosen,true);else {water.Overview.ChooseRegion(ChunkKey.At(position),false);water.Rig.FocusOn(VolumePainter.V(position),water.Rig.Distance);}
                 Event.current.Use();
             }
-            string depth=water.Overview.FullDepth?"Вся толща · цвет = высота":"Срез Y "+water.Overview.SliceIndex*20+"…"+(water.Overview.SliceIndex+1)*20;
+            string depth=miniLayer>0?MiniLayerName+" · Y="+(water.Overview.FullDepth?ChunkKey.At(center).Y:water.Overview.SliceIndex)*20:water.Overview.FullDepth?"Вся толща · цвет = высота":"Срез Y "+water.Overview.SliceIndex*20+"…"+(water.Overview.SliceIndex+1)*20;
             Label(r.x+12,r.y+170,r.width-24,depth,micro);
             if(Button(new Rect(r.x+10,r.y+198,128,30),water.Overview.FullDepth?"Выбрать слой":"Вся толща","Срез по высоте 20 условных единиц")){water.Overview.SetSlice(!water.Overview.FullDepth,ChunkKey.At(center).Y);}
             if(Button(new Rect(r.x+142,r.y+198,35,30),"−","Ниже на 20"))water.Overview.SetSlice(false,water.Overview.SliceIndex-1);
@@ -431,12 +433,13 @@ namespace Evolution.Runtime
         {
             var r=ToastBox;Box(r,"Недавние события");
             var events=water.Overview.Survey.Events;
-            for(int n=0;n<3&&n<events.Count;n++){
+            for(int n=0;n<2&&n<events.Count;n++){
                 int i=events.Count-1-n;var e=events[i];
                 if(Button(new Rect(r.x+10,r.y+51+n*32,r.width-20,30),EventName(e.Kind)+" · "+e.Count,"Перейти к месту фактического события")){
                     development=false;if(!water.Overview.Active)water.Overview.Enter();water.Overview.VisitEvent(i);
                 }
             }
+            GUI.Label(new Rect(r.x+12,r.y+118,r.width-24,40),NicheReadout.Trend(water.Overview.Survey.NicheHistory),micro);
         }
         void DrawWorldLabels()
         {
@@ -474,11 +477,11 @@ namespace Evolution.Runtime
             if(threat)ThreatConnectorLength=Vector2.Distance(anchor,target);
             return true;
         }
-        static readonly string[] Layers={"Генетические линии","Формы жизни","Способы питания","Угрозы","Плотность жизни","Запасы пищи","Температура","Течения","Свет"};
+        static readonly string[] Layers={"Генетические линии","Формы жизни","Способы питания","Угрозы","Плотность жизни","Запасы пищи","Температура","Течения","Свет","Минералы","Кислород","Химическая энергия","Температурный оптимум"};
         void DrawObserverLinks()
         {
             var r=ObserverBox;occupied.Add(r);float half=(r.width-8)/2;
-            if(Button(new Rect(r.x,r.y,half,34),"Слой: "+Layers[(int)water.Overview.Layer],"Переключить аналитические данные")){water.Overview.Layer=(SurveyLayer)(((int)water.Overview.Layer+1)%9);water.Overview.SetMode(true);}
+            if(Button(new Rect(r.x,r.y,half,34),"Слой: "+Layers[(int)water.Overview.Layer],"Переключить аналитические данные")){water.Overview.Layer=(SurveyLayer)(((int)water.Overview.Layer+1)%Layers.Length);water.Overview.SetMode(true);}
             if(busiest!=null&&Button(new Rect(r.x+half+8,r.y,half,34),"Больше жизни: "+busiest.Living))water.Overview.ChooseRegion(busiest.Key,true);
             if(foodRegion!=null&&Button(new Rect(r.x,r.y+40,half,32),"Найти пищу"))water.Overview.ChooseRegion(foodRegion.Key,true);
             if(dangerRegion!=null&&Button(new Rect(r.x+half+8,r.y+40,half,32),"Недавние атаки"))water.Overview.ChooseRegion(dangerRegion.Key,true);
@@ -489,3 +492,4 @@ namespace Evolution.Runtime
         void OnDestroy(){Destroy(skin);Destroy(chrome);Destroy(chromeActive);Destroy(white);Destroy(dot);}
     }
 }
+
