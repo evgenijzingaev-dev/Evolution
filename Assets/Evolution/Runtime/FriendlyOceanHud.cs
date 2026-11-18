@@ -16,6 +16,7 @@ namespace Evolution.Runtime
     {
         WaterPrototype water;
         VolumeWorld readWorld;int readIndex=-2;
+        public const string ChallengeHelp = "F5 — начать/повторить испытание · F6 — выйти";
         public HudDetail Detail;
         public bool HelpVisible, AttackRequested;
         public bool CapturesCommands=>development||settings||HelpVisible||journal;
@@ -430,7 +431,7 @@ namespace Evolution.Runtime
         }
         void DrawHelp()
         {
-            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,120),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\nH — скрыть HUD · Esc — назад",micro);
+            var r=HelpBox;Box(r,"Управление");GUI.Label(new Rect(r.x+16,r.y+55,r.width-32,120),"WASD — движение · Q/E — глубина\nShift — ускорение · Space — укус · R — деление\nY — играть за своего потомка\nПКМ — вращение · колесо — масштаб\nTab — обзор / следующая клетка\n"+ChallengeHelp+"\nH — скрыть HUD · Esc — назад",micro);
         }
         void DrawNotices()
         {
