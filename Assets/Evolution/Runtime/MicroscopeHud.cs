@@ -8,7 +8,7 @@ namespace Evolution.Runtime
     {
         GUISkin hudSkin;
         Texture2D panelTexture;
-        GUIStyle panelStyle, titleStyle, hintStyle;
+        GUIStyle panelStyle, headerStyle, titleStyle, hintStyle, markerStyle;
         Vector2 selectionScroll, environmentScroll;
         bool showEnvironment, showGenes, confirmRestart, showGoals, showJournal;
         float UiScale => Mathf.Clamp(Mathf.Min(Screen.width / 1920f, Screen.height / 1080f), .65f, 1.5f);
@@ -29,20 +29,24 @@ namespace Evolution.Runtime
             hudSkin = Instantiate(GUI.skin);
             hudSkin.label.fontSize = 16; hudSkin.label.wordWrap = true;
             hudSkin.label.normal.textColor = new Color(.81f, .91f, .93f);
-            hudSkin.label.margin = new RectOffset(2, 2, 5, 5);
+            hudSkin.label.margin = new RectOffset(2, 2, 3, 3);
             hudSkin.button.fontSize = 16; hudSkin.button.wordWrap = true;
             hudSkin.button.fixedHeight = 0;
             hudSkin.button.padding = new RectOffset(8, 8, 7, 7);
             hudSkin.button.normal.textColor = new Color(.82f, 1, .94f);
-            hudSkin.button.margin = new RectOffset(2, 2, 5, 5);
+            hudSkin.button.margin = new RectOffset(2, 2, 3, 3);
+            hudSkin.box.fontSize=15; hudSkin.box.alignment=TextAnchor.MiddleCenter;
             hudSkin.horizontalSlider.margin = new RectOffset(4, 4, 12, 12);
             panelTexture = new Texture2D(1, 1); panelTexture.SetPixel(0, 0, new Color(.018f, .047f, .065f, .78f)); panelTexture.Apply();
-            panelStyle = new GUIStyle(hudSkin.box) { padding = new RectOffset(18, 18, 14, 14) };
+            panelStyle = new GUIStyle(hudSkin.box) { padding = new RectOffset(16, 16, 12, 12) };
             panelStyle.normal.background = panelTexture;
+            headerStyle=new GUIStyle(panelStyle) { padding=new RectOffset(16,16,6,6) };
             titleStyle = new GUIStyle(hudSkin.label) { fontSize = 21, fontStyle = FontStyle.Bold };
             titleStyle.normal.textColor = new Color(.55f, 1, .84f);
-            hintStyle = new GUIStyle(hudSkin.label) { fontSize = 15 };
+            hintStyle = new GUIStyle(hudSkin.label) { fontSize = 15,margin=new RectOffset(2,2,2,2) };
             hintStyle.normal.textColor = new Color(.53f, .72f, .78f);
+            markerStyle=new GUIStyle(hintStyle) { alignment=TextAnchor.MiddleCenter,wordWrap=false,fontSize=14 };
+            markerStyle.normal.textColor=new Color(.9f,.97f,.93f);
         }
         void BeginPanelScroll(ref Vector2 scroll, Rect panel)
         {
@@ -62,7 +66,8 @@ namespace Evolution.Runtime
             if (simulation == null || !HudVisible) return;
             PrepareHud(); var oldMatrix = GUI.matrix; var oldSkin = GUI.skin;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * UiScale); GUI.skin = hudSkin;
-            GUILayout.BeginArea(TopPanel, panelStyle);
+            DrawWorldGuides();
+            GUILayout.BeginArea(TopPanel, headerStyle);
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(200,UiWidth-1180)));
             GUILayout.Label(GameText.Get(TextKey.Title), titleStyle);
@@ -87,12 +92,13 @@ namespace Evolution.Runtime
                 GUILayout.Label(GameText.Format(TextKey.Colonies, simulation.ColonyCount, simulation.ColonialCells, simulation.LargestColony));
                 if (simulation.ActiveEvent == NaturalEvent.None) GUILayout.Label(GameText.Get(TextKey.ClimateQuiet), hintStyle);
                 else GUILayout.Label(GameText.Format(TextKey.ClimateStatus, GameText.Get(EventKeys[(int)simulation.ActiveEvent]), simulation.EventSecondsRemaining));
-                if (GUILayout.Button(GameText.Get(colorMode == 0 ? TextKey.TemperatureColors : colorMode == 1 ? TextKey.DietColors : colorMode == 2 ? TextKey.RoleColors : TextKey.StrategyColors))) colorMode = (colorMode + 1) % 4;
-                GUILayout.Label(GameText.Get(colorMode == 3 ? TextKey.StrategyLegend : colorMode == 2 ? TextKey.LegendCompact : colorMode == 1 ? TextKey.DietLegend : TextKey.TemperatureLegend), hintStyle);
+                if (GUILayout.Button(GameText.Get(colorMode == 4 ? TextKey.NaturalColors : colorMode == 0 ? TextKey.TemperatureColors : colorMode == 1 ? TextKey.DietColors : colorMode == 2 ? TextKey.RoleColors : TextKey.StrategyColors))) colorMode = (colorMode + 1) % 5;
+                GUILayout.Label(GameText.Get(colorMode == 4 ? TextKey.NaturalLegend : colorMode == 3 ? TextKey.StrategyLegend : colorMode == 2 ? TextKey.LegendCompact : colorMode == 1 ? TextKey.DietLegend : TextKey.TemperatureLegend), hintStyle);
                 DrawEnvironment();
                 GUILayout.Label(GameText.Format(TextKey.EcosystemSummary, simulation.LivingLineages, simulation.PredatorCount, simulation.PredationDeaths));
                 DrawOceanMap();
                 if (GUILayout.Button(GameText.Get(DetailedOrganisms ? TextKey.DetailOn : TextKey.DetailOff))) DetailedOrganisms = !DetailedOrganisms;
+                if (GUILayout.Button(GameText.Get(WorldHints ? TextKey.WorldHintsOn : TextKey.WorldHintsOff))) WorldHints=!WorldHints;
                 GUILayout.Label(GameText.Get(TextKey.SoundSetting)); SoundVolume = GUILayout.HorizontalSlider(SoundVolume, 0, 1);
             }
             if (GUILayout.Button(GameText.Get(showGoals ? TextKey.HideGoals : TextKey.ShowGoals))) showGoals = !showGoals;
