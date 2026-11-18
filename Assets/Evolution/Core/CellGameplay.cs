@@ -5,6 +5,8 @@ namespace Evolution.Core
     public struct EnergyBudget
     {
         public float Start, Substrate, Organic, Light, Prey, Upkeep, Movement, Defense, Stress, Repair, Growth, Attack, Division, Contact, Transport, PredationLoss;
+        // Components of Movement, not additional charges. Boost includes its extra turning cost.
+        public float Swimming, Turning, Boost;
         public float Intake => Substrate + Organic + Light + Prey;
         public float Spent => Upkeep + Movement + Defense + Stress + Repair + Growth + Attack + Division + Contact + PredationLoss;
         public float Net => Intake - Spent + Transport;
@@ -20,7 +22,10 @@ namespace Evolution.Core
         {
             float agility = (2 + c.Genes.Speed + c.Genes.Uptake * .3f) / (c.Genes.Size * (1 + .12f * (members - 1)) * (1 + c.Genes.Membrane * .5f));
             float wanted = Math.Max(-agility, Math.Min(agility, AngleDelta(c.TargetHeading - c.Heading) * 4));
-            c.AngularVelocity += (wanted - c.AngularVelocity) * (1 - (float)Math.Exp(-7 * dt));
+            float change = (wanted - c.AngularVelocity) * (1 - (float)Math.Exp(-7 * dt));
+            // Bounded torque prevents a sudden full-speed turn when input reverses by 180 degrees.
+            float angularAcceleration = agility * 2.5f;
+            c.AngularVelocity += Math.Max(-angularAcceleration * dt, Math.Min(angularAcceleration * dt, change));
             c.Heading = AngleDelta(c.Heading + c.AngularVelocity * dt);
             float blend = 1 - (float)Math.Exp(-4 * dt / (c.Genes.Size * (1 + .08f * (members - 1))));
             c.SwimSpeed += (speed - c.SwimSpeed) * blend;
@@ -30,8 +35,9 @@ namespace Evolution.Core
             c.VelocityZ += (vz - c.VelocityZ) * blend;
             c.X += c.VelocityX * dt; c.Z += c.VelocityZ * dt;
         }
-        public static float Cost(Cell c) => (.07f * c.SwimSpeed * c.SwimSpeed * c.Genes.Size
-            + .025f * Math.Abs(c.AngularVelocity) * c.Genes.Size) * (1 - .3f * c.Genes.EnergyEfficiency) * (c.Boosting ? 1.8f : 1);
+        public static float SwimmingCost(Cell c) => .07f * c.SwimSpeed * c.SwimSpeed * c.Genes.Size * (1 - .3f * c.Genes.EnergyEfficiency);
+        public static float TurningCost(Cell c) => .025f * Math.Abs(c.AngularVelocity) * c.Genes.Size * (1 - .3f * c.Genes.EnergyEfficiency);
+        public static float Cost(Cell c) => (SwimmingCost(c) + TurningCost(c)) * (c.Boosting ? 1.8f : 1);
     }
     public sealed partial class Simulation
     {
@@ -51,7 +57,8 @@ namespace Evolution.Core
             }
             if ((action == CellAction.Attack && (!config.Ecosystem || c.Genes.Predation <= .2f)) ||
                 (action == CellAction.Defend && (!config.Ecosystem || c.Genes.Membrane < .35f))) return ActionBlock.Physiology;
-            if (action != CellAction.Defend && defenseHeld) return ActionBlock.Defending;
+            if (action != CellAction.Defend && defenseHeld && config.Ecosystem && c.Genes.Membrane >= .35f
+                && c.Energy > Biology.Capacity(c.Genes) * .12f) return ActionBlock.Defending;
             return c.Energy > Biology.Capacity(c.Genes) * .12f ? ActionBlock.None : ActionBlock.LowEnergy;
         }
         void PrepareActions()

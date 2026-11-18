@@ -21,7 +21,9 @@ namespace Evolution.Runtime
                 }
             }
             var mesh = new Mesh { name = "Micro cell (low polygon)" };
-            mesh.SetVertices(vertices); mesh.SetNormals(normals); mesh.SetUVs(0, uv); mesh.SetTangents(tangents); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds(); mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1.8f); return mesh;
+            mesh.SetVertices(vertices); mesh.SetNormals(normals); mesh.SetUVs(0, uv); mesh.SetTangents(tangents); mesh.SetTriangles(triangles, 0); mesh.RecalculateBounds();
+            // Includes inherited axial growth plus the largest animated division stretch.
+            mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 3.6f); return mesh;
         }
         public static Mesh Habitat()
         {
