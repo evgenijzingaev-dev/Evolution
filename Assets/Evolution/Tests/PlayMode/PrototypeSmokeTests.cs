@@ -97,6 +97,20 @@ namespace Evolution.Tests
             yield return null;
         }
 
+        [UnityTest]
+        public IEnumerator ControlRoundTripPreservesWorldAndPausedTicks()
+        {
+            runner.IsPaused = true; var world = runner.World; long tick = world.Tick;
+            runner.SelectCell(world.GetCell(0).Id);
+            Assert.IsTrue(runner.PlaySelected()); Assert.IsTrue(runner.IsControlling);
+            Assert.IsTrue(runner.CameraRig.Following);
+            yield return null;
+            Assert.AreEqual(tick, world.Tick); Assert.AreSame(world, runner.World);
+            runner.ObserveWorld(); Assert.IsFalse(runner.IsControlling);
+            Assert.AreSame(world, runner.World); Assert.Greater(runner.SelectedId, 0);
+            runner.PlaySelected(); runner.ResetWorld(); Assert.IsFalse(runner.IsControlling);
+        }
+
         [UnityTearDown]
         public IEnumerator UnloadPrototype()
         {

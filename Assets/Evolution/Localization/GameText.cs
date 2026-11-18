@@ -9,7 +9,7 @@ namespace Evolution.Localization
         DietColors, TemperatureColors, Resume, Pause, TimeScale, Temperature, Regeneration,
         Restart, ZoomIn, ZoomOut, DietLegend, TemperatureLegend, FoodLegend, Extinction, Colonies, Transport, ColonyTraits, FeedingCells,
         MovementCells, DefenseCells, ReproductiveCells, RoleColors, RoleLegend, ColonyHelp, SelectionHelp, ColonyBlueprint,
-        Observe, PopulationShort, TimeShort, Environment, CloseEnvironment, Overview, Focus, Follow, StopFollow, NothingSelected, PickHelp, OrganismTitle, CellIdentity, AgeGeneration, EnergyReserve, Vitality, VitalityHelp, ReproductionReady, ReproductionYoung, ReproductionEnergy, PopulationFull, Genes, HideGenes, GeneMotion, GeneFeeding, GeneTemperature, GeneAdhesion, GeneStructure, GeneRoles, ColonyEnergy, RolesSummary, Generalists, MutationSummary, NoMutations, FounderGenome, ControlHelp, ShortcutHelp, PendingEnvironment, MutationSpeed, MutationSize, MutationUptake, MutationTemperature, MutationDiet, MutationAdhesion, MutationColonySize, MutationBranching, MutationDifferentiation, MutationTransport, MutationPattern, RoleDetail, GeneralistRole, FeedingRole, MovementRole, DefenseRole, ReproductionRole, LegendCompact, RestartConfirm, RestartCancel, RestartWarning, SelectedValue
+        Observe, PopulationShort, TimeShort, Environment, CloseEnvironment, Overview, Focus, Follow, StopFollow, NothingSelected, PickHelp, OrganismTitle, CellIdentity, AgeGeneration, EnergyReserve, Vitality, VitalityHelp, ReproductionReady, ReproductionYoung, ReproductionEnergy, PopulationFull, Genes, HideGenes, GeneMotion, GeneFeeding, GeneTemperature, GeneAdhesion, GeneStructure, GeneRoles, ColonyEnergy, RolesSummary, Generalists, MutationSummary, NoMutations, FounderGenome, ControlHelp, ShortcutHelp, PendingEnvironment, MutationSpeed, MutationSize, MutationUptake, MutationTemperature, MutationDiet, MutationAdhesion, MutationColonySize, MutationBranching, MutationDifferentiation, MutationTransport, MutationPattern, RoleDetail, GeneralistRole, FeedingRole, MovementRole, DefenseRole, ReproductionRole, LegendCompact, RestartConfirm, RestartCancel, RestartWarning, SelectedValue, PlayOrganism, ReturnObserve, ControlledMode, PlayHelp, Divide, PlayChild, LocalEnvironment
     }
 
     // UI uses keys. Future languages supply a separate catalog with the same keys.
@@ -27,6 +27,13 @@ namespace Evolution.Localization
     {
         public static TextCatalog Russian { get; } = new TextCatalog(CultureInfo.GetCultureInfo("ru-RU"),
             new Dictionary<TextKey, string> {
+                [TextKey.PlayOrganism] = "Играть за организм",
+                [TextKey.ReturnObserve] = "Вернуться к наблюдению",
+                [TextKey.ControlledMode] = "Управление организмом",
+                [TextKey.PlayHelp] = "WASD / стрелки — плыть   ·   Пища поглощается автоматически   ·   Деление — кнопка в карточке   ·   Esc — наблюдение",
+                [TextKey.Divide] = "Размножиться",
+                [TextKey.PlayChild] = "Продолжить за потомка",
+                [TextKey.LocalEnvironment] = "Местная температура: {0:F1} °C   ·   течение: {1:F2}",
                 [TextKey.Observe] = "Наблюдение за микромиром",
                 [TextKey.PopulationShort] = "{0} клеток   ·   {1} колоний",
                 [TextKey.TimeShort] = "Время опыта: {0:F1} с",

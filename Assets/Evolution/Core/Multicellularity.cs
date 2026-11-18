@@ -157,11 +157,18 @@ namespace Evolution.Core
                 if (c.Specialization == 0) c.Role = CellRole.Generalist;
             }
         }
-        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng, float time = 0)
+        public void Move(Cell[] cells, int count, SimulationConfig cfg, ref RandomSource rng, float time = 0, int controlledId = 0, float inputX = 0, float inputZ = 0)
         {
+            int controlledRoot = indices.TryGetValue(controlledId, out int controlledIndex) ? root[controlledIndex] : -1;
             for (int i = 0; i < count; i++) if (parent[i] < 0) {
-                cells[i].Heading += rng.Range(-1, 1) * cfg.StepSeconds * 2 / (1 + .15f * (size[i] - 1));
+                float autonomousTurn = rng.Range(-1, 1) * cfg.StepSeconds * 2 / (1 + .15f * (size[i] - 1));
+                if (i != controlledRoot) cells[i].Heading += autonomousTurn;
                 float speed = motors[i] / size[i] / (1 + .09f * (size[i] - 1));
+                if (i == controlledRoot) {
+                    float throttle = (float)Math.Sqrt(inputX * inputX + inputZ * inputZ);
+                    if (throttle > 0) cells[i].Heading = (float)Math.Atan2(inputZ, inputX);
+                    speed *= Math.Min(1, throttle);
+                }
                 cells[i].X = Wrap(cells[i].X + (float)Math.Cos(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
                 cells[i].Z = Wrap(cells[i].Z + (float)Math.Sin(cells[i].Heading) * speed * cfg.StepSeconds, cfg.WorldSize);
                 if (cfg.OceanZones) {

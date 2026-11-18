@@ -51,7 +51,7 @@ namespace Evolution.Runtime
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.Width(470));
             GUILayout.Label(GameText.Get(TextKey.Title), titleStyle);
-            GUILayout.Label(GameText.Get(TextKey.Observe), hintStyle);
+            GUILayout.Label(GameText.Get(IsControlling ? TextKey.ControlledMode : TextKey.Observe), hintStyle);
             GUILayout.EndVertical();
             GUILayout.FlexibleSpace();
             GUILayout.Label(GameText.Format(TextKey.TimeShort, simulation.Tick * activeSettings.StepSeconds), GUILayout.Width(200));
@@ -61,7 +61,7 @@ namespace Evolution.Runtime
                 if (GUILayout.Button(GameText.Format(TextKey.TimeScale, value), GUILayout.Width(62))) speed = value;
             }
             GUI.backgroundColor = Color.white;
-            if (GUILayout.Button(GameText.Get(TextKey.Overview), GUILayout.Width(170))) rig.Overview();
+            if (GUILayout.Button(GameText.Get(TextKey.Overview), GUILayout.Width(170))) { ObserveWorld(); rig.Overview(); }
             GUILayout.EndHorizontal(); GUILayout.EndArea();
             GUILayout.BeginArea(LeftPanel, panelStyle);
             environmentScroll = GUILayout.BeginScrollView(environmentScroll);
@@ -83,7 +83,7 @@ namespace Evolution.Runtime
             }
             GUILayout.EndScrollView(); GUILayout.EndArea();
             GUILayout.BeginArea(BottomPanel, panelStyle);
-            GUILayout.Label(GameText.Get(TextKey.ControlHelp), hintStyle);
+            GUILayout.Label(GameText.Get(IsControlling ? TextKey.PlayHelp : TextKey.ControlHelp), hintStyle);
             GUILayout.Label(GameText.Get(TextKey.ShortcutHelp), hintStyle);
             GUILayout.EndArea(); GUI.matrix = oldMatrix; GUI.skin = oldSkin;
         }
@@ -127,6 +127,15 @@ namespace Evolution.Runtime
             if (GUILayout.Button(GameText.Get(TextKey.Focus))) FocusSelected(false);
             if (GUILayout.Button(GameText.Get(rig.Following ? TextKey.StopFollow : TextKey.Follow))) { if (rig.Following) rig.StopFollowing(); else FocusSelected(true); }
             GUILayout.EndHorizontal();
+            if (IsControlling) {
+                if (GUILayout.Button(GameText.Get(TextKey.ReturnObserve))) ObserveWorld();
+                bool wasEnabled = GUI.enabled; GUI.enabled = !paused && Biology.CanDivide(c) && simulation.Count < activeSettings.Capacity;
+                if (GUILayout.Button(GameText.Get(TextKey.Divide))) simulation.RequestDivision();
+                GUI.enabled = wasEnabled;
+            } else if (GUILayout.Button(GameText.Get(TextKey.PlayOrganism))) PlaySelected();
+            if (simulation.LastDivisionParentId == c.Id && Observation.TryFind(simulation, simulation.LastOffspringId, out _)) {
+                if (GUILayout.Button(GameText.Get(TextKey.PlayChild))) PlayOffspring();
+            }
             GUILayout.Label(GameText.Format(TextKey.ColonyEnergy, energy, capacity));
             GUILayout.Label(GameText.Format(TextKey.RolesSummary, feeding, moving, defense, reproduction));
             GUILayout.Label(GameText.Format(TextKey.Generalists, generalists));
@@ -135,6 +144,8 @@ namespace Evolution.Runtime
             GUILayout.Label(GameText.Format(TextKey.AgeGeneration, c.Age, c.Generation));
             GUILayout.Label(GameText.Format(TextKey.RoleDetail, GameText.Get(RoleKeys[(int)c.Role]), c.Specialization));
             GUILayout.Label(GameText.Format(TextKey.EnergyReserve, c.Energy, Biology.Capacity(c.Genes)));
+            var local = simulation.EnvironmentAt(c.X,c.Z);
+            GUILayout.Label(GameText.Format(TextKey.LocalEnvironment, local.Temperature, new Vector2(local.CurrentX,local.CurrentZ).magnitude));
             GUILayout.Label(GameText.Format(TextKey.Vitality, Mathf.Clamp01(c.Energy / Biology.Capacity(c.Genes))));
             GUILayout.Label(GameText.Get(TextKey.VitalityHelp), hintStyle);
             if (simulation.Count >= activeSettings.Capacity) GUILayout.Label(GameText.Get(TextKey.PopulationFull));

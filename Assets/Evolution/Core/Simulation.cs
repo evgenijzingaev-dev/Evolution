@@ -35,7 +35,7 @@ namespace Evolution.Core
         public CellRole Role;
     }
     // Dense storage, stable iteration and deferred births. No engine references or per-cell objects.
-    public sealed class Simulation
+    public sealed partial class Simulation
     {
         readonly SimulationConfig config;
         readonly Cell[] cells;
@@ -96,7 +96,7 @@ namespace Evolution.Core
         }
         public void Step()
         {
-            float dt = config.StepSeconds;
+            float dt = config.StepSeconds; bool divide = divisionRequested; divisionRequested = false;
             for (int i = 0; i < nutrients.Length; i++) {
                 nutrients[i] = Math.Min(config.NutrientCapacity, nutrients[i] + NutrientRegeneration * SampleTile(i).Fertility * dt);
                 // Decay dissipates energy; it does not create another energy-bearing resource.
@@ -105,7 +105,7 @@ namespace Evolution.Core
             colonies.Prepare(cells, Count, config);
             colonies.Contact(cells, Count, config, ref random);
             colonies.Prepare(cells, Count, config);
-            colonies.Move(cells, Count, config, ref random, Tick * dt);
+            colonies.Move(cells, Count, config, ref random, Tick * dt, ControlledId, controlX, controlZ);
             // Feed and pay upkeep first, then transport can rescue a hungry living neighbour.
             for (int i = 0; i < Count; i++) {
                 Cell c = cells[i]; c.Age += dt;
@@ -125,13 +125,14 @@ namespace Evolution.Core
                 if (c.Energy <= 0 || c.Age >= config.MaxAge) {
                     pendingRemains[tile] += Biology.CarcassEnergy(c); Deaths++; continue;
                 }
-                if (Biology.CanDivide(c) && originalCount + births < cells.Length) {
+                if ((c.Id != ControlledId || divide) && Biology.CanDivide(c) && originalCount + births < cells.Length) {
                     Cell child = new Cell { ParentId = c.Id, Generation = c.Generation + 1,
                         Genes = c.Genes.Inherit(ref random, config.MutationProbability, config.MutationStrength),
                         X = Wrap(c.X + .3f), Z = c.Z, Heading = random.Range(0, 6.283185f) };
                     if (Biology.TryDivide(ref c, ref child)) {
                         child.BirthMutationMask = Observation.MutationMask(c.Genes, child.Genes);
                         child.Id = ++nextId;
+                        if (c.Id == ControlledId) { LastOffspringId = child.Id; LastDivisionParentId = c.Id; LastDivisionTick = Tick + 1; }
                         colonies.Retain(ref c, ref child, i, config, ref random);
                         cells[originalCount + births++] = child; Births++;
                     }
@@ -146,6 +147,7 @@ namespace Evolution.Core
             Count = survivors + births;
             colonies.Prepare(cells, Count, config);
             colonies.Layout(cells, Count, config.WorldSize); Tick++;
+            if (ControlledId != 0 && !Observation.TryFind(this, ControlledId, out _)) ReleaseControl();
         }
         OceanSample SampleTile(int i) => EnvironmentAt((i % config.GridSize + .5f) * config.WorldSize / config.GridSize,
             (i / config.GridSize + .5f) * config.WorldSize / config.GridSize);
