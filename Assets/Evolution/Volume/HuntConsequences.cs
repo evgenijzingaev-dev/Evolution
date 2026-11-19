@@ -37,13 +37,18 @@ namespace Evolution.Volume
                 hunted[key] = huntedRegion;
             }
             string warning = null;
-            foreach (var pair in hunted) {
-                if (!survey.TryRegion(pair.Key, out var region) || !region.Loaded) continue;
-                var huntedRegion = pair.Value;
+            // Mono (Unity) invalidates a Dictionary enumerator even when an existing
+            // key is overwritten in place, so walk a snapshot of the keys and write
+            // each entry after reading it.
+            var tracked = new ChunkKey[hunted.Count];
+            hunted.Keys.CopyTo(tracked, 0);
+            foreach (var key in tracked) {
+                if (!survey.TryRegion(key, out var region) || !region.Loaded) continue;
+                var huntedRegion = hunted[key];
                 if (Depleted(huntedRegion.Baseline, region.Living)) huntedRegion.Warned = true;
                 else if (Recovered(huntedRegion.Baseline, region.Living)) huntedRegion.Warned = false;
-                hunted[pair.Key] = huntedRegion;
-                if (huntedRegion.Warned && warning == null) warning = WarningText(pair.Key);
+                hunted[key] = huntedRegion;
+                if (huntedRegion.Warned && warning == null) warning = WarningText(key);
             }
             Warning = warning;
             return warning != null;
