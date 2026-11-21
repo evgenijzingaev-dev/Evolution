@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101b2d">
+  <meta name="theme-color" content="#090e14">
   <meta name="description" content="Дом №13 — атмосферная детективная игра на телефон с пятью делами, жильцами и последствиями решений.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <title>Дом №13 — Ночная смена</title>
+  <title>Дом №13 — Тёмные окна</title>
   <style>
     .chapter-dots{display:flex;gap:6px;margin:14px 0 0}.chapter-dot{height:5px;flex:1;border-radius:9px;background:#414962}.chapter-dot.done{background:#83e9cf}.chapter-dot.current{background:#ffcf8b;box-shadow:0 0 12px #ffcf8b50}.achievement-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.achievement{min-height:65px;border-radius:11px;background:#242941;border:1px solid #393e5e;padding:9px;opacity:.6}.achievement.unlocked{opacity:1;border-color:#86d9c4;background:#283c47}.achievement b{font-size:11px;display:block}.achievement small{font-size:10px;display:block;color:#b3bcd1;margin-top:5px}.lore{border:1px solid #38405d;border-radius:11px;background:#181d33;padding:12px 14px;font-size:11px;color:#adb8d6;margin-top:12px}.nav-btn{min-height:49px}.action{min-height:58px}body[data-chapter="4"] .room.home{box-shadow:inset 0 0 18px #b9a2ff32} 
 
@@ -28,12 +28,13 @@
     dialog{border:none;background:transparent;padding:0;max-height:100dvh;max-width:none;width:100%;margin:0;position:fixed;left:0;bottom:0;top:auto;color:var(--ink)}dialog::backdrop{background:#050814b5;backdrop-filter:blur(5px)}.sheet{max-width:510px;margin:auto;background:#20253e;border:1px solid #515778;border-bottom:0;border-radius:24px 24px 0 0;padding:17px 17px calc(20px + env(safe-area-inset-bottom));max-height:86dvh;overflow-y:auto;box-shadow:0 -17px 60px #0009}.sheet-handle{width:36px;height:4px;background:#777c9a;border-radius:3px;margin:0 auto 18px}.sheet-title-row{display:flex;gap:12px;align-items:center;margin-bottom:14px}.sheet-icon{width:48px;height:48px;border-radius:14px;background:#3b405e;display:grid;place-items:center;font-size:30px}.sheet-title{font-size:21px;font-weight:900;margin:0;letter-spacing:-.5px}.sheet-sub{font-size:12px;color:var(--muted);margin:4px 0 0}.sheet-close{margin-left:auto;background:#313854;border:1px solid #4a5675;width:32px;height:32px;border-radius:9px;flex-shrink:0}.sheet-copy{font-size:13px;color:#d1d4e4;line-height:1.65;margin:8px 0 14px}.actions{display:grid;gap:9px}.action{padding:12px 13px;border-radius:13px;background:#303752;border:1px solid #535d7d;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:10px}.action strong{font-size:13px;display:block}.action small{display:block;margin-top:4px;color:#afb9d2;font-size:11px;line-height:1.3}.action-cost{font-size:11px;font-weight:800;flex-shrink:0;color:var(--yellow)}.action.primary{background:#e5b979;border-color:#e5b979;color:#222139}.action.primary small,.action.primary .action-cost{color:#4f4560}.action.danger{background:#614050;border-color:#945a6b}.pill{border:1px solid #545c7a;border-radius:999px;display:inline-block;padding:5px 8px;color:#cbd3e7;font-size:11px;margin:0 5px 5px 0}.clue{background:#303650;padding:11px 12px;border-radius:12px;border-left:3px solid var(--yellow);margin:8px 0}.clue b{display:block;font-size:12px;margin-bottom:5px}.clue p{font-size:12px;color:#bfc8dd;line-height:1.5;margin:0}.empty{color:var(--muted);font-size:13px;line-height:1.6;padding:15px 5px}.toast{z-index:25;pointer-events:none;position:fixed;top:18px;left:50%;transform:translate(-50%,-15px);width:min(calc(100% - 36px),440px);padding:12px 14px;background:#f6e4b8;color:#24283a;font-weight:800;font-size:12px;border-radius:14px;box-shadow:0 10px 40px #0008;opacity:0;transition:opacity .2s,transform .2s}.toast.show{opacity:1;transform:translate(-50%,0)}.event{color:var(--mint);font-weight:800}.final-score{text-align:center;font-size:48px;margin:12px 0}.foot{font-size:10px;color:#7e87a5;text-align:center;padding-top:16px}.muted{color:var(--muted)}@keyframes flicker{0%,94%,98%,100%{filter:brightness(1)}95%{filter:brightness(.65)}96%{filter:brightness(1.2)}97%{filter:brightness(.55)}}@media(min-width:650px){.app{border-left:1px solid #2b314d;border-right:1px solid #2b314d}.sheet{border-left:1px solid #515778;border-right:1px solid #515778}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
   </style>
   <link rel="stylesheet" href="./vibe.css">
+  <link rel="stylesheet" href="./noir.css">
 </head>
 <body>
   <div class="app">
     <div class="sky"></div>
     <header class="top">
-      <div><div class="eyebrow" id="campaign">ДЕЛО 1 / 3 · 0 ОЧКОВ</div><h1>ДОМ <span>№13</span></h1><p class="subtitle">У каждого окна — своя тайна.</p></div>
+      <div><div class="eyebrow" id="campaign">НОЧНОЙ АРХИВ · ДЕЛО 1 / 5</div><h1>ДОМ <span>№13</span></h1><p class="subtitle">Не все окна смотрят наружу.</p></div>
       <button class="round-btn" id="help" aria-label="Как играть">?</button>
     </header>
     <div class="chapter-dots" id="chapter-dots" aria-label="Прогресс кампании"></div>
@@ -43,7 +44,7 @@
       <div class="hud-stat"><span>Улики</span><strong id="cluecount">0 <small>/ 6</small></strong></div>
     </div>
     <section class="case" aria-label="Главное дело">
-      <div class="case-top"><div class="case-icon" id="case-icon">⚡</div><div><p class="case-title" id="case-name">Дело №01: Кто гасит свет?</p><p class="case-desc" id="mission">В доме каждую ночь пропадает электричество. Раскрой причину до конца третьего дня.</p></div></div>
+      <div class="case-top"><div class="case-icon" id="case-icon">⚡</div><div><p class="case-title" id="case-name">Дело №01: 22:13</p><p class="case-desc" id="mission">Каждую ночь ровно в 22:13 в доме моргает свет. Узнай, что запускает этот сбой.</p></div></div>
       <div class="progress-label"><span>Улик для выдвижения версии</span><span id="progress-n">0 из 3</span></div><div class="progress"><i id="clueprogress"></i></div>
     </section>
     <div class="section-title"><h2>Жильцы дома</h2><small>Выбери окно</small></div>
@@ -51,18 +52,18 @@
       <div class="district" aria-hidden="true"></div>
       <div class="ambient-light" aria-hidden="true"></div>
       <div class="rain back" aria-hidden="true"></div>
-      <div class="stage-label"><span class="led"></span> НОЧНОЙ ДОЗОР</div>
+      <div class="stage-label"><span class="led"></span> ПРЯМОЕ НАБЛЮДЕНИЕ</div>
       <div class="stage-time" id="stage-time">19:00 · мелкий дождь</div>
       <div class="house-wrap"><div class="roof"></div><div class="house" id="house" aria-label="Дом с шестью квартирами"></div></div>
-      <div class="street"><span>🌲</span><span>ТИХАЯ УЛИЦА · 13</span><span>🚲</span></div>
+      <div class="street"><span>23:13</span><span>ТИХАЯ УЛИЦА · 13</span><span>ПОДЪЕЗД А</span></div>
       <div class="rain" aria-hidden="true"></div>
     </section>
     <section class="mood"><div class="mood-head">Напряжение в доме <span id="tensionlabel">18%</span></div><div class="progress"><i id="tensionbar"></i></div></section>
-    <div class="feed" aria-live="polite"><span class="feed-dot" id="feed-icon">📻</span><p id="feed-text"><strong>Домовой эфир.</strong> Где-то за стеной щёлкает автомат...</p></div>
+    <div class="feed" aria-live="polite"><span class="feed-dot" id="feed-icon">◈</span><p id="feed-text"><strong>Домовой эфир.</strong> Где-то за стеной щёлкает автомат...</p></div>
     <div class="lore" id="lore">В доме ещё немало секретов.</div>
     <div class="foot" id="foot">КАМПАНИЯ · ДОСТИЖЕНИЯ <span id="achievement-count">0</span> · ЛОКАЛЬНОЕ СОХРАНЕНИЕ</div>
   </div>
-  <nav class="nav" aria-label="Основные действия"><button class="nav-btn" id="journal">📓 Журнал <b id="journal-n"></b></button><button class="nav-btn" id="theories">🧩 Версии</button><button class="nav-btn main" id="wait">⏭ След. час</button></nav>
+  <nav class="nav" aria-label="Основные действия"><button class="nav-btn" id="journal">ДОСЬЕ <b id="journal-n"></b></button><button class="nav-btn" id="theories">ВЕРСИИ</button><button class="nav-btn main" id="wait">+1 ЧАС</button></nav>
   <dialog id="modal" aria-label="Игровое меню"><div class="sheet" id="sheet"></div></dialog>
   <div class="toast" id="toast" role="status"></div>
   <script src="./game.js"></script>
