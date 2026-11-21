@@ -319,6 +319,7 @@ const clueConnections=[
   ]
  ];
  const activeConnections=()=>clueConnections[state.chapter];
+ const trustFor=id=>state.trust[id]||0;
  const solvedConnections=()=>activeConnections().filter(link=>state.insights.includes(link.key));
  const linkedClues=link=>link.pair.every(id=>state.clues.includes(id));
  function unlockConnection(link){
@@ -331,7 +332,8 @@ const clueConnections=[
   if(!p||!home(p)||state.focus<1||state.closed){if(p)showPerson(p.id);return}
   const clue=getClues().find(k=>k.resident===id&&k.action==='knock'&&!state.clues.includes(k.id));
   const canChallenge=!!clue&&activeConnections().some(link=>link.pair.includes(clue.id)&&link.pair.some(k=>k!==clue.id&&state.clues.includes(k))&&!state.insights.includes(link.key));
-  const trust=state.trust[id]||0;
+ const wary=trustFor(id)<=-2;
+  const trust=trustFor(id);
   const intro={
    '301':'Кира блокирует экран телефона, но оставляет камеру наготове.',
    '302':'Лев убирает наушники и выключает микрофон. Он слушает только тебя.',
@@ -340,7 +342,7 @@ const clueConnections=[
    '101':'Тамара закрывает старый домовой журнал, придерживая нужную страницу.',
    '102':'Олег ставит у порога сумку курьера. Похоже, он сильно устал.'
   };
-  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения».</div></div><p class="sheet-copy muted">Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с уже найденной уликой':'Сначала найди связанную с этим свидетелем улику','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
+  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения».</div></div><p class="sheet-copy muted">${wary?'Жилец не доверяет тебе и пока не готов делиться показаниями. Спокойный разговор или помощь восстановят контакт.':'Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.'}</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с уже найденной уликой':'Сначала найди связанную с этим свидетелем улику','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
   $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
    if(b.dataset.action==='back')showPerson(id);
    else act(id,'knock',b.dataset.action);
@@ -391,6 +393,7 @@ function tick(){state.hour++;
   if(state.day>3){finish('timeout');return}}
  lifeScene();if(state.tension>=100)finish('panic')}
 function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();return}if(state.closed||state.focus<1)return;const p=residents.find(r=>r.id===id);if(!p)return;const here=home(p);if((type==='knock'||type==='help')&&!here)return;const key=`${state.chapter}-${state.day}-${id}`;if(type==='help'&&state.helped[key])return;
+ const refused=type==='knock'&&(state.trust[id]||0)<=-2;
  state.focus--;state.actions++;let icon={observe:'👀',listen:'👂',knock:'🚪',help:'🤝'}[type];
  const genericHome={
   observe:[`${p.name} задержался у окна и явно чего-то ждёт во дворе.`,`Ты замечаешь в комнате ${p.name} странную мелочь, которая может пригодиться в деле.`],
@@ -416,7 +419,8 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
  }
  if(type==='listen')state.tension=clamp(state.tension+3);
  if(type==='observe')state.tension=clamp(state.tension+1);
- const match=here?getClues().find(k=>k.resident===id&&k.action===type&&!state.clues.includes(k.id)):null;
+ const match=here&&!refused?getClues().find(k=>k.resident===id&&k.action===type&&!state.clues.includes(k.id)):null;
+ if(refused)result=`Беседа · ${p.name} / кв. ${p.id}. «После обвинений я пока не готов делиться записями. Сначала докажи, что тебе можно доверять».`;
  if(match){
   state.clues.push(match.id);
   // The clue is explicitly tied to the apartment selected by the player.
@@ -424,8 +428,8 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   icon='🔎';
  }
  if(type==='knock'&&approach==='direct'){
-  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
-  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+'.';}
+  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&home(residents.find(p=>p.id===k.resident)))||getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
+  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+(lead.action==='knock'&&!home(target)?' после возвращения домой':'')+'.';}
   result='Прямой вопрос · '+result;
  }
  if(type==='knock'&&approach==='challenge'){
