@@ -65,7 +65,7 @@ const cases=[
   ],deduction:'Все нити сходятся сюда: резервное питание, оповещение, ключ и предупреждения — это единая забытая система дома.'}
 ];
 
-function makeState(){return {version:4,chapter:0,day:1,hour:19,focus:4,tension:18,kindness:0,trust:{},clues:[],actions:0,helped:{},log:[{icon:'📻',text:'Началась новая ночная смена в доме №13.'}],history:[],score:0,closed:false,ending:null,pendingEvent:null,eventsSeen:{},sound:false,rainAudio:false,seenTutorial:false,chapterStart:18,achievements:[],lifeEvents:0,choices:[],hints:0,storiesSeen:{}}}
+function makeState(){return {version:4,chapter:0,day:1,hour:19,focus:4,tension:18,kindness:0,trust:{},clues:[],actions:0,helped:{},log:[{icon:'📻',text:'Началась новая ночная смена в доме №13.',kind:'ambient'}],lastAction:{icon:'⌁',text:'Выбери квартиру и действие, чтобы начать расследование.'},ambientEvent:{icon:'◦',text:'За окнами идёт дождь. Дом прислушивается к ночи.'},history:[],score:0,closed:false,ending:null,pendingEvent:null,eventsSeen:{},sound:false,rainAudio:false,seenTutorial:false,chapterStart:18,achievements:[],lifeEvents:0,choices:[],hints:0,storiesSeen:{}}}
 let state;
 try{
  let old=JSON.parse(localStorage.getItem(STORE));
@@ -85,13 +85,22 @@ try{
  if(!state.eventsSeen||typeof state.eventsSeen!=='object')state.eventsSeen={};
  if(!state.helped||typeof state.helped!=='object')state.helped={};
  if(!state.trust||typeof state.trust!=='object')state.trust={};
+ if(!state.lastAction||typeof state.lastAction.text!=='string')state.lastAction=makeState().lastAction;
+ if(!state.ambientEvent||typeof state.ambientEvent.text!=='string')state.ambientEvent=makeState().ambientEvent;
 }catch{state=makeState()}
 let toastTimer, audio, rainLoop, rainGain;
 const modal=$('modal');
 const current=()=>cases[state.chapter];
 const getClues=()=>current().clues.map(c=>({id:c[0],resident:c[1],action:c[2],title:c[3],body:c[4]}));
 const home=p=>p.home(state.hour);
-const addLog=(text,icon='📻')=>{state.log.unshift({text,icon});state.log=state.log.slice(0,30)};
+// Player actions and autonomous neighborhood events must never share a single 'last message' slot.
+// Otherwise lifeScene() can overwrite the reply from the resident the player actually selected.
+const addLog=(text,icon='📻',kind='ambient')=>{
+ const entry={text,icon,kind,chapter:state.chapter,day:state.day,hour:state.hour};
+ state.log.unshift(entry);state.log=state.log.slice(0,40);
+ if(kind==='action')state.lastAction={text,icon};
+ else state.ambientEvent={text,icon};
+};
 const specialEvents=[
  ['⚡ Щелчок в 22:13','Свет погас ровно на секунду. В подвале оживает забытое устройство; Виктор зовёт на помощь, Кира уже снимает видео. Кому ты доверишься?',
   ['🤝 Помочь Виктору','Разгрузить щит и снизить тревогу','protect'],['📱 Снять происходящее','Получить общественное внимание, но напугать соседей','expose']],
@@ -119,6 +128,51 @@ const stories={
  '202':'Виктор впервые смеётся: «Гайку затянуть проще, чем попросить помощи».',
  '101':'Тамара вспоминает первого смотрителя: он всегда оставлял свет в подъезде для тех, кто поздно возвращался.',
  '102':'Олег рассказывает, как соседи однажды спасли его из застрявшего лифта.'
+};
+// Individual dialogue for each resident, one line per case. No random cross-resident substitutions.
+const interviews={
+ '301':[
+  'Кира убирает телефон: «В 22:13 у подвальной решётки вспыхивает свет. У меня даже есть кадр».',
+  'Кира: «Человек в капюшоне забрал только одну коробку. Остальные вообще не трогал».',
+  'Кира: «Я сравнила записи. Голос звучит с одинаковыми паузами — это точно не живой разговор».',
+  'Кира: «Сняла папку со старыми письмами. Кто-то очень хотел, чтобы их нашли».',
+  'Кира: «Снимок кладки странный. Дверь не исчезла — её просто спрятали».'
+ ],
+ '302':[
+  'Лев снимает наушники: «Свет гаснет, а мой рекордер успевает записать короткий гул. Хочешь послушать?»',
+  'Лев: «Камера подъезда уловила шорох кассеты в той коробке. Это точно не обычная доставка».',
+  'Лев: «Запись повторяется бит в бит. И список квартир обрывается на 302 — на моей».',
+  'Лев: «На кассете имя будто вырезали. Я различаю только слово “смотритель”».',
+  'Лев: «За дверью слышен один металлический щелчок. Совсем как ключ в старом замке». '
+ ],
+ '201':[
+  'Майя приглушает музыку: «Сначала щелчок, потом тишина на одну секунду. Я слышу это каждый вечер».',
+  'Майя: «Под лестницей катили что-то тяжёлое. Колёса дважды зацепились за порог».',
+  'Майя: «Этот голос не дышит между словами. Он звучит как старая магнитная запись».',
+  'Майя: «Я запомнила строку с кассеты: не открывать нулевую дверь в одиночку».',
+  'Майя: «Мотор за стеной стучит тем же ритмом, что и щит в первую ночь». '
+ ],
+ '202':[
+  'Виктор вытаскивает сложенный чертёж: «Не трогай щит. Тут есть отдельный контур — “Линия 13”».',
+  'Виктор: «На той коробке была бирка с нулём. Я видел старый ключ внутри».',
+  'Виктор: «К чердаку от резервного питания идёт отдельный провод. Его давно никто не обслуживал».',
+  'Виктор: «Почерк на письме такой же, как на старой схеме подвала».',
+  'Виктор: «За стеной резервная шина. Это не просто заколоченная кладовка». '
+ ],
+ '101':[
+  'Тамара раскрывает журнал: «Записывала отключения. Все до единого — в 22:13».',
+  'Тамара: «Посылка была адресована не человеку, а “смотрителю”. Так раньше писали в этом доме».',
+  'Тамара: «В описи за прошлый век значится чердачное оповещение. Я думала, его демонтировали».',
+  'Тамара тихо говорит: «Первый смотритель оставил предупреждение. Мы слишком поздно его прочли».',
+  'Тамара: «На старом плане подвала есть помещение ноль. Его нет ни в одном новом документе». '
+ ],
+ '102':[
+  'Олег снимает мокрую куртку: «У двери подвала свежая копоть. Я прошёл там после последнего заказа».',
+  'Олег: «Я доставил все коробки. Но одну перевязали старым шпагатом, не упаковочной лентой».',
+  'Олег: «На чердаке под балкой есть решётка динамика. Её закрасили вместе со стеной».',
+  'Олег: «Письма новые на ощупь, а печати на них старые. Это точно копии».',
+  'Олег: «Под штукатуркой стрелка аварийного выхода. Кто-то намеренно закрасил её». '
+ ]
 };
 const achievementsCatalog=[
  ['first','🔎 Первый след','Найти первую улику'],
@@ -233,7 +287,10 @@ function render(){evaluateAchievements();const c=current();$('time').innerHTML=`
    btn.setAttribute('aria-label',`${p.name}, квартира ${p.id}, ${here?'дома':'нет дома'}`);
    btn.innerHTML=`<span class="room-badge ${found?'discovered':''}">${found?'★ УЛИКА':p.id}</span><span class="window-view"><span class="curtain left"></span><span class="curtain right"></span><span class="window-cross"></span><span class="window-lights">•••</span><span class="room-furniture"><span class="frame"></span><span class="shelf"></span><span class="plant"></span><span class="lamp"></span></span>${here?`<span class="avatar">${residentArt(p)}</span>`:'<span class="room-empty" aria-hidden="true"></span>'}</span><span class="room-info"><b>${p.name}</b><em>${here?(state.hour===23?'● не спит':'● дома'):'○ нет дома'}</em></span>`;
    btn.addEventListener('click',()=>state.closed?showEnding():showPerson(p.id));rooms.append(btn)}block.append(rooms);house.append(block)}
- const recent=state.log[0]||{icon:'📻',text:'Тишина.'};$('feed-icon').textContent='◈';$('feed-text').textContent=recent.text;
+ const selected=state.lastAction||makeState().lastAction;
+ $('feed-icon').textContent=selected.icon||'⌁';$('feed-text').textContent=selected.text;
+ $('ambient-icon').textContent=(state.ambientEvent||{}).icon||'◦';
+ $('ambient-text').textContent=(state.ambientEvent||makeState().ambientEvent).text;
  $('foot').textContent=`КАМПАНИЯ · ${state.history.length} ДЕЛ · ${state.achievements.length} ДОСТИЖЕНИЙ · СОХРАНЕНО`;save()}
 function showPerson(id){if(state.pendingEvent){showEvent();return}const p=residents.find(r=>r.id===id);if(!p)return;const here=home(p),can=state.focus>0&&!state.closed;const helped=!!state.helped[`${state.chapter}-${state.day}-${id}`],tr=state.trust[id]||0;
  const observeTitle=here?'👀 Наблюдать':'🚪 Осмотреть дверь';
@@ -256,7 +313,7 @@ function act(id,type){if(state.pendingEvent){showEvent();return}if(state.closed|
  const genericHome={
   observe:[`${p.name} задержался у окна и явно чего-то ждёт во дворе.`,`Ты замечаешь в комнате ${p.name} странную мелочь, которая может пригодиться в деле.`],
   listen:[`Из квартиры доносится приглушённый разговор и шорох шагов.`,`За стеной слышно, как ${p.name} реагирует на происходящее в доме.`],
-  knock:[`${p.name} внимательно выслушивает тебя и нехотя делится тем, что заметил.`,`Разговор проходит напряжённо, но ты всё же вытягиваешь важные детали.`],
+  knock:[`Беседа · ${p.name} / кв. ${p.id}. ${interviews[id][state.chapter]}`],
   help:[`Ты помог жильцу ${p.name} с мелкой проблемой. Доверие заметно выросло.`]
  };
  const genericAway={
@@ -271,9 +328,17 @@ function act(id,type){if(state.pendingEvent){showEvent();return}if(state.closed|
  if(type==='listen')state.tension=clamp(state.tension+3);
  if(type==='observe')state.tension=clamp(state.tension+1);
  const match=here?getClues().find(k=>k.resident===id&&k.action===type&&!state.clues.includes(k.id)):null;
- if(match){state.clues.push(match.id);result=`Улика «${match.title}»: ${match.body}`;icon='🔎'}
- addLog(result,icon);tick();closeModal();render();if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify(match?`🔎 Улика: ${match.title}`:type==='help'?'💛 Доверие выросло':`+1 час · ${p.name}`)}
-function waitHour(){if(state.pendingEvent){showEvent();return}if(state.closed){showEnding();return}state.focus=clamp(state.focus+2,0,4);addLog('Ты отдыхаешь, сортируешь записи и восстанавливаешь внимание.','☕');tick();render();if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('☕ +2 внимания · +1 час')}
+ if(match){
+  state.clues.push(match.id);
+  // The clue is explicitly tied to the apartment selected by the player.
+  result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${match.body}`;
+  icon='🔎';
+ }
+ addLog(result,icon,'action');
+ tick();closeModal();render();
+ if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}
+ notify(match?`🔎 ${p.name}: ${match.title}`:type==='help'?`💛 ${p.name}: доверие выросло`:type==='knock'?`💬 ${p.name}: разговор завершён`:`+1 час · кв. ${p.id}`)}
+function waitHour(){if(state.pendingEvent){showEvent();return}if(state.closed){showEnding();return}state.focus=clamp(state.focus+2,0,4);addLog('Ты отдыхаешь, сортируешь записи и восстанавливаешь внимание.','☕','action');tick();render();if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('☕ +2 внимания · +1 час')}
 function showEvent(){const e=state.pendingEvent;if(!e||state.closed)return;
  if(e==='special'){
   const data=specialEvents[state.chapter];
@@ -284,13 +349,13 @@ function showEvent(){const e=state.pendingEvent;if(!e||state.closed)return;
 function chooseEvent(ch){if(!state.pendingEvent)return;const e=state.pendingEvent;state.pendingEvent=null;
  if(e==='special'){
   state.choices.push({chapter:state.chapter,action:ch});
-  if(ch==='protect'){state.tension=clamp(state.tension-10);state.kindness++;const p=residents[state.chapter%residents.length];state.trust[p.id]=clamp((state.trust[p.id]||0)+1,-2,4);addLog('Ты помог соседям договориться. В доме стало немного спокойнее.','💛')}
-  else{state.tension=clamp(state.tension+12);addLog('История разлетелась по домовому чату, но теперь все нервничают.','📢')}
+  if(ch==='protect'){state.tension=clamp(state.tension-10);state.kindness++;const p=residents[state.chapter%residents.length];state.trust[p.id]=clamp((state.trust[p.id]||0)+1,-2,4);addLog('Ты помог соседям договориться. В доме стало немного спокойнее.','💛','action')}
+  else{state.tension=clamp(state.tension+12);addLog('История разлетелась по домовому чату, но теперь все нервничают.','📢','action')}
  }
- if(ch==='calm'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-14);addLog('Ты вывел соседей из темноты и успокоил их.','🤝')}
- if(ch==='inspect'){state.tension=clamp(state.tension+5);addLog(`Подсказка: присмотрись к уликам в квартирах ${current().clues[0][1]} и ${current().clues[3][1]}.`,'🔍')}
- if(ch==='talk'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-12);state.kindness++;addLog('Соседи наконец выслушали друг друга.','💛')}
- if(ch==='notes'){state.tension=clamp(state.tension+3);addLog(`Подсказка: поговори с ${residents.find(r=>r.id===current().clues[3][1]).name} и проверь записи соседей.`,'📋')}
+ if(ch==='calm'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-14);addLog('Ты вывел соседей из темноты и успокоил их.','🤝','action')}
+ if(ch==='inspect'){state.tension=clamp(state.tension+5);addLog(`Подсказка: присмотрись к уликам в квартирах ${current().clues[0][1]} и ${current().clues[3][1]}.`,'🔍','action')}
+ if(ch==='talk'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-12);state.kindness++;addLog('Соседи наконец выслушали друг друга.','💛','action')}
+ if(ch==='notes'){state.tension=clamp(state.tension+3);addLog(`Подсказка: поговори с ${residents.find(r=>r.id===current().clues[3][1]).name} и проверь записи соседей.`,'📋','action')}
  closeModal();render();notify('Решение повлияло на дом')}
 function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||state.focus<=0){notify('Нужно внимание: отдохни один час');return}
  if(state.hints>=2){notify('В этом деле уже получены две подсказки');return}
@@ -299,7 +364,7 @@ function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||st
  const candidate=pending.find(k=>home(residents.find(r=>r.id===k.resident))&&k.action==='knock')||pending.find(k=>home(residents.find(r=>r.id===k.resident)))||pending[0];
  const p=residents.find(r=>r.id===candidate.resident);
  state.hints++;state.focus--;state.tension=clamp(state.tension+4);state.actions++;
- addLog(`Запись в досье: ${p.name} (кв. ${p.id}) может помочь. ${!home(p)?'Пока жильца нет, дождись возвращения. ':''}Попробуй: ${candidate.action==='knock'?'поговорить':candidate.action==='observe'?'наблюдать': 'прислушаться к звукам'}.`,'◈');
+ addLog(`Запись в досье: ${p.name} (кв. ${p.id}) может помочь. ${!home(p)?'Пока жильца нет, дождись возвращения. ':''}Попробуй: ${candidate.action==='knock'?'поговорить':candidate.action==='observe'?'наблюдать': 'прислушаться к звукам'}.`,'◈','action');
  tick();closeModal();render();
  if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('💡 Новая подсказка в журнале')
 }
@@ -340,11 +405,11 @@ function showEnding(){if(!state.closed)return;const h=state.history[state.histor
  const endingText=h.win?`${c.reveal} Ты успел разобраться и сохранить доверие соседей.`:`Твоя версия не выдержала проверки. В доме остались нестыковки и противоречивые свидетельства. Придётся двигаться дальше, так и не узнав всю правду об этом деле.`;
  const conclusion=last?`<div class="clue"><b>КАМПАНИЯ ПРОЙДЕНА · ${state.score} ОЧКОВ</b><p>Разгадано дел: ${state.history.filter(v=>v.win).length}/${cases.length} · Добрых дел: ${state.kindness}<br>${state.history.every(v=>v.win)?'🏅 Ты раскрыл главную тайну дома №13!':'История дома не завершилась идеально — попробуй другие решения.'}<br>${state.choices.filter(v=>v.action==='protect').length>=3?'Соседи доверяют тебе: дом снова стал одной семьёй.':'Секреты раскрыты, но соседям ещё предстоит научиться доверять друг другу.'}</p></div>`:'';
  openModal(`${heading(h.win?'🏆':'📜',title,`Дело ${state.chapter+1}/${cases.length} · +${h.earned} очков`)}<div class="final-score">${h.brilliant?'🌟':h.win?'🎉':'🌧'}</div><p class="sheet-copy">${endingText}</p><div class="clue"><b>Результат дела</b><p>Улики: ${h.clues}/6 · ${h.supported?'Доказательство подтверждено':'Аргумент не подтверждён'} · Добрые дела: ${state.kindness}<br>Напряжение: ${h.tension}% · Начислено: ${h.earned}</p></div>${conclusion}<div class="actions">${last?actionButton('🔄 Новая кампания','Начать все пять дел сначала','again','ИГРАТЬ',false,'primary'):actionButton('➡️ Следующее дело','Продолжить историю жильцов','next','ПРОДОЛЖИТЬ',false,'primary')}</div>`);
- $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.helped={};state.hints=0;state.closed=false;state.ending=null;state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование.`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
+ $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.helped={};state.hints=0;state.closed=false;state.ending=null;state.lastAction={icon:'⌁',text:'Новое дело. Выбери квартиру и начни расследование.'};state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование.`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
 function showHelp(){if(state.pendingEvent){showEvent();return}state.seenTutorial=true;save();openModal(`${heading('🏢','Добро пожаловать','Дом №13 · Пять ночных дел')}<p class="sheet-copy">Ты — ночной смотритель странного дома. В нём повторяется время 22:13, исчезает особая посылка, с чердака говорит металлический голос, а прошлое самого дома возвращается через письма и скрытую комнату №0.</p><div class="clue"><b>Как играть</b><p>1. Нажимай на квартиры и выбирай действия.<br>2. Собирай хотя бы 3 из 6 улик для каждого дела.<br>3. Если жильца нет дома, можно проверить пустую квартиру, но показания он даст после возвращения. Каждое действие стоит 1 внимание и 1 час.<br>4. Кнопка «След. час» восстанавливает 2 внимания.<br>5. Помогай жильцам и принимай решения в событиях.<br>6. На доске улик выбери версию и подтверждающее доказательство до конца третьей ночи. Решение повлияет на общий счёт. Все пять дел связаны между собой и ведут к одной большой тайне.</p></div><p class="sheet-copy">Прогресс сохраняется на этом телефоне. Помогай жильцам, находи личные истории и открывай достижения. В журнале доступны подсказки и настройки звука.</p><div class="actions">${actionButton('Начать игру','Открыть дом','start','ВПЕРЁД',false,'primary')}</div>`);$('sheet').querySelector('[data-action="start"]').addEventListener('click',closeModal)}
 $('help').addEventListener('click',showHelp);$('journal').addEventListener('click',showJournal);$('theories').addEventListener('click',showTheories);$('wait').addEventListener('click',waitHour);
 modal.addEventListener('cancel',e=>{if(state.pendingEvent){e.preventDefault();notify('Сначала выбери действие')}});
 modal.addEventListener('click',e=>{if(e.target===modal){if(state.pendingEvent){notify('Сначала выбери решение')}else closeModal()}});
 render();if(state.closed)showEnding();else if(state.pendingEvent)showEvent();else if(!state.seenTutorial)showHelp();
-window.__dom13={getState:()=>JSON.parse(JSON.stringify(state)),reset:()=>{state=makeState();state.seenTutorial=true;closeModal();render()},act,waitHour,showTheories,showEnding,chooseEvent,showJournal,askHint};
+window.__dom13={getState:()=>JSON.parse(JSON.stringify(state)),showPerson,reset:()=>{state=makeState();state.seenTutorial=true;closeModal();render()},act,waitHour,showTheories,showEnding,chooseEvent,showJournal,askHint};
 })();

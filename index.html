@@ -59,7 +59,12 @@
       <div class="rain" aria-hidden="true"></div>
     </section>
     <section class="mood"><div class="mood-head">Напряжение в доме <span id="tensionlabel">18%</span></div><div class="progress"><i id="tensionbar"></i></div></section>
-    <div class="feed" aria-live="polite"><span class="feed-dot" id="feed-icon">◈</span><p id="feed-text"><strong>Домовой эфир.</strong> Где-то за стеной щёлкает автомат...</p></div>
+    <section class="investigation-updates" aria-label="Результаты и события">
+      <div class="update-label">ТВОЁ ПОСЛЕДНЕЕ ДЕЙСТВИЕ</div>
+      <div class="feed" aria-live="polite" aria-atomic="true"><span class="feed-dot" id="feed-icon">⌁</span><p id="feed-text">Выбери квартиру и действие, чтобы начать расследование.</p></div>
+      <div class="update-label secondary">В ЭТО ВРЕМЯ В ДОМЕ</div>
+      <div class="feed ambient-feed"><span class="feed-dot" id="ambient-icon">◦</span><p id="ambient-text">За окнами идёт дождь. Дом прислушивается к ночи.</p></div>
+    </section>
     <div class="lore" id="lore">В доме ещё немало секретов.</div>
     <div class="foot" id="foot">КАМПАНИЯ · ДОСТИЖЕНИЯ <span id="achievement-count">0</span> · ЛОКАЛЬНОЕ СОХРАНЕНИЕ</div>
   </div>

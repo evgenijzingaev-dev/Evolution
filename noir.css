@@ -141,3 +141,11 @@ body[data-night="quiet"] .rain{opacity:.17}
 body[data-chapter="4"] .case{border-left-color:#c07769}
 @media(max-width:359px){.house-stage{padding:38px 12px 6px}.room{min-height:105px}.room-info b{font-size:11px}.room-info em{font-size:8px}.stage-time{font-size:9px}.case-desc{max-width:95%}.sheet{padding-left:13px;padding-right:13px}}
 @media(prefers-reduced-motion:reduce){.rain,.avatar,.room.window-flash .window-view,.stage-label .led{animation:none!important}}
+
+/* Separate player feedback from autonomous world activity; never impersonate the selected resident. */
+.investigation-updates{margin-top:13px}
+.update-label{margin:13px 3px 7px;font-size:10px;letter-spacing:1.8px;color:#d0b18a;font-weight:700}
+.update-label.secondary{color:#7e948f}
+.investigation-updates .feed{margin-top:0;min-height:62px}
+.ambient-feed{opacity:.78;background:#111a1e!important;border-color:#2e4143!important;box-shadow:none!important}
+.ambient-feed p{font-size:11px!important;color:#aab8b5!important}
