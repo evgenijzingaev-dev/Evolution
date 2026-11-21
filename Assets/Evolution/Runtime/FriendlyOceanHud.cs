@@ -384,7 +384,7 @@ namespace Evolution.Runtime
             if(Action(new Rect(r.x+104,r.y,cell,76),1,"Питание","Подсветить подходящую пищу. Усвоение автоматическое внутри облака",water.FindFood)){water.FindFood=!water.FindFood;}
             bool canAttack=readout.Alive&&water.World.Controlled>=0&&water.World.Get(water.SelectedIndex).Biology.Genes.Predation>.2f&&water.World.Get(water.SelectedIndex).Biology.Energy>.5f;
             string why=!readout.Alive?"Выбери живую клетку":water.World.Controlled<0?"Сначала возьми управление":water.World.Get(water.SelectedIndex).Biology.Genes.Predation<=.2f?"Эта способность отсутствует":"Недостаточно энергии";
-            if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Разрешить укусы в пределах досягаемости. Также можно удерживать Space":why,AttackRequested,canAttack))AttackRequested=!AttackRequested;
+            if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Атака расходует энергию каждую попытку, даже без попадания. Подплыви к добыче; удерживай Space или выключи режим.":why,AttackRequested,canAttack||AttackRequested))AttackRequested=!AttackRequested;
             string blocked=water.World.DivisionBlock(water.SelectedIndex);
             if(water.Paused)blocked="Продолжи симуляцию";
             else if(water.World.Controlled!=water.SelectedIndex&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Alive)blocked="Сначала возьми управление";

@@ -199,10 +199,12 @@ namespace Evolution.Volume
                 if(!agents[i].Alive || (i==Controlled&&!Attack)) continue;
                 if((agents[i].Position-ActiveCenter).Sqr>36*36)continue;
                 dt=StepSeconds;
+                bool contactedPrey=false;
                 for(int j=0;j<Count;j++) {
                     if(!agents[j].Alive||!Ecology.CanHunt(agents[i].Biology,agents[j].Biology)) continue;
                     float reach=.32f*(agents[i].Biology.Genes.Size+agents[j].Biology.Genes.Size);
                     if((agents[i].Position-agents[j].Position).Sqr>reach*reach || agents[i].Biology.Energy>=Biology.Capacity(agents[i].Biology.Genes)*.97f) continue;
+                    contactedPrey=true;
                     var hunter=agents[i];var prey=agents[j];
                     float before=hunter.Biology.Energy,victim=prey.Biology.Energy;
                     float preyStructure=Biology.StructureEnergy(prey.Biology.Genes);
@@ -218,6 +220,18 @@ namespace Evolution.Volume
                     hunter.BitAt=Time;int remnant=NearestFood(prey.Position);if(remnant>=0)food[remnant].Organic+=remains;
                     if(Niches)TransferPreyMatter(ref hunter,ref prey,remnant);
                     agents[i]=hunter;agents[j]=prey;break;
+                }
+                // A deliberate hunt is a decision with a metabolic cost, even if
+                // the player mistimes it. Successful contact already pays in Ecology.Bite.
+                // NPC search remains unchanged and holding Attack grants no free probing.
+                if(i==Controlled && Attack && !contactedPrey && agents[i].Biology.Genes.Predation>.2f
+                    && agents[i].Biology.Energy>.5f && !agents[i].Biology.Consumed) {
+                    var hunter=agents[i];
+                    float missedCost=(.18f+.3f*hunter.Biology.Genes.Predation)*dt;
+                    hunter.Biology.Energy-=missedCost;
+                    hunter.Biology.Budget.Attack+=missedCost;
+                    Diagnostics.Attack+=missedCost;
+                    agents[i]=hunter;
                 }
             }
             ResolveContacts();ExchangeColonies();
