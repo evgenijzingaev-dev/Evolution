@@ -149,3 +149,22 @@ body[data-chapter="4"] .case{border-left-color:#c07769}
 .investigation-updates .feed{margin-top:0;min-height:62px}
 .ambient-feed{opacity:.78;background:#111a1e!important;border-color:#2e4143!important;box-shadow:none!important}
 .ambient-feed p{font-size:11px!important;color:#aab8b5!important}
+
+/* Дом №13 · Noir Edition 3.2: witness conversations and linked evidence */
+.connection-meter{font:700 10px/1.5 ui-monospace,monospace;letter-spacing:.6px;color:#bba48a;margin-top:12px;border-top:1px solid #9c86652d;padding-top:10px}
+.interview-scene{background:linear-gradient(135deg,#2b3436,#191e23 64%,#242021);border:1px solid #8a75654b;border-left:2px solid #c09b73;padding:15px 14px;border-radius:4px;margin:0 0 13px}
+.interview-scene p{font:14px/1.6 Georgia,serif;color:#e4d7ca;margin:10px 0}
+.interview-quote{font:italic 13px/1.6 Georgia,serif;color:#c6ae94;padding-left:12px;border-left:1px solid #927d68;margin-top:10px}
+.link-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+.link-choice{min-width:0;min-height:88px;text-align:left;padding:12px 10px;border:1px solid #5e6966;background:linear-gradient(145deg,#242e30,#1a2024);border-radius:4px;display:flex;flex-direction:column;gap:8px;justify-content:space-between}
+.link-choice small{font:700 9px ui-monospace,monospace;color:#9fb9ac;letter-spacing:.6px}
+.link-choice b{font:600 12px/1.4 Georgia,serif;color:#f1e2d4}
+.link-choice.selected{border-color:#d5ad75;background:#3c342c}
+.link-choice:focus-visible{outline:2px solid #c7ae84;outline-offset:2px}
+.connection-result{border:1px solid #7e886257;border-left:3px solid #a5bba3;background:#202b2b;padding:13px;margin:10px 0;border-radius:3px}
+.connection-result b{display:block;color:#e1e8d5;font:600 14px/1.4 Georgia,serif}
+.connection-result p{margin:7px 0 0;color:#b9c9c0;line-height:1.6;font-size:12px}
+.connection-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#252c2c;border:1px solid #4d5a53;padding:10px 12px;margin:10px 0}
+.connection-summary b{font:600 13px Georgia,serif;white-space:nowrap}
+.connection-summary span{font-size:10px;line-height:1.4;color:#abb8ae;text-align:right}
+@media(max-width:360px){.link-grid{gap:6px}.link-choice{padding:9px 8px}.connection-summary{display:block}.connection-summary span{display:block;text-align:left;margin-top:6px}}
