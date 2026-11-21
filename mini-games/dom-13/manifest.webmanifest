@@ -1,14 +1,14 @@
 {
   "id": "./index.html",
-  "name": "Дом №13 — Пять ночей",
+  "name": "Дом №13 — Тёмные окна",
   "short_name": "Дом №13",
-  "description": "Пять связанных расследований, живые жильцы, тайна дома №13",
+  "description": "Интерактивный ночной детектив. Пять дел, улики, странные соседи и тайна квартиры №0.",
   "lang": "ru",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b1020",
-  "theme_color": "#101b2d",
+  "background_color": "#080b10",
+  "theme_color": "#0d1319",
   "orientation": "portrait",
   "icons": [
     {
