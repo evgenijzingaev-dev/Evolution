@@ -84,6 +84,28 @@ namespace Evolution.Tests
             Assert.AreEqual(0,nonHunter.Get(0).Biology.Budget.Attack,
                 "Organisms without predation cannot spend energy on a nonexistent ability.");
         }
+        [Test] public void ManualHuntCostRequiresAnActivePlayerDecisionAndIsRepeatable()
+        {
+            var hunter=Agent(default,1,0,1.6f);
+            var baseline=new VolumeWorld(1,42,new[] {hunter}) {Controlled=0,ActiveCenter=default};
+            var active=new VolumeWorld(1,42,new[] {hunter}) {Controlled=0,Attack=true,ActiveCenter=default};
+            var npc=new VolumeWorld(1,42,new[] {hunter}) {Controlled=-1,Attack=true,ActiveCenter=default};
+            float perTick=(.18f+.3f*hunter.Biology.Genes.Predation)*VolumeWorld.StepSeconds;
+            for(int tick=1;tick<=5;tick++)
+            {
+                baseline.Step();active.Step();npc.Step();
+                Assert.That(baseline.Get(0).Biology.Energy-active.Get(0).Biology.Energy,
+                    Is.EqualTo(perTick*tick).Within(.0001f),"Only deliberate player misses pay the added cost.");
+                Assert.That(active.Diagnostics.Attack,Is.EqualTo(perTick*tick).Within(.00001f));
+                Assert.AreEqual(0,npc.Get(0).Biology.Budget.Attack,
+                    "An uncontrolled hunter must not be charged for the player's Attack toggle.");
+            }
+            active.Attack=false;
+            float before=active.Diagnostics.Attack;
+            active.Step();
+            Assert.That(active.Diagnostics.Attack,Is.EqualTo(before).Within(.00001f),
+                "Switching Attack off must immediately stop the missed-attack drain.");
+        }
         [Test] public void HuntingUsesSphericalContactIncludingVerticalSeparation()
         {
             var far=new VolumeWorld(2,42,new[] {Agent(default,1,0,1.6f),Agent(new V3(.3f,5,0))}) {Controlled=0,Attack=true};far.Step();
