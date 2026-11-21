@@ -1,0 +1,14 @@
+{
+  "id": "./index.html",
+  "name": "Дом №13 — Ночная смена",
+  "short_name": "Дом №13",
+  "description": "Три загадочных дела в доме, где каждый сосед хранит секрет.",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101326",
+  "theme_color": "#111427",
+  "orientation": "portrait",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
