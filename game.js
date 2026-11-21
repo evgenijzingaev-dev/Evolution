@@ -364,7 +364,8 @@ const clueConnections=[
    '101':'Тамара закрывает старый домовой журнал, придерживая нужную страницу.',
    '102':'Олег ставит у порога сумку курьера. Похоже, он сильно устал.'
   };
-  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения».</div></div><p class="sheet-copy muted">${wary?'Жилец не доверяет тебе и пока не готов делиться показаниями. Спокойный разговор или помощь восстановят контакт.':'Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.'}</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с уже найденной уликой':'Сначала найди связанную с этим свидетелем улику','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
+  const memory=incidentMemory(id);
+  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">${memory?memory:"«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения»."}</div></div><p class="sheet-copy muted">${wary?'Жилец не доверяет тебе и пока не готов делиться показаниями. Спокойный разговор или помощь восстановят контакт.':'Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.'}</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с уже найденной уликой':'Сначала найди связанную с этим свидетелем улику','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
   $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
    if(b.dataset.action==='back')showPerson(id);
    else act(id,'knock',b.dataset.action);
@@ -398,6 +399,33 @@ const clueConnections=[
   $('sheet').querySelector('[data-action="again"]').addEventListener('click',()=>showConnections());
   $('sheet').querySelector('[data-action="theories"]').addEventListener('click',showTheories);
  }
+
+// A resident remembers how the player handled the chapter's public incident.
+// These consequences appear in later interviews and carry into the next case.
+const choiceAftermath=[
+ {protect:'Виктор тихо благодарит тебя за помощь со щитом: теперь он готов показать схему без лишних споров.',expose:'После опубликованного видео Виктор боится новых обвинений и просит не снимать его работу.'},
+ {protect:'Олег помнит, что ты остановил обвинения в краже, и спокойнее говорит о странной посылке.',expose:'После шума вокруг доставки Олег опасается, что любое его слово снова попадёт в домовой чат.'},
+ {protect:'Лев благодарен, что ты не позволил сделать из тревожного сообщения шоу.',expose:'Лев замечает, что после распространения записи жильцы перестали доверять даже знакомым голосам.'},
+ {protect:'Тамара ценит, что ты не стал публично обсуждать личное письмо первого смотрителя.',expose:'Тамара не хочет обсуждать письмо при соседях после того, как его вывесили в подъезде.'},
+ {protect:'Виктор вспоминает, как ты настоял на проверке безопасности перед открытием двери.',expose:'Виктор не забыл попытку вскрыть дверь без проверки: он опасается за проводку и людей.'}
+];
+const choiceWitness=['202','102','302','101','202'];
+function incidentMemory(id){
+ const last=[...state.choices].reverse().find(v=>v.chapter<=state.chapter&&choiceWitness[v.chapter]===id);
+ return last?choiceAftermath[last.chapter]?.[last.action]||'':'';
+}
+function chapterEcho(){
+ const previous=state.choices.find(v=>v.chapter===state.chapter-1);
+ if(!previous)return '';
+ const aftermath=[
+  {protect:'После помощи Виктор оставил тебе доступ к старому плану щита. Это пригодится при поиске посылки.',expose:'Из-за видео щита соседи спорят, кому можно доверять в истории с пропавшей посылкой.'},
+  {protect:'Олег согласился помочь разобраться со звуками на чердаке, потому что ты не обвинил его в краже.',expose:'После скандала с посылкой Олег не хочет обсуждать новые звуки при посторонних.'},
+  {protect:'Лев сохранил запись оповещения для расследования вместо публикации.',expose:'Опубликованная запись породила слухи; жильцы боятся даже писем под дверями.'},
+  {protect:'Тамара сохранила старые письма и готова сверить их с планом комнаты №0.',expose:'После разглашения письма Тамара просит не входить в комнату №0 без свидетелей.'}
+ ];
+ return aftermath[previous.chapter]?.[previous.action]||'';
+}
+
 function showPerson(id){if(state.pendingEvent){showEvent();return}const p=residents.find(r=>r.id===id);if(!p)return;const here=home(p),can=state.focus>0&&!state.closed;const helped=!!state.helped[`${state.chapter}-${state.day}-${id}`],tr=state.trust[id]||0;
  const observeTitle=here?'👀 Наблюдать':corridorClue(p,'observe')?'🔎 Осмотреть общий коридор':'🚪 Осмотреть дверь';
  const observeDesc=here?'Присмотреться к окну и коридору':corridorClue(p,'observe')?'Проверить следы у доставки и служебных дверей':'Изучить дверь, коврик и следы рядом';
@@ -457,6 +485,7 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
  if(type==='knock'&&!match&&!refused&&spokenToday(id)>1){
   result='Повторный разговор · '+p.name+' / кв. '+p.id+'. «Я уже рассказал всё, что знаю. Может, лучше сравнить мои слова с другими уликами?»';
  }
+ if(type==='knock'&&incidentMemory(id))result+=' '+incidentMemory(id);
  if(type==='knock'&&approach==='direct'){
   const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action))||getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
   if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+(lead.action==='knock'&&!home(target)?' после возвращения домой':'')+(lead.action==='listen'&&!home(target)?' после возвращения домой':'')+'.';}
@@ -540,11 +569,11 @@ function showEnding(){if(!state.closed)return;const h=state.history[state.histor
  const endingText=h.win?`${c.reveal} Ты успел разобраться и сохранить доверие соседей.`:`Твоя версия не выдержала проверки. В доме остались нестыковки и противоречивые свидетельства. Придётся двигаться дальше, так и не узнав всю правду об этом деле.`;
  const conclusion=last?`<div class="clue"><b>КАМПАНИЯ ПРОЙДЕНА · ${state.score} ОЧКОВ</b><p>Разгадано дел: ${state.history.filter(v=>v.win).length}/${cases.length} · Добрых дел: ${state.kindness}<br>${state.history.every(v=>v.win)?'🏅 Ты раскрыл главную тайну дома №13!':'История дома не завершилась идеально — попробуй другие решения.'}<br>${state.choices.filter(v=>v.action==='protect').length>=3?'Соседи доверяют тебе: дом снова стал одной семьёй.':'Секреты раскрыты, но соседям ещё предстоит научиться доверять друг другу.'}</p></div>`:'';
  openModal(`${heading(h.win?'🏆':'📜',title,`Дело ${state.chapter+1}/${cases.length} · +${h.earned} очков`)}<div class="final-score">${h.brilliant?'🌟':h.win?'🎉':'🌧'}</div><p class="sheet-copy">${endingText}</p><div class="clue"><b>Результат дела</b><p>Улики: ${h.clues}/6 · Связи: ${h.links||0}/${activeConnections().length} · ${h.supported?'Доказательство подтверждено':'Аргумент не подтверждён'} · Добрые дела: ${state.kindness}<br>Напряжение: ${h.tension}% · Начислено: ${h.earned}</p></div>${conclusion}<div class="actions">${last?actionButton('🔄 Новая кампания','Начать все пять дел сначала','again','ИГРАТЬ',false,'primary'):actionButton('➡️ Следующее дело','Продолжить историю жильцов','next','ПРОДОЛЖИТЬ',false,'primary')}</div>`);
- $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.clueNotes={};state.helped={};state.dailyConversations={};state.hints=0;state.closed=false;state.ending=null;state.lastAction={icon:'⌁',text:'Новое дело. Выбери квартиру и начни расследование.'};state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование.`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
+ $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.clueNotes={};state.helped={};state.dailyConversations={};state.hints=0;state.closed=false;state.ending=null;state.lastAction={icon:'⌁',text:'Новое дело. Выбери квартиру и начни расследование.'};state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование. ${chapterEcho()}`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
 function showHelp(){if(state.pendingEvent){showEvent();return}state.seenTutorial=true;save();openModal(`${heading('🏢','Добро пожаловать','Дом №13 · Пять ночных дел')}<p class="sheet-copy">Ты — ночной смотритель странного дома. В нём повторяется время 22:13, исчезает особая посылка, с чердака говорит металлический голос, а прошлое самого дома возвращается через письма и скрытую комнату №0.</p><div class="clue"><b>Как играть</b><p>1. Нажимай на квартиры и выбирай действия.<br>2. Собирай хотя бы 3 из 6 улик для каждого дела. В диалогах можно выбирать тактику; повторные беседы в тот же день не увеличивают доверие.<br>3. Если жильца нет дома, можно проверить пустую квартиру, но показания он даст после возвращения. Каждое действие стоит 1 внимание и 1 час.<br>4. Кнопка «След. час» восстанавливает 2 внимания.<br>5. Сопоставляй пары улик в досье: правильные связи дают очки, неверные усиливают напряжение. Помогай жильцам.<br>6. На доске улик выбери версию и подтверждающее доказательство до конца третьей ночи. Решение повлияет на общий счёт. Все пять дел связаны между собой и ведут к одной большой тайне.</p></div><p class="sheet-copy">Прогресс сохраняется на этом телефоне. Помогай жильцам, находи личные истории и открывай достижения. В журнале доступны подсказки и настройки звука.</p><div class="actions">${actionButton('Начать игру','Открыть дом','start','ВПЕРЁД',false,'primary')}</div>`);$('sheet').querySelector('[data-action="start"]').addEventListener('click',closeModal)}
 $('help').addEventListener('click',showHelp);$('journal').addEventListener('click',showJournal);$('theories').addEventListener('click',showTheories);$('wait').addEventListener('click',waitHour);
 modal.addEventListener('cancel',e=>{if(state.pendingEvent){e.preventDefault();notify('Сначала выбери действие')}});
 modal.addEventListener('click',e=>{if(e.target===modal){if(state.pendingEvent){notify('Сначала выбери решение')}else closeModal()}});
 render();if(state.closed)showEnding();else if(state.pendingEvent)showEvent();else if(!state.seenTutorial)showHelp();
-window.__dom13={getState:()=>JSON.parse(JSON.stringify(state)),showPerson,reset:()=>{state=makeState();state.seenTutorial=true;closeModal();render()},act,waitHour,showTheories,showEnding,chooseEvent,showJournal,askHint,showInterview,showConnections,compareClues};
+window.__dom13={incidentMemory,chapterEcho,getState:()=>JSON.parse(JSON.stringify(state)),showPerson,reset:()=>{state=makeState();state.seenTutorial=true;closeModal();render()},act,waitHour,showTheories,showEnding,chooseEvent,showJournal,askHint,showInterview,showConnections,compareClues};
 })();
