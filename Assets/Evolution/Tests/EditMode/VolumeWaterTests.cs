@@ -101,7 +101,7 @@ namespace Evolution.Tests
                     "An uncontrolled hunter must not be charged for the player's Attack toggle.");
             }
             active.Attack=false;
-            float before=active.Diagnostics.Attack;
+            double before=active.Diagnostics.Attack;
             active.Step();
             Assert.That(active.Diagnostics.Attack,Is.EqualTo(before).Within(.00001f),
                 "Switching Attack off must immediately stop the missed-attack drain.");
