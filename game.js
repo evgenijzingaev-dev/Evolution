@@ -66,7 +66,7 @@ const cases=[
   ],deduction:'Все нити сходятся сюда: резервное питание, оповещение, ключ и предупреждения — это единая забытая система дома.'}
 ];
 
-function makeState(){return {version:4,chapter:0,day:1,hour:19,focus:4,tension:18,kindness:0,trust:{},clues:[],actions:0,helped:{},log:[{icon:'📻',text:'Началась новая ночная смена в доме №13.',kind:'ambient'}],lastAction:{icon:'⌁',text:'Выбери квартиру и действие, чтобы начать расследование.'},ambientEvent:{icon:'◦',text:'За окнами идёт дождь. Дом прислушивается к ночи.'},history:[],score:0,closed:false,ending:null,pendingEvent:null,eventsSeen:{},sound:false,rainAudio:false,seenTutorial:false,chapterStart:18,achievements:[],lifeEvents:0,choices:[],hints:0,storiesSeen:{},insights:[],interviewHistory:[],dailyConversations:{}}}
+function makeState(){return {version:4,chapter:0,day:1,hour:19,focus:4,tension:18,kindness:0,trust:{},clues:[],actions:0,helped:{},log:[{icon:'📻',text:'Началась новая ночная смена в доме №13.',kind:'ambient'}],lastAction:{icon:'⌁',text:'Выбери квартиру и действие, чтобы начать расследование.'},ambientEvent:{icon:'◦',text:'За окнами идёт дождь. Дом прислушивается к ночи.'},history:[],score:0,closed:false,ending:null,pendingEvent:null,eventsSeen:{},sound:false,rainAudio:false,seenTutorial:false,chapterStart:18,achievements:[],lifeEvents:0,choices:[],hints:0,storiesSeen:{},insights:[],interviewHistory:[],dailyConversations:{},clueNotes:{}}}
 let state;
 try{
  let old=JSON.parse(localStorage.getItem(STORE));
@@ -85,6 +85,7 @@ try{
  if(!Array.isArray(state.insights))state.insights=[];
  if(!Array.isArray(state.interviewHistory))state.interviewHistory=[];
  if(!state.dailyConversations||typeof state.dailyConversations!=='object'||Array.isArray(state.dailyConversations))state.dailyConversations={};
+ if(!state.clueNotes||typeof state.clueNotes!=='object'||Array.isArray(state.clueNotes))state.clueNotes={};
  if(!Array.isArray(state.log))state.log=[];
  if(!state.eventsSeen||typeof state.eventsSeen!=='object')state.eventsSeen={};
  if(!state.helped||typeof state.helped!=='object')state.helped={};
@@ -96,7 +97,7 @@ let toastTimer, audio, rainLoop, rainGain;
 const modal=$('modal');
 const current=()=>cases[state.chapter];
 const getClues=()=>current().clues.map(c=>({id:c[0],resident:c[1],action:c[2],title:c[3],body:c[4]}));
-const home=p=>p.home(state.hour);
+const home=p=>!!p&&p.home(state.hour);
 // Clues left in the shared corridor are discoverable without entering a private flat.
 // Only Oleg's physical traces are public; personal testimony and recordings require presence.
 const corridorClue=(p,type)=>p.id==='102'&&type==='observe';
@@ -129,6 +130,13 @@ const specialEvents=[
   ['💛 Поговорить с Тамарой','Уважить личную историю соседки','protect'],['📰 Вывесить письмо','Дать всем узнать тайну немедленно','expose']],
  ['🚪 Замок двери №0','Вокруг старой двери собираются жильцы. Что делать в первую очередь?',
   ['🧯 Проверить безопасность','Убедиться, что внутри никого нет','protect'],['🔨 Вскрыть замок сейчас','Рискнуть ради быстрой разгадки','expose']]
+];
+const midnightEvents=[
+ ['⚡','Сбой 22:13','Виктор пытается удержать старый щит от перегрузки.','Успокоить соседей','Осмотреть щит'],
+ ['📦','Шорох в подсобке','За дверью подсобки кто-то передвигает коробку.','Успокоить Олега','Проверить подсобку'],
+ ['📻','Голос из вентиляции','Динамик на чердаке произносит номер квартиры Льва.','Успокоить Льва','Проверить динамик'],
+ ['✉️','Письмо под дверью','Под дверь Тамары просовывают конверт. На лестнице мокрые следы.','Поддержать Тамару','Осмотреть лестницу'],
+ ['🚪','Дверь №0 отвечает','За замурованной дверью оживает вентиляция.','Увести соседей','Проверить замок']
 ];
 const dailyScenes=[
  ['301','📱','Кира снимает сторис из окна: снова что-то происходит во дворе.'],
@@ -442,6 +450,7 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   state.clues.push(match.id);
   // The clue is explicitly tied to the apartment selected by the player.
   const evidenceText=!here&&corridorClue(p,type)?corridorFindings[match.id]:match.body;
+   state.clueNotes[match.id]=evidenceText;
   result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${evidenceText}`;
   icon='🔎';
  }
@@ -467,16 +476,16 @@ function showEvent(){const e=state.pendingEvent;if(!e||state.closed)return;
  if(e==='special'){
   const data=specialEvents[state.chapter];
   openModal(`${heading(data[0].split(' ')[0],data[0].slice(3),'Событие текущего расследования')}<p class="sheet-copy">${data[1]}</p><div class="actions">${actionButton(data[2][0],data[2][1],'protect','💛')}${actionButton(data[3][0],data[3][1],'expose','⚠️')}</div>`);
- } else if(e==='power')openModal(`${heading('⚡','Сбой 22:13','Жильцы замерли на лестнице')}<p class="sheet-copy">Сначала исчезает жужжание холодильников. Затем на долю секунды темнеют все окна, а за стеной щёлкает металл. Что предпримешь, пока свет не вернулся?</p><div class="actions">${actionButton('🧯 Успокоить соседей','Снизить панику, потратить часть сил','calm','−1 👁')}${actionButton('🔍 Осмотреть лестницу','Получить подсказку, но усилить тревогу','inspect','+5 ⚠️')}</div>`);
- else openModal(`${heading('🗣','Собрание у лифта','Соседи требуют ответа')}<p class="sheet-copy">Жильцы спорят, кто виноват. Ты можешь наладить разговор или отстраниться и заняться своим делом.</p><div class="actions">${actionButton('🤝 Организовать разговор','Снять напряжение и заслужить доверие','talk','−1 👁')}${actionButton('📋 Проверить записи','Не терять время, получить напоминание','notes','+3 ⚠️')}</div>`);
+ } else if(e==='power'){const scene=midnightEvents[state.chapter];openModal(`${heading(scene[0],scene[1],'22:13 · СОБЫТИЕ')}<p class="sheet-copy">${scene[2]}</p><div class="actions">${actionButton('🧯 '+scene[3],'Снизить панику, потратить часть сил','calm','−1 👁')}${actionButton('🔍 '+scene[4],'Получить подсказку, но усилить тревогу','inspect','+5 ⚠️')}</div>`);}
+  else openModal(`${heading('🗣','Собрание у лифта','Соседи требуют ответа')}<p class="sheet-copy">Жильцы спорят, кто виноват. Ты можешь наладить разговор или отстраниться и заняться своим делом.</p><div class="actions">${actionButton('🤝 Организовать разговор','Снять напряжение и заслужить доверие','talk','−1 👁')}${actionButton('📋 Проверить записи','Не терять время, получить напоминание','notes','+3 ⚠️')}</div>`);
  $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>chooseEvent(b.dataset.action)))}
 function chooseEvent(ch){if(!state.pendingEvent)return;const e=state.pendingEvent;state.pendingEvent=null;
  if(e==='special'){
   state.choices.push({chapter:state.chapter,action:ch});
-  if(ch==='protect'){state.tension=clamp(state.tension-10);state.kindness++;const p=residents[state.chapter%residents.length];state.trust[p.id]=clamp((state.trust[p.id]||0)+1,-2,4);addLog('Ты помог соседям договориться. В доме стало немного спокойнее.','💛','action')}
+  if(ch==='protect'){state.tension=clamp(state.tension-10);state.kindness++;const p=residents.find(r=>r.id===['202','102','302','101','202'][state.chapter]);state.trust[p.id]=clamp((state.trust[p.id]||0)+1,-2,4);addLog('Ты помог соседям договориться. '+p.name+' заметил твою поддержку.','💛','action')}
   else{state.tension=clamp(state.tension+12);addLog('История разлетелась по домовому чату, но теперь все нервничают.','📢','action')}
  }
- if(ch==='calm'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-14);addLog('Ты вывел соседей из темноты и успокоил их.','🤝','action')}
+ if(ch==='calm'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-14);addLog('Ты помог жильцам пережить происшествие без паники.','🤝','action')}
  if(ch==='inspect'){state.tension=clamp(state.tension+5);addLog(`Подсказка: присмотрись к уликам в квартирах ${current().clues[0][1]} и ${current().clues[3][1]}.`,'🔍','action')}
  if(ch==='talk'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-12);state.kindness++;addLog('Соседи наконец выслушали друг друга.','💛','action')}
  if(ch==='notes'){state.tension=clamp(state.tension+3);addLog(`Подсказка: поговори с ${residents.find(r=>r.id===current().clues[3][1]).name} и проверь записи соседей.`,'📋','action')}
@@ -492,7 +501,7 @@ function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||st
  tick();closeModal();render();
  if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('💡 Новая подсказка в журнале')
 }
-function showJournal(){if(state.pendingEvent){showEvent();return}const found=getClues().filter(k=>state.clues.includes(k.id));const body=found.length?found.map((c,i)=>`<div class="clue"><b>${i+1}. ${c.title}</b><p>${c.body}</p></div>`).join(''):'<div class="empty">Пока нет улик. Исследуй окна, слушай звуки и разговаривай с жильцами.</div>';
+function showJournal(){if(state.pendingEvent){showEvent();return}const found=getClues().filter(k=>state.clues.includes(k.id));const body=found.length?found.map((c,i)=>`<div class="clue"><b>${i+1}. ${c.title}</b><p>${state.clueNotes[c.id]||c.body}</p></div>`).join(''):'<div class="empty">Пока нет улик. Исследуй окна, слушай звуки и разговаривай с жильцами.</div>';
  const links=solvedConnections().map(link=>'<div class="connection-result"><b>🧩 '+link.title+'</b><p>'+link.body+'</p></div>').join('');
  const past=state.history.map((h,i)=>`<div class="clue"><b>${h.win?'✅':'❌'} Дело ${i+1}: ${cases[i].title}</b><p>${h.win?'Разгадано':'Не разгадано'} · ${h.earned} очков · улик ${h.clues}/6</p></div>`).join('');
  const events=state.log.slice(0,8).map(l=>`<p class="sheet-copy" style="margin:6px 0">${l.icon} ${l.text}</p>`).join('');
@@ -531,7 +540,7 @@ function showEnding(){if(!state.closed)return;const h=state.history[state.histor
  const endingText=h.win?`${c.reveal} Ты успел разобраться и сохранить доверие соседей.`:`Твоя версия не выдержала проверки. В доме остались нестыковки и противоречивые свидетельства. Придётся двигаться дальше, так и не узнав всю правду об этом деле.`;
  const conclusion=last?`<div class="clue"><b>КАМПАНИЯ ПРОЙДЕНА · ${state.score} ОЧКОВ</b><p>Разгадано дел: ${state.history.filter(v=>v.win).length}/${cases.length} · Добрых дел: ${state.kindness}<br>${state.history.every(v=>v.win)?'🏅 Ты раскрыл главную тайну дома №13!':'История дома не завершилась идеально — попробуй другие решения.'}<br>${state.choices.filter(v=>v.action==='protect').length>=3?'Соседи доверяют тебе: дом снова стал одной семьёй.':'Секреты раскрыты, но соседям ещё предстоит научиться доверять друг другу.'}</p></div>`:'';
  openModal(`${heading(h.win?'🏆':'📜',title,`Дело ${state.chapter+1}/${cases.length} · +${h.earned} очков`)}<div class="final-score">${h.brilliant?'🌟':h.win?'🎉':'🌧'}</div><p class="sheet-copy">${endingText}</p><div class="clue"><b>Результат дела</b><p>Улики: ${h.clues}/6 · Связи: ${h.links||0}/${activeConnections().length} · ${h.supported?'Доказательство подтверждено':'Аргумент не подтверждён'} · Добрые дела: ${state.kindness}<br>Напряжение: ${h.tension}% · Начислено: ${h.earned}</p></div>${conclusion}<div class="actions">${last?actionButton('🔄 Новая кампания','Начать все пять дел сначала','again','ИГРАТЬ',false,'primary'):actionButton('➡️ Следующее дело','Продолжить историю жильцов','next','ПРОДОЛЖИТЬ',false,'primary')}</div>`);
- $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.helped={};state.dailyConversations={};state.hints=0;state.closed=false;state.ending=null;state.lastAction={icon:'⌁',text:'Новое дело. Выбери квартиру и начни расследование.'};state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование.`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
+ $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.action==='again'){state=makeState();state.seenTutorial=true}else{state.chapter++;state.day=1;state.hour=19;state.focus=4;state.clues=[];state.clueNotes={};state.helped={};state.dailyConversations={};state.hints=0;state.closed=false;state.ending=null;state.lastAction={icon:'⌁',text:'Новое дело. Выбери квартиру и начни расследование.'};state.pendingEvent=null;state.tension=clamp(Math.round(state.tension*.45)+12,12,55);addLog(`Дело №0${state.chapter+1}: ${current().title}. Начинается новое расследование.`,current().icon)}closeModal();render();notify('Открыто новое дело') }));}
 function showHelp(){if(state.pendingEvent){showEvent();return}state.seenTutorial=true;save();openModal(`${heading('🏢','Добро пожаловать','Дом №13 · Пять ночных дел')}<p class="sheet-copy">Ты — ночной смотритель странного дома. В нём повторяется время 22:13, исчезает особая посылка, с чердака говорит металлический голос, а прошлое самого дома возвращается через письма и скрытую комнату №0.</p><div class="clue"><b>Как играть</b><p>1. Нажимай на квартиры и выбирай действия.<br>2. Собирай хотя бы 3 из 6 улик для каждого дела. В диалогах можно выбирать тактику; повторные беседы в тот же день не увеличивают доверие.<br>3. Если жильца нет дома, можно проверить пустую квартиру, но показания он даст после возвращения. Каждое действие стоит 1 внимание и 1 час.<br>4. Кнопка «След. час» восстанавливает 2 внимания.<br>5. Сопоставляй пары улик в досье: правильные связи дают очки, неверные усиливают напряжение. Помогай жильцам.<br>6. На доске улик выбери версию и подтверждающее доказательство до конца третьей ночи. Решение повлияет на общий счёт. Все пять дел связаны между собой и ведут к одной большой тайне.</p></div><p class="sheet-copy">Прогресс сохраняется на этом телефоне. Помогай жильцам, находи личные истории и открывай достижения. В журнале доступны подсказки и настройки звука.</p><div class="actions">${actionButton('Начать игру','Открыть дом','start','ВПЕРЁД',false,'primary')}</div>`);$('sheet').querySelector('[data-action="start"]').addEventListener('click',closeModal)}
 $('help').addEventListener('click',showHelp);$('journal').addEventListener('click',showJournal);$('theories').addEventListener('click',showTheories);$('wait').addEventListener('click',waitHour);
 modal.addEventListener('cancel',e=>{if(state.pendingEvent){e.preventDefault();notify('Сначала выбери действие')}});
