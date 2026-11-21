@@ -96,6 +96,17 @@ const modal=$('modal');
 const current=()=>cases[state.chapter];
 const getClues=()=>current().clues.map(c=>({id:c[0],resident:c[1],action:c[2],title:c[3],body:c[4]}));
 const home=p=>p.home(state.hour);
+// Clues left in the shared corridor are discoverable without entering a private flat.
+// Only Oleg's physical traces are public; personal testimony and recordings require presence.
+const corridorClue=(p,type)=>p.id==='102'&&type==='observe';
+const corridorFindings={
+ sparkmark:'У кабель-канала у подвальной двери осталась свежая копоть. Олег ещё не вернулся, но следы видны без него.',
+ roughtwine:'Возле общей зоны доставки лежит обрывок старого шпагата. Олег ещё на смене; это явно не обычная упаковочная лента.',
+ speakergrill:'Из общего коридора видна закрашенная решётка чердачного динамика. Олега дома нет, но осмотреть её можно самостоятельно.',
+ copytoner:'На общем столике лежит копия письма: свежий тонер и старый штемпель. Олега ещё нет, но след доступен.',
+ paintscar:'Под краской у подвальной стены проступает стрелка аварийного выхода. Олег ещё на работе; след можно осмотреть без него.'
+};
+const isClueAccessible=(p,type)=>home(p)||corridorClue(p,type);
 // Player actions and autonomous neighborhood events must never share a single 'last message' slot.
 // Otherwise lifeScene() can overwrite the reply from the resident the player actually selected.
 const addLog=(text,icon='📻',kind='ambient')=>{
@@ -331,7 +342,7 @@ const clueConnections=[
   const p=residents.find(r=>r.id===id);
   if(!p||!home(p)||state.focus<1||state.closed){if(p)showPerson(p.id);return}
   const clue=getClues().find(k=>k.resident===id&&k.action==='knock'&&!state.clues.includes(k.id));
-  const canChallenge=!!clue&&activeConnections().some(link=>link.pair.includes(clue.id)&&link.pair.some(k=>k!==clue.id&&state.clues.includes(k))&&!state.insights.includes(link.key));
+  const canChallenge=trustFor(id)>-2&&!!clue&&activeConnections().some(link=>link.pair.includes(clue.id)&&link.pair.some(k=>k!==clue.id&&state.clues.includes(k))&&!state.insights.includes(link.key));
  const wary=trustFor(id)<=-2;
   const trust=trustFor(id);
   const intro={
@@ -377,8 +388,8 @@ const clueConnections=[
   $('sheet').querySelector('[data-action="theories"]').addEventListener('click',showTheories);
  }
 function showPerson(id){if(state.pendingEvent){showEvent();return}const p=residents.find(r=>r.id===id);if(!p)return;const here=home(p),can=state.focus>0&&!state.closed;const helped=!!state.helped[`${state.chapter}-${state.day}-${id}`],tr=state.trust[id]||0;
- const observeTitle=here?'👀 Наблюдать':'🚪 Осмотреть дверь';
- const observeDesc=here?'Присмотреться к окну и коридору':'Изучить дверь, коврик и следы рядом';
+ const observeTitle=here?'👀 Наблюдать':corridorClue(p,'observe')?'🔎 Осмотреть общий коридор':'🚪 Осмотреть дверь';
+ const observeDesc=here?'Присмотреться к окну и коридору':corridorClue(p,'observe')?'Проверить следы у доставки и служебных дверей':'Изучить дверь, коврик и следы рядом';
  const listenDesc=here?'Разобрать звуки из квартиры':'Послушать, что слышно за дверью и в подъезде';
  const talkDesc=here?'Задать вопрос жильцу':'В квартире пусто — поговорить не с кем';
  const helpDesc=helped?'Сегодня уже помогал':here?'Повысить доверие и снизить напряжение':'Помочь получится только когда жилец вернётся';
@@ -393,7 +404,7 @@ function tick(){state.hour++;
   if(state.day>3){finish('timeout');return}}
  lifeScene();if(state.tension>=100)finish('panic')}
 function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();return}if(state.closed||state.focus<1)return;const p=residents.find(r=>r.id===id);if(!p)return;const here=home(p);if((type==='knock'||type==='help')&&!here)return;const key=`${state.chapter}-${state.day}-${id}`;if(type==='help'&&state.helped[key])return;
- const refused=type==='knock'&&(state.trust[id]||0)<=-2;
+ const refused=type==='knock'&&(state.trust[id]||0)<=-2&&approach!=='gentle';
  state.focus--;state.actions++;let icon={observe:'👀',listen:'👂',knock:'🚪',help:'🤝'}[type];
  const genericHome={
   observe:[`${p.name} задержался у окна и явно чего-то ждёт во дворе.`,`Ты замечаешь в комнате ${p.name} странную мелочь, которая может пригодиться в деле.`],
@@ -419,17 +430,18 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
  }
  if(type==='listen')state.tension=clamp(state.tension+3);
  if(type==='observe')state.tension=clamp(state.tension+1);
- const match=here&&!refused?getClues().find(k=>k.resident===id&&k.action===type&&!state.clues.includes(k.id)):null;
+ const match=isClueAccessible(p,type)&&!refused?getClues().find(k=>k.resident===id&&k.action===type&&!state.clues.includes(k.id)):null;
  if(refused)result=`Беседа · ${p.name} / кв. ${p.id}. «После обвинений я пока не готов делиться записями. Сначала докажи, что тебе можно доверять».`;
  if(match){
   state.clues.push(match.id);
   // The clue is explicitly tied to the apartment selected by the player.
-  result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${match.body}`;
+  const evidenceText=!here&&corridorClue(p,type)?corridorFindings[match.id]:match.body;
+  result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${evidenceText}`;
   icon='🔎';
  }
  if(type==='knock'&&approach==='direct'){
-  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&home(residents.find(p=>p.id===k.resident)))||getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
-  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+(lead.action==='knock'&&!home(target)?' после возвращения домой':'')+'.';}
+  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action))||getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
+  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+(lead.action==='knock'&&!home(target)?' после возвращения домой':'')+(lead.action==='listen'&&!home(target)?' после возвращения домой':'')+'.';}
   result='Прямой вопрос · '+result;
  }
  if(type==='knock'&&approach==='challenge'){
