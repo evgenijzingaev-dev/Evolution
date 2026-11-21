@@ -1,5 +1,0 @@
-{
-  "name": "Evolution.Volume",
-  "references": ["Evolution.Core"],
-  "noEngineReferences": true
-}

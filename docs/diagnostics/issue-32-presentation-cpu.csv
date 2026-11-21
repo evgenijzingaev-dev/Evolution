@@ -1,4 +1,0 @@
-cells,detailed,iterations,mean_cpu_ms,allocated_bytes_per_frame,checksum
-256,13,1000,0.2172,0.0,16568908.138
-512,13,1000,0.1459,0.0,33290124.956
-2048,13,1000,0.2351,0.0,133608011.302
