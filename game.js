@@ -409,12 +409,8 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
 
  if(type==='knock'){
   state.trust[id]=clamp((state.trust[id]||0)+1,-2,4);state.tension=clamp(state.tension-3);
-  if(approach==='direct'){
-   state.tension=clamp(state.tension+7);
-   const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
-   if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+'.';}
-  }
-  if(approach==='challenge'){state.trust[id]=clamp(state.trust[id]-2,-2,4);state.tension=clamp(state.tension+11);result='Разговор на повышенных тонах. '+result;}
+  if(approach==='direct')state.tension=clamp(state.tension+7);
+  if(approach==='challenge'){state.trust[id]=clamp(state.trust[id]-2,-2,4);state.tension=clamp(state.tension+11);}
   state.interviewHistory.push({chapter:state.chapter,resident:id,approach,day:state.day,hour:state.hour});
   state.interviewHistory=state.interviewHistory.slice(-24);
  }
@@ -427,7 +423,13 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${match.body}`;
   icon='🔎';
  }
+ if(type==='knock'&&approach==='direct'){
+  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
+  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+'.';}
+  result='Прямой вопрос · '+result;
+ }
  if(type==='knock'&&approach==='challenge'){
+  result='Разговор на повышенных тонах · '+result;
   const link=activeConnections().find(conn=>conn.pair.includes(match?.id)&&linkedClues(conn)&&!state.insights.includes(conn.key));
   if(link&&unlockConnection(link))result+=' 🧩 Теперь ясно: '+link.title+'. '+link.body;
  }
