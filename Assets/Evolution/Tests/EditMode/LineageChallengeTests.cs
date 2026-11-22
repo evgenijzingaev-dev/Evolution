@@ -7,6 +7,62 @@ namespace Evolution.Tests
     public sealed class LineageChallengeTests
     {
         [Test]
+        public void RequestedPaidDivisionCreatesOnlyARealVerifiedDescendant()
+        {
+            var genes = new Genome {
+                Size = 1, Speed = 1, Uptake = 1, PreferredTemperature = 22
+            };
+            var founder = new VolumeAgent {
+                Position = new V3(0, 0, 0),
+                Direction = new V3(1, 0, 0),
+                Biology = new Cell {
+                    Genes = genes, Energy = 100, Integrity = 1, Growth = 1, Age = 100
+                }
+            };
+            var world = new VolumeWorld(1, 123, new[] { founder }) { Controlled = 0 };
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.IsNull(world.DivisionBlock(0), "The prepared founder must be eligible for real division.");
+            float beforeEnergy = world.Get(0).Biology.Energy;
+            Assert.IsTrue(world.RequestDivision());
+            world.Step();
+            challenge.RecordStep(world);
+
+            Assert.AreEqual(1, world.Births, "Only the real simulation may produce a birth.");
+            Assert.AreEqual(2, world.Count);
+            Assert.AreEqual(1, challenge.VerifiedBirths);
+            Assert.AreEqual(2, challenge.LivingKnown);
+            Assert.IsTrue(LineageChallenge.VerifiedChild(world.Get(0), world.Get(1)));
+            Assert.Less(world.Get(0).Biology.Energy, beforeEnergy,
+                "A real daughter must not be created without spending the parent's energy.");
+            Assert.AreNotEqual(LineageChallengeState.Won, challenge.State,
+                "A birth alone does not prove settlement in a new ecological niche.");
+            challenge.RecordStep(world);
+            Assert.AreEqual(1, challenge.VerifiedBirths,
+                "Repeated HUD observations must not count the same child twice.");
+        }
+
+        [Test]
+        public void RealWorldTicksDoNotAdvanceChallengeWithoutVerifiedOffspring()
+        {
+            // Integration smoke on the actual simulation, not synthetic births.
+            var world = new VolumeWorld(1, 123);
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            for (int step = 0; step < 3; step++) {
+                world.Step();
+                challenge.RecordStep(world);
+                Assert.AreEqual(0, challenge.VerifiedBirths,
+                    "No paid division means no verified birth.");
+                Assert.AreNotEqual(LineageChallengeState.Won, challenge.State);
+                double progress = challenge.CurrentNicheSeconds;
+                challenge.RecordStep(world);
+                Assert.AreEqual(progress, challenge.CurrentNicheSeconds, 1e-9,
+                    "A second observation of the same tick cannot advance settlement.");
+            }
+        }
+
+        [Test]
         public void ChallengeOutcomeExplainsVerifiedResultWithoutInventingDeathCause()
         {
             StringAssert.Contains("закрепился", LineageChallenge.OutcomeSummary(LineageChallengeState.Won, 2, 1));
