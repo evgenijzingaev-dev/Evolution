@@ -508,8 +508,10 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
    if(previous&&f&&f.id===id)result+=' '+f[previous.action];
   }
  if(type==='knock'&&approach==='direct'&&!refused){
-  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action))||getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id);
-  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+(lead.action==='knock'&&!home(target)?' после возвращения домой':'')+(lead.action==='listen'&&!home(target)?' после возвращения домой':'')+'.';}
+  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action));
+  if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+'.';}
+  else if(getClues().some(k=>!state.clues.includes(k.id)&&k.resident!==id))result+=' Остальные свидетели сейчас недоступны. Вернись позже или изучи уже собранные улики.';
+  else result+=' Новых показаний пока нет. Сопоставь найденные доказательства.';
   result='Прямой вопрос · '+result;
  }
  if(type==='knock'&&approach==='challenge'){
