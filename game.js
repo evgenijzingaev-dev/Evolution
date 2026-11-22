@@ -474,7 +474,7 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   if(firstToday&&approach==='gentle'){state.trust[id]=clamp((state.trust[id]||0)+1,-2,4);state.tension=clamp(state.tension-3);}
   if(!firstToday&&approach==='gentle')state.tension=clamp(state.tension-1);
   if(approach==='direct')state.tension=clamp(state.tension+7);
-  if(approach==='challenge'){state.trust[id]=clamp(state.trust[id]-2,-2,4);state.tension=clamp(state.tension+11);}
+  if(approach==='challenge'){state.trust[id]=clamp((state.trust[id]||0)-2,-2,4);state.tension=clamp(state.tension+11);}
   state.interviewHistory.push({chapter:state.chapter,resident:id,approach,day:state.day,hour:state.hour});
   state.interviewHistory=state.interviewHistory.slice(-24);
  }
@@ -515,7 +515,10 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   result='Прямой вопрос · '+result;
  }
  if(type==='knock'&&approach==='challenge'){
-  result='Разговор на повышенных тонах · '+result;
+  // A confrontation is evidence-led: the witness reacts to a known inconsistency,
+  // not a generic accusation. Never fabricate a new statement when no link exists.
+  const supported=activeConnections().find(conn=>conn.pair.some(clueId=>getClues().some(k=>k.id===clueId&&k.resident===id&&k.action==='knock'))&&linkedClues(conn));
+  result=(supported?'Предъявлено противоречие «'+supported.title+'». '+p.name+' вынужден вернуться к деталям. ':'')+'Разговор на повышенных тонах · '+result;
   const link=activeConnections().find(conn=>!state.insights.includes(conn.key)&&conn.pair.some(clueId=>getClues().some(k=>k.id===clueId&&k.resident===id&&k.action==='knock'))&&linkedClues(conn));
   if(link&&unlockConnection(link))result+=' 🧩 Теперь ясно: '+link.title+'. '+link.body;
  }
@@ -538,9 +541,9 @@ function chooseEvent(ch){if(!state.pendingEvent)return;const e=state.pendingEven
   else{state.tension=clamp(state.tension+12);addLog('История разлетелась по домовому чату, но теперь все нервничают.','📢','action')}
  }
  if(ch==='calm'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-14);addLog('Ты помог жильцам пережить происшествие без паники.','🤝','action')}
- if(ch==='inspect'){state.tension=clamp(state.tension+5);addLog(`Подсказка: присмотрись к уликам в квартирах ${current().clues[0][1]} и ${current().clues[3][1]}.`,'🔍','action')}
+ if(ch==='inspect'){state.tension=clamp(state.tension+5);const available=getClues().filter(k=>!state.clues.includes(k.id)&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action));const clue=available[0];addLog(clue?`Подсказка: ${clue.action==='knock'?'поговори с':'проверь следы возле квартиры'} ${residents.find(p=>p.id===clue.resident).name} (кв. ${clue.resident}).`:'Подсказка: сейчас новых доступных следов нет. Сопоставь записи или дождись возвращения жильцов.','🔍','action')}
  if(ch==='talk'){state.focus=clamp(state.focus-1,0,4);state.tension=clamp(state.tension-12);state.kindness++;addLog('Соседи наконец выслушали друг друга.','💛','action')}
- if(ch==='notes'){state.tension=clamp(state.tension+3);addLog(`Подсказка: поговори с ${residents.find(r=>r.id===current().clues[3][1]).name} и проверь записи соседей.`,'📋','action')}
+ if(ch==='notes'){state.tension=clamp(state.tension+3);const witness=getClues().find(k=>!state.clues.includes(k.id)&&k.action==='knock'&&home(residents.find(r=>r.id===k.resident)));addLog(witness?`Подсказка: поговори с ${residents.find(r=>r.id===witness.resident).name} и проверь записи соседей.`:'Подсказка: доступных свидетелей сейчас нет. Сверь собранные записи и вернись позже.','📋','action')}
  closeModal();render();notify('Решение повлияло на дом')}
 function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||state.focus<=0){notify('Нужно внимание: отдохни один час');return}
  if(state.hints>=2){notify('В этом деле уже получены две подсказки');return}
