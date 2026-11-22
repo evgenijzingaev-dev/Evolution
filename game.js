@@ -559,10 +559,14 @@ function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||st
  if(state.hints>=2){notify('В этом деле уже получены две подсказки');return}
  const pending=getClues().filter(k=>!state.clues.includes(k.id));
  if(!pending.length){notify('Все улики уже найдены');return}
- const candidate=pending.find(k=>isClueAccessible(residents.find(r=>r.id===k.resident),k.action)&&k.action==='knock')||pending.find(k=>isClueAccessible(residents.find(r=>r.id===k.resident),k.action))||pending[0];
+ // First suggest evidence obtainable now, not testimony from an unwilling witness.
+ const accessible=k=>{const p=residents.find(r=>r.id===k.resident);return isClueAccessible(p,k.action)&&(k.action!=='knock'||trustFor(k.resident)>-2)};
+ const candidate=pending.find(k=>accessible(k)&&k.action!=='knock')||pending.find(accessible)||pending[0];
  const p=residents.find(r=>r.id===candidate.resident);
  state.hints++;state.focus--;state.tension=clamp(state.tension+4);state.actions++;
- addLog(`Запись в досье: ${p.name} (кв. ${p.id}) может помочь. ${!home(p)?'Пока жильца нет, дождись возвращения. ':''}Попробуй: ${candidate.action==='knock'?'поговорить':candidate.action==='observe'?'наблюдать': 'прислушаться к звукам'}.`,'◈','action');
+ const blocked=candidate.action==='knock'&&trustFor(p.id)<=-2;
+ const guidance=blocked?'Сначала восстанови доверие спокойной беседой или помощью.':!isClueAccessible(p,candidate.action)?'Этот след пока недоступен — дождись возвращения жильца.':candidate.action==='knock'?'Попробуй поговорить.':candidate.action==='observe'?'Осмотри место и следы.':'Прислушайся к звукам.';
+ addLog(`Запись в досье: ${p.name} (кв. ${p.id}) может помочь. ${guidance}`,'◈','action');
  tick();closeModal();render();
  if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('💡 Новая подсказка в журнале')
 }
