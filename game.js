@@ -561,11 +561,20 @@ function askHint(){if(state.pendingEvent){showEvent();return}if(state.closed||st
  if(!pending.length){notify('Все улики уже найдены');return}
  // First suggest evidence obtainable now, not testimony from an unwilling witness.
  const accessible=k=>{const p=residents.find(r=>r.id===k.resident);return isClueAccessible(p,k.action)&&(k.action!=='knock'||trustFor(k.resident)>-2)};
- const candidate=pending.find(k=>accessible(k)&&k.action!=='knock')||pending.find(accessible)||pending[0];
+ const candidate=pending.find(k=>accessible(k)&&k.action!=='knock')||pending.find(accessible);
+ // A hint must not consume focus or the two-hint allowance when no lead is actionable.
+ // In particular, an absent witness cannot be interviewed just because their clue is next.
+ if(!candidate){
+  const witness=pending.find(k=>k.action==='knock'&&trustFor(k.resident)<=-2);
+  const absent=pending.find(k=>!isClueAccessible(residents.find(r=>r.id===k.resident),k.action));
+  if(witness)notify('Свидетель пока не доверяет тебе. Попробуй восстановить отношения.');
+  else if(absent)notify('Нужные свидетели пока отсутствуют. Вернись позже.');
+  else notify('Сейчас нет доступных зацепок. Попробуй позже.');
+  return;
+ }
  const p=residents.find(r=>r.id===candidate.resident);
  state.hints++;state.focus--;state.tension=clamp(state.tension+4);state.actions++;
- const blocked=candidate.action==='knock'&&trustFor(p.id)<=-2;
- const guidance=blocked?'Сначала восстанови доверие спокойной беседой или помощью.':!isClueAccessible(p,candidate.action)?'Этот след пока недоступен — дождись возвращения жильца.':candidate.action==='knock'?'Попробуй поговорить.':candidate.action==='observe'?'Осмотри место и следы.':'Прислушайся к звукам.';
+ const guidance=candidate.action==='knock'?'Попробуй поговорить.':candidate.action==='observe'?'Осмотри место и следы.':'Прислушайся к звукам.';
  addLog(`Запись в досье: ${p.name} (кв. ${p.id}) может помочь. ${guidance}`,'◈','action');
  tick();closeModal();render();
  if(state.closed){showEnding();return}if(state.pendingEvent){showEvent();return}notify('💡 Новая подсказка в журнале')
