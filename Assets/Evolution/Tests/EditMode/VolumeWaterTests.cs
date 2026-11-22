@@ -102,9 +102,14 @@ namespace Evolution.Tests
             }
             active.Attack=false;
             double before=active.Diagnostics.Attack;
+            float energyGap=baseline.Get(0).Biology.Energy-active.Get(0).Biology.Energy;
+            baseline.Step();
             active.Step();
             Assert.That(active.Diagnostics.Attack,Is.EqualTo(before).Within(.00001f),
                 "Switching Attack off must immediately stop the missed-attack drain.");
+            Assert.That(baseline.Get(0).Biology.Energy-active.Get(0).Biology.Energy,
+                Is.EqualTo(energyGap).Within(.0001f),
+                "Turning Attack off must stop real energy loss, not merely hide it from Diagnostics.");
         }
         [Test] public void HuntingUsesSphericalContactIncludingVerticalSeparation()
         {
