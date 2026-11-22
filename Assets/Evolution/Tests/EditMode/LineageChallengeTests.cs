@@ -7,6 +7,26 @@ namespace Evolution.Tests
     public sealed class LineageChallengeTests
     {
         [Test]
+        public void RealWorldTicksDoNotAdvanceChallengeWithoutVerifiedOffspring()
+        {
+            // Integration smoke on the actual simulation, not synthetic births.
+            var world = new VolumeWorld(1, 123);
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            for (int step = 0; step < 3; step++) {
+                world.Step();
+                challenge.RecordStep(world);
+                Assert.AreEqual(0, challenge.VerifiedBirths,
+                    "No paid division means no verified birth.");
+                Assert.AreNotEqual(LineageChallengeState.Won, challenge.State);
+                double progress = challenge.CurrentNicheSeconds;
+                challenge.RecordStep(world);
+                Assert.AreEqual(progress, challenge.CurrentNicheSeconds, 1e-9,
+                    "A second observation of the same tick cannot advance settlement.");
+            }
+        }
+
+        [Test]
         public void ChallengeOutcomeExplainsVerifiedResultWithoutInventingDeathCause()
         {
             StringAssert.Contains("закрепился", LineageChallenge.OutcomeSummary(LineageChallengeState.Won, 2, 1));
