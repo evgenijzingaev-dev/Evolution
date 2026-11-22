@@ -459,10 +459,16 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   knock:[`Беседа · ${p.name} / кв. ${p.id}. ${interviews[id][state.chapter]}`],
   help:[`Ты помог жильцу ${p.name} с мелкой проблемой. Доверие заметно выросло.`]
  };
- const genericAway={
-  observe:[`Квартира ${id} пуста: у двери только потёртый коврик и свежие следы в коридоре.`,`В окне темно. Ты осматриваешь дверь и замечаешь, что жильца давно нет дома.`],
-  listen:[`За дверью тихо, но в подъезде слышен далёкий шорох и эхо лифта.`,`Из квартиры не доносится ни звука — зато коридор иногда выдаёт важные мелочи.`]
+ // Empty apartments offer public corridor observations, never invented conversations.
+ const awayDetails={
+  '301':{observe:'У двери Киры лежит рекламный листок; сама квартира тёмная.',listen:'За дверью Киры тихо, в подъезде щёлкает датчик освещения.'},
+  '302':{observe:'Дверь Льва заперта, индикатор эфира погашен. Запись можно попросить после его возвращения.',listen:'Из квартиры Льва не слышно ни эфира, ни голоса. В коридоре гудит вентиляция.'},
+  '201':{observe:'У двери Майи стоит пустая подставка для зонта; окна погашены.',listen:'Музыки из квартиры Майи нет. С лестницы доносится дождь по козырьку.'},
+  '202':{observe:'У порога Виктора нет рабочих ботинок. Замок цел, щиток в коридоре доступен.',listen:'В квартире Виктора тихо. За стеной слышно старое реле.'},
+  '101':{observe:'Квартира Тамары закрыта; у двери аккуратно сложены газеты.',listen:'Из квартиры Тамары не слышно голосов. По лестнице проходят соседи.'},
+  '102':{observe:'Олег ещё не вернулся. В общем коридоре видны следы доставки, но это не его показания.',listen:'За дверью Олега тихо. На лестнице слышно, как останавливается лифт.'}
  };
+ const genericAway={observe:[awayDetails[id].observe],listen:[awayDetails[id].listen]};
  let result=(here?genericHome[type]:genericAway[type])[ (state.actions+Number(id)) % (here?genericHome[type]:genericAway[type]).length ];
  if(type==='help'){state.helped[key]=true;state.kindness++;state.trust[id]=clamp((state.trust[id]||0)+2,-2,4);state.tension=clamp(state.tension-11);
  if(!state.storiesSeen[id]&&state.trust[id]>=2){state.storiesSeen[id]=true;addLog(`${p.name} доверяет тебе. ${stories[id]}`,'💬')}
