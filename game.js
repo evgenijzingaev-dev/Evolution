@@ -491,7 +491,17 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   icon='🔎';
  }
  if(type==='knock'&&!match&&!refused&&spokenToday(id)>1){
-  result='Повторный разговор · '+p.name+' / кв. '+p.id+'. «Я уже рассказал всё, что знаю. Может, лучше сравнить мои слова с другими уликами?»';
+  const known=getClues().filter(k=>state.clues.includes(k.id)&&k.resident===id);
+  const unresolved=activeConnections().find(link=>!state.insights.includes(link.key)&&link.pair.some(clueId=>known.some(k=>k.id===clueId)));
+  const reactions={
+   '301':'Кира убирает телефон: «Я не хочу публиковать догадки без подтверждения».',
+   '302':'Лев выключает прямой эфир: «Сначала проверим запись, потом будем делать выводы».',
+   '201':'Майя прислушивается к тишине: «Я могу ошибаться в источнике звука».',
+   '202':'Виктор хмурится: «В старой проводке легко перепутать причину и следствие».',
+   '101':'Тамара закрывает журнал: «В этом доме слухи переживают факты».',
+   '102':'Олег проверяет время доставки: «Я не стану обвинять соседей без доказательств».'
+  };
+  result='Повторный разговор · '+p.name+' / кв. '+p.id+'. '+reactions[id]+(unresolved?' «Вернись к сопоставлению улик: в моих показаниях ещё есть неясность».':' «Пока мне нечего добавить к протоколу».');
  }
  if(type==='knock'&&incidentMemory(id))result+=' '+incidentMemory(id);
   // The witness's recollection depends on how the player handled the previous case.
@@ -508,7 +518,7 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
    if(previous&&f&&f.id===id)result+=' '+f[previous.action];
   }
  if(type==='knock'&&approach==='direct'&&!refused){
-  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action));
+  const lead=getClues().find(k=>!state.clues.includes(k.id)&&k.resident!==id&&isClueAccessible(residents.find(p=>p.id===k.resident),k.action)&&!(k.action==='knock'&&trustFor(k.resident)<=-2));
   if(lead){const target=residents.find(r=>r.id===lead.resident);result+=' Следующий след: '+target.name+' (кв. '+target.id+'), действие — '+(lead.action==='knock'?'разговор':lead.action==='listen'?'прослушивание':'наблюдение')+'.';}
   else if(getClues().some(k=>!state.clues.includes(k.id)&&k.resident!==id))result+=' Остальные свидетели сейчас недоступны. Вернись позже или изучи уже собранные улики.';
   else result+=' Новых показаний пока нет. Сопоставь найденные доказательства.';
