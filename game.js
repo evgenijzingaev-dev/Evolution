@@ -352,7 +352,7 @@ const clueConnections=[
  function availableConfrontation(id){
   if(trustFor(id)<=-2)return null;
   const testimony=getClues().find(k=>k.resident===id&&k.action==='knock');
-  if(!testimony)return null;
+  if(!testimony||!state.clues.includes(testimony.id))return null;
   return activeConnections().find(link=>!state.insights.includes(link.key)&&link.pair.includes(testimony.id)&&link.pair.some(k=>k!==testimony.id&&state.clues.includes(k)))||null;
  }
  function showInterview(id){
@@ -372,7 +372,7 @@ const clueConnections=[
    '102':'Олег ставит у порога сумку курьера. Похоже, он сильно устал.'
   };
   const memory=incidentMemory(id);
-  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">${memory?memory:"«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения»."}</div></div><p class="sheet-copy muted">${wary?'Жилец не доверяет тебе и пока не готов делиться показаниями. Спокойный разговор или помощь восстановят контакт.':'Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.'}</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с независимым свидетельством':'Сначала найди независимую улику, связанную с этим свидетелем','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
+  openModal(`${heading(residentArt(p),'Разговор: '+p.name,'КВ. '+p.id+' · ДЕЛО '+(state.chapter+1))}<div class="interview-scene"><span class="eyebrow">СВИДЕТЕЛЬ · ДОВЕРИЕ ${trust>0?'+':''}${trust}</span><p>${intro[id]}</p><div class="interview-quote">${memory?memory:"«Ты тоже пытаешься понять, что случилось? Спрашивай, только не записывай меня без разрешения»."}</div></div><p class="sheet-copy muted">${wary?'Жилец не доверяет тебе и пока не готов делиться показаниями. Спокойный разговор или помощь восстановят контакт.':'Манера разговора изменит отношения с жильцом. Прямой вопрос укажет новый след; предъявление противоречия связывает уже найденные факты.'}</p><div class="actions">${actionButton('Выслушать спокойно','Снизить тревогу и укрепить доверие','gentle','−1 👁',false,'primary')}${actionButton('Задать прямой вопрос','Найти следующего свидетеля, но усилить напряжение','direct','−1 👁')}${actionButton('Предъявить противоречие',canChallenge?'Сопоставить показание с независимым свидетельством':'Сначала запиши показания и найди независимую улику','challenge','−1 👁',!canChallenge)}${actionButton('← Вернуться к квартире','Не тратить время','back','НАЗАД')}</div>`);
   $('sheet').querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
    if(b.dataset.action==='back')showPerson(id);
    else act(id,'knock',b.dataset.action);
@@ -517,9 +517,9 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
  if(type==='knock'&&approach==='challenge'){
   // A confrontation is evidence-led: the witness reacts to a known inconsistency,
   // not a generic accusation. Never fabricate a new statement when no link exists.
-  const supported=activeConnections().find(conn=>conn.pair.some(clueId=>getClues().some(k=>k.id===clueId&&k.resident===id&&k.action==='knock'))&&linkedClues(conn));
+  const supported=availableConfrontation(id);
   result=(supported?'Предъявлено противоречие «'+supported.title+'». '+p.name+' вынужден вернуться к деталям. ':'')+'Разговор на повышенных тонах · '+result;
-  const link=activeConnections().find(conn=>!state.insights.includes(conn.key)&&conn.pair.some(clueId=>getClues().some(k=>k.id===clueId&&k.resident===id&&k.action==='knock'))&&linkedClues(conn));
+  const link=supported;
   if(link&&unlockConnection(link))result+=' 🧩 Теперь ясно: '+link.title+'. '+link.body;
  }
  addLog(result,icon,'action');
