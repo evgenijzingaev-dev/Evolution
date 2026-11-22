@@ -43,6 +43,31 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void DeniedDivisionCannotCountAsBirthOrChallengeProgress()
+        {
+            // The same real-world division request must not grant an objective
+            // when the founder cannot afford the biological cost.
+            var founder = new VolumeAgent {
+                Position = new V3(0, 0, 0),
+                Direction = new V3(1, 0, 0),
+                Biology = new Cell {
+                    Genes = new Genome { Size = 1, Speed = 1, Uptake = 1, PreferredTemperature = 22 },
+                    Energy = .01f, Integrity = 1, Growth = 1, Age = 100
+                }
+            };
+            var world = new VolumeWorld(1, 124, new[] { founder }) { Controlled = 0 };
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.IsNotNull(world.DivisionBlock(0), "Insufficient energy must block division.");
+            Assert.IsFalse(world.RequestDivision(), "A blocked division must not queue a free daughter.");
+            world.Step();
+            challenge.RecordStep(world);
+            Assert.AreEqual(0, world.Births);
+            Assert.AreEqual(0, challenge.VerifiedBirths);
+            Assert.AreNotEqual(LineageChallengeState.Won, challenge.State);
+        }
+
+        [Test]
         public void RealWorldTicksDoNotAdvanceChallengeWithoutVerifiedOffspring()
         {
             // Integration smoke on the actual simulation, not synthetic births.
