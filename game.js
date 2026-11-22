@@ -493,7 +493,7 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
   // The clue is explicitly tied to the apartment selected by the player.
   const evidenceText=!here&&corridorClue(p,type)?corridorFindings[match.id]:match.body;
    state.clueNotes[match.id]=evidenceText;
-  result=`${type==='knock'?'Беседа':type==='listen'?'Прослушивание':'Осмотр'} · ${p.name} / кв. ${p.id}. Улика «${match.title}»: ${evidenceText}`;
+  result=`${!here&&corridorClue(p,type)?'Осмотр общего коридора у кв. '+p.id:type==='knock'?'Беседа · '+p.name+' / кв. '+p.id:type==='listen'?'Прослушивание · '+p.name+' / кв. '+p.id:'Осмотр · '+p.name+' / кв. '+p.id}. Улика «${match.title}»: ${evidenceText}`;
   icon='🔎';
  }
  if(type==='knock'&&!match&&!refused&&spokenToday(id)>1){
@@ -508,6 +508,20 @@ function act(id,type,approach='gentle'){if(state.pendingEvent){showEvent();retur
    '102':'Олег проверяет время доставки: «Я не стану обвинять соседей без доказательств».'
   };
   result='Повторный разговор · '+p.name+' / кв. '+p.id+'. '+reactions[id]+(unresolved?' «Вернись к сопоставлению улик: в моих показаниях ещё есть неясность».':' «Пока мне нечего добавить к протоколу».');
+ }
+ // A public trace can be discussed later, but it is never treated as Oleg's testimony.
+ if(type==='knock'&&id==='102'&&!refused){
+  const corridorEvidence=getClues().find(k=>k.resident===id&&k.action==='observe'&&state.clues.includes(k.id));
+  if(corridorEvidence){
+   const response={
+    sparkmark:'«Копоть у кабель-канала? Я её не оставлял. Лучше спросить Виктора о щите».',
+    roughtwine:'«Шпагат видел у грузового лифта, но не знаю, чья была коробка».',
+    speakergrill:'«Решётку закрасили ещё до моей смены. Кто включал динамик, не видел».',
+    copytoner:'«Письмо на столике не моё. Я доставляю посылки, а не чужую почту».',
+    paintscar:'«Стрелка старая. Не уверен, что выход сейчас открывается».'
+   };
+   result+=' Ты показываешь Олегу найденную в коридоре улику «'+corridorEvidence.title+'». '+(response[corridorEvidence.id]||'«Я не знаю, откуда это взялось».');
+  }
  }
  if(type==='knock'&&incidentMemory(id))result+=' '+incidentMemory(id);
   // The witness's recollection depends on how the player handled the previous case.
