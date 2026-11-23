@@ -1,0 +1,27 @@
+{
+  "id": "./index.html",
+  "name": "Дом №13 — Тёмные окна",
+  "short_name": "Дом №13",
+  "description": "Интерактивный ночной детектив. Пять дел, улики, странные соседи и тайна квартиры №0.",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080b10",
+  "theme_color": "#0d1319",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
