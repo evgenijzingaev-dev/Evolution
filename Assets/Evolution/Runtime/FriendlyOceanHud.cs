@@ -30,6 +30,7 @@ namespace Evolution.Runtime
         double assimilated;
         long eventTick;
         PlayerReadout readout;
+        int migrationFood=-1, migrationNiche;
         readonly List<Notice> notices=new List<Notice>(3);
         readonly Dictionary<string,float> cooldown=new Dictionary<string,float>();
         struct Notice { public string Text, Sub; public float Until; public bool Danger; }
@@ -126,6 +127,7 @@ namespace Evolution.Runtime
             if(readWorld==water.World&&readIndex==water.SelectedIndex&&Time.unscaledTime<nextRead)return;
             nextRead=Time.unscaledTime+.5f;readWorld=water.World;readIndex=water.SelectedIndex;
             readout=PlayerReadout.Read(water.World,water.SelectedIndex);
+            migrationFood=water.Challenge.FindMigrationFood(water.World,out migrationNiche);
             water.Overview.Refresh();living=0;lines.Clear();busiest=foodRegion=dangerRegion=null;
             foreach(var a in water.Overview.Survey.Agents)if(InLayer(a.Position)){living++;lines.Add(a.Lineage);}
             foreach(var r in water.Overview.Survey.Regions)if(r.Loaded&&InLayer(r.Center)){
@@ -274,7 +276,10 @@ namespace Evolution.Runtime
             var matrix=GUI.matrix;var oldSkin=GUI.skin;var oldColor=GUI.color;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);GUI.skin=skin;
             GUI.color=new Color(1,1,1,.75f+.25f*transition);
-            DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
+            DrawTop();
+            int routeFood=!water.Overview.Active&&water.SelectedIndex==water.World.Controlled
+                &&water.Challenge.CanGuideMigration(water.World)?migrationFood:-1;
+            DrawTasks(routeFood);DrawCell();DrawMap(routeFood);DrawActions();DrawFooter();
             if(development)DrawDevelopment();
             if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else if(chronicle)DrawChronicle();else DrawNotices();
             if(ShowObserverControls)DrawObserverLinks();
@@ -298,7 +303,7 @@ namespace Evolution.Runtime
             if(Button(new Rect(W-94,22,32,42),"?","Подсказки · F1",HelpVisible)){HelpVisible=!HelpVisible;settings=false;}
             if(Button(new Rect(W-58,22,32,42),"≡","Размер интерфейса и звук",settings)){settings=!settings;HelpVisible=false;}
         }
-        void DrawTasks()
+        void DrawTasks(int routeFood)
         {
             var r=Left;Box(r,Page==HudPage.Overview?"Жизнь вокруг":"Твоя следующая цель");
             if(Page!=HudPage.Overview){
@@ -312,6 +317,21 @@ namespace Evolution.Runtime
                     string outcome=LineageChallenge.OutcomeSummary(challenge.State,challenge.VerifiedBirths,challenge.LivingKnown);
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nСтарт: "+challenge.FounderNicheName+" · Новая ниша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
+                    if(routeFood>=0) {
+                        var destination=water.World.GetFood(routeFood).Position;
+                        float rise=destination.Y-water.World.Get(water.SelectedIndex).Position.Y;
+                        string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
+                        var offset=destination-VolumePainter.V(water.Rig.Focus);
+                        bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
+                        task="Новая ниша: "+LineageChallenge.NicheName(migrationNiche);
+                        hint="Пищи может хватить"+direction+"\n"+(offMap?"Цель за картой · плыви к ромбу":"Плыви к ромбу · F6 — выход");
+                    }
+                    else if (Event.current.type == EventType.Repaint && !CapturesCommands && !water.Overview.Typing
+                        && challenge.CanPromptOffspring(water.World, water.EvolutionPlay)) {
+                        const string handoff = "Нажми Y, чтобы управлять потомком";
+                        if (challenge.SettlementHint != null) hint = handoff;
+                        else task = handoff;
+                    }
                 } else hint="F5 — испытание «Сохрани линию»\n"+hint;
                 GUI.Label(new Rect(r.x+16,r.y+60,r.width-32,54),task,title);
                 GUI.Label(new Rect(r.x+16,r.y+119,r.width-32,42),hint,micro);
@@ -419,7 +439,7 @@ namespace Evolution.Runtime
             if(Button(new Rect(r.xMax-150,r.y+5,138,32),water.Paused?"Продолжить · P":"Пауза · P"))water.Paused=!water.Paused;
         }
         Vector2 MapPoint(V3 p,Rect map,V3 center)=>new Vector2(map.center.x+(p.X-center.X)/mapRange*map.width*.5f,map.center.y-(p.Z-center.Z)/mapRange*map.height*.5f);
-        void DrawMap()
+        void DrawMap(int routeFood)
         {
             var r=MapBox;Box(r);Label(r.x+12,r.y+8,100,"Экология",title);
             if(Button(new Rect(r.x+113,r.y+7,147,28),MiniLayerName,"Слои показывают реальные запасы выбранной глубины; цвет клеток — наследуемые склонности"))miniLayer=(miniLayer+1)%8;
@@ -438,6 +458,16 @@ namespace Evolution.Runtime
             }
             Vector2 eye=MapPoint(VolumePainter.V(water.Lens.transform.position),map,center);var forward=water.Lens.transform.forward;Vector2 dir=new Vector2(forward.x,-forward.z).normalized;
             if(map.Contains(eye)){Line(eye,eye+dir*14,Color.white,2);Line(eye+dir*14,eye+dir*6+new Vector2(-dir.y,dir.x)*5,Color.white);}
+            if(routeFood>=0) {
+                var offset=MapPoint(water.World.GetFood(routeFood).Position,map,center)-map.center;
+                float edge=Mathf.Max(1,Mathf.Max(Mathf.Abs(offset.x)/(map.width*.5f-7),Mathf.Abs(offset.y)/(map.height*.5f-7)));
+                var p=map.center+offset/edge;
+                var colour=new Color(.35f,1f,.9f);
+                var top=p+Vector2.up*6;var right=p+Vector2.right*6;
+                var bottom=p+Vector2.down*6;var left=p+Vector2.left*6;
+                Line(top,right,colour,2);Line(right,bottom,colour,2);
+                Line(bottom,left,colour,2);Line(left,top,colour,2);
+            }
             if(Event.current.type==EventType.ScrollWheel&&map.Contains(Event.current.mousePosition)){mapRange=Mathf.Clamp(mapRange*Mathf.Exp(Event.current.delta.y*.08f),10,180);Event.current.Use();}
             if(Event.current.type==EventType.MouseDown&&Event.current.button==0&&map.Contains(Event.current.mousePosition)){
                 var p=Event.current.mousePosition;V3 position=new V3(center.X+(p.x-map.center.x)*2*mapRange/map.width,water.Overview.FullDepth?center.Y:water.Overview.SliceIndex*20+10,center.Z-(p.y-map.center.y)*2*mapRange/map.height);

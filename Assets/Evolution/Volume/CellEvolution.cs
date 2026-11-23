@@ -26,17 +26,38 @@ namespace Evolution.Volume
             "Больше энергии от света; дороже обмен и структура. Без света преимущество исчезает.":d==DevelopmentDirection.Organic?
             "Лучше усваивает органику; хуже субстрат, дороже обмен. Нужна органическая пища.":
             "Быстрее плавает; дороже обмен и плавание. Высокая скорость быстрее истощает запас.";
+        static int ParentSeparator(VolumeAgent child) => child.Biology.ParentId == 0 || child.Identity == null
+            ? -1 : child.Identity.LastIndexOf("/b", StringComparison.Ordinal);
         public static string ParentIdentity(VolumeAgent child)
-        {if(child.Biology.ParentId==0||child.Identity==null)return null;int at=child.Identity.LastIndexOf("/b",StringComparison.Ordinal);return at<0?null:child.Identity.Substring(0,at);}
+        {
+            int at = ParentSeparator(child);
+            return at < 0 ? null : child.Identity.Substring(0, at);
+        }
         public static List<int> Offspring(VolumeWorld world,string parent)
         {
-            var result=new List<int>();if(parent==null||world==null)return result;
-            Cell? anchor=null;for(int i=0;i<world.Count;i++)if(world.Get(i).Identity==parent){anchor=world.Get(i).Biology;break;}
-            for(int i=world.Count-1;i>=0;i--){var a=world.Get(i);if(!a.Alive||ParentIdentity(a)!=parent)continue;
-                if(anchor.HasValue&&(a.Biology.ParentId!=anchor.Value.Id||a.Biology.LineageId!=anchor.Value.LineageId||a.Biology.Generation!=anchor.Value.Generation+1))continue;
+            var result = new List<int>();
+            CollectOffspring(world, parent, result);
+            return result;
+        }
+        internal static void CollectOffspring(VolumeWorld world, string parent, List<int> result)
+        {
+            result.Clear();
+            if (parent == null || world == null) return;
+            Cell? anchor = null;
+            for (int i = 0; i < world.Count; i++) {
+                var agent = world.Get(i);
+                if (agent.Identity != parent) continue;
+                anchor = agent.Biology;
+                break;
+            }
+            for (int i = world.Count - 1; i >= 0; i--) {
+                var agent = world.Get(i);
+                if (!agent.Alive || ParentSeparator(agent) != parent.Length
+                    || string.CompareOrdinal(agent.Identity, 0, parent, 0, parent.Length) != 0) continue;
+                if (anchor.HasValue && (agent.Biology.ParentId != anchor.Value.Id || agent.Biology.LineageId != anchor.Value.LineageId
+                    || agent.Biology.Generation != anchor.Value.Generation + 1)) continue;
                 result.Add(i);
             }
-            return result;
         }
         public static string DeathReason(VolumeAgent a)=>a.Biology.Consumed?"Клетка съедена хищником. Продолжи за живого потомка.":
             "Запас энергии исчерпан. "+(a.Biology.Budget.Movement>a.Biology.Budget.Upkeep?"Основной расход последнего шага — движение.":"Питание не покрыло обмен веществ.");
@@ -79,6 +100,7 @@ namespace Evolution.Volume
     {
         int ownedCell,ownedLineage,ownedGeneration;
         readonly Dictionary<string,int> cycles=new Dictionary<string,int>(StringComparer.Ordinal);
+        readonly List<int> offspring = new List<int>();
         public string Identity {get;private set;}
         public VolumeAgent? Fallen {get;private set;}
         public bool TakeControl(VolumeWorld world,int index)
@@ -94,25 +116,44 @@ namespace Evolution.Volume
         // Verified direct children of the played cell; empty while identity is unknown.
         public List<int> VerifiedChildren(VolumeWorld world)
         {
-            var children=CellEvolution.Offspring(world,Identity);
-            children.RemoveAll(i=>world.Get(i).Biology.ParentId!=ownedCell||world.Get(i).Biology.LineageId!=ownedLineage||world.Get(i).Biology.Generation!=ownedGeneration+1);
+            var children = new List<int>();
+            CollectVerifiedChildren(world, children);
             return children;
+        }
+        void CollectVerifiedChildren(VolumeWorld world, List<int> children)
+        {
+            CellEvolution.CollectOffspring(world, Identity, children);
+            for (int i = children.Count - 1; i >= 0; i--) {
+                var child = world.Get(children[i]).Biology;
+                if (child.ParentId != ownedCell || child.LineageId != ownedLineage
+                    || child.Generation != ownedGeneration + 1) children.RemoveAt(i);
+            }
+        }
+        public int PeekOffspring(VolumeWorld world)
+        {
+            CollectVerifiedChildren(world, offspring);
+            return NextOffspring(out _);
+        }
+        int NextOffspring(out int offset)
+        {
+            offset = 0;
+            if (offspring.Count == 0) return -1;
+            cycles.TryGetValue(Identity, out offset);
+            return offspring[offset % offspring.Count];
         }
         // Without an index Y cycles through the verified offspring of the played cell:
         // returning to the same parent resumes where the last Y stopped, so a second
         // child is reachable without opening the development panel.
         public bool FollowOffspring(VolumeWorld world,int index=-1)
         {
-            if(Identity==null)return false;
-            var children=VerifiedChildren(world);
-            if(index<0){
-                if(children.Count==0)return false;
-                cycles.TryGetValue(Identity,out int offset);
-                index=children[offset%children.Count];
-                if(cycles.Count>64)cycles.Clear();
-                cycles[Identity]=(offset+1)%children.Count;
+            CollectVerifiedChildren(world, offspring);
+            if (index < 0) {
+                index = NextOffspring(out int offset);
+                if (index < 0) return false;
+                if (cycles.Count > 64) cycles.Clear();
+                cycles[Identity] = (offset + 1) % offspring.Count;
             }
-            if(!children.Contains(index))return false;
+            else if (!offspring.Contains(index)) return false;
             return TakeControl(world,index);
         }
     }
@@ -285,6 +326,53 @@ namespace Evolution.Volume
         {
             return child.DivisionChild && child.DivisionAt > startedAt && child.DivisionAt <= now;
         }
+        public bool CanGuideMigration(VolumeWorld world)
+        {
+            if (State != LineageChallengeState.OffspringAlive || CurrentNicheSeconds > 0 || SettlementHint != null
+                || world == null || !world.Niches || world.Controlled < 0 || world.Controlled >= world.Count) return false;
+            return IsLivingDescendant(world.Get(world.Controlled));
+        }
+
+        bool IsLivingDescendant(VolumeAgent agent)
+            => agent.Alive && agent.Identity != null && agent.Identity != FounderIdentity
+                && members.TryGetValue(agent.Identity, out var member) && !member.Dead
+                && member.Id == agent.Biology.Id && member.LineageId == agent.Biology.LineageId
+                && member.Generation == agent.Biology.Generation;
+
+        public bool CanPromptOffspring(VolumeWorld world, CellLineagePlay play)
+        {
+            if (State != LineageChallengeState.OffspringAlive || play?.Identity == null
+                || !members.ContainsKey(play.Identity)) return false;
+            int target = play.PeekOffspring(world);
+            return target >= 0 && IsLivingDescendant(world.Get(target));
+        }
+
+        public int FindMigrationFood(VolumeWorld world, out int niche)
+        {
+            niche = 0;
+            if (!CanGuideMigration(world)) return -1;
+            var agent = world.Get(world.Controlled);
+            int best = -1;
+            float bestDistance = float.PositiveInfinity;
+            for (int i = 0; i < world.FoodCount; i++) {
+                var food = world.GetFood(i);
+                float distance = (food.Position - agent.Position).Sqr;
+                if (!(food.Radius > 0) || !(distance < bestDistance)) continue;
+                float intake = world.FoodPotential(i, agent.Biology);
+                if (!(intake > 0)) continue;
+                var environment = world.EnvironmentAt(food.Position);
+                int kind = NicheKind(environment);
+                if (kind == 0 || kind == founderNiche) continue;
+                float upkeep = Multicellularity.Cost(agent.Biology, environment.Temperature)
+                    + NicheMetabolism.Stress(agent.Biology, environment);
+                if (!(intake > upkeep)) continue;
+                best = i;
+                bestDistance = distance;
+                niche = kind;
+            }
+            return best;
+        }
+
         public void RecordStep(VolumeWorld world)
         {
             if (!Active || world == null || world.Tick <= recordedTick
