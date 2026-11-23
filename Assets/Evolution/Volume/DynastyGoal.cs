@@ -62,15 +62,20 @@ namespace Evolution.Volume
             }
             // A neighbourhood dies for good only on a fresh observation: an unloaded
             // region keeps its last numbers and proves nothing.
-            foreach (var pair in regions) {
-                if (survey == null || !survey.TryRegion(pair.Key, out var region) || !region.Loaded) continue;
-                var watch = pair.Value;
+            // Mono (Unity) invalidates a Dictionary enumerator even when an existing
+            // key is overwritten in place, so walk a snapshot of the keys and write
+            // each entry after reading it.
+            var watched = new ChunkKey[regions.Count];
+            regions.Keys.CopyTo(watched, 0);
+            foreach (var key in watched) {
+                if (survey == null || !survey.TryRegion(key, out var region) || !region.Loaded) continue;
+                var watch = regions[key];
                 if (region.Living > watch.Peak) watch.Peak = region.Living;
                 if (watch.Peak >= RegionPeak && region.Living == 0) {
                     watch.Collapsed = true;
                     CollapseSeen = true;
                 }
-                regions[pair.Key] = watch;
+                regions[key] = watch;
             }
             GenerationsCovered = CoveredGenerations(generations, tree.FounderGeneration);
             if (IsComplete(chainComplete, GenerationsCovered, niches.Count, CollapseSeen)) {
