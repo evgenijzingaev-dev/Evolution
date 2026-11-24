@@ -7,11 +7,18 @@ namespace Evolution.Runtime
     {
         void DrawColonyEntry()
         {
+            if (water.IsFreshColonyOcean) {
+                Label(160, 34, 128, "Временный океан", micro);
+                if (Button(new Rect(292, 22, 78, 42), "Назад", "Вернуться в сохранённый океан на этом seed",
+                    false, water.CanReloadColonyOcean && !CapturesCommands)) water.ReturnToSavedOcean();
+                return;
+            }
             if (water.ColonyAttempt.Active || water.Overview.Active || CapturesCommands) return;
             bool ready = ColonyChallenge.CanBegin(water.World, water.SelectedIndex);
             string tip = ready ? "От клетки к первой колонии" : "Выбери живую одиночную клетку";
-            if (Button(new Rect(160, 22, 178, 42), "Первая колония · F7", tip, false, ready))
+            if (Button(new Rect(160, 22, 112, 42), "Колония · F7", tip, false, ready))
                 water.StartColonyChallenge();
+            DrawFreshColonyButton(new Rect(278, 22, 92, 42), "Практика");
         }
 
         bool DrawColonyChallenge()
@@ -35,8 +42,9 @@ namespace Evolution.Runtime
                     GUI.Label(new Rect(r.x + 16, r.y + 104, r.width - 32, 46), outcome, title);
                     bool ready = ColonyChallenge.CanBegin(water.World, water.SelectedIndex);
                     string tip = ready ? "Новая попытка в текущем океане" : "Выбери живую одиночную клетку";
-                    if (Button(new Rect(r.x + 16, r.y + 189, r.width - 32, 35), "Повторить · F7", tip, false, ready))
+                    if (Button(new Rect(r.x + 16, r.y + 184, r.width - 32, 31), "В текущем океане · F7", tip, false, ready))
                         water.StartColonyChallenge();
+                    DrawFreshColonyButton(new Rect(r.x + 16, r.y + 219, r.width - 32, 34), "Начать в свежем океане");
                 } else {
                     GUI.Label(new Rect(r.x + 16, r.y + 105, r.width - 32, 50),
                         attempt.Guidance ?? "Удерживай потомка у пищи", title);
@@ -51,7 +59,8 @@ namespace Evolution.Runtime
                     GUI.Label(new Rect(r.x + 16, r.y + 154, r.width - 32, 29), exchange, micro);
                 }
             }
-            GUI.Label(new Rect(r.x + 16, r.y + 230, r.width - 32, 24), "F6 — выйти из испытания", micro);
+            if (!attempt.Finished)
+                GUI.Label(new Rect(r.x + 16, r.y + 230, r.width - 32, 24), "F6 — выйти из испытания", micro);
             return true;
         }
 
@@ -68,8 +77,17 @@ namespace Evolution.Runtime
                 linkBlock ?? "Пара движется вместе и обменивается энергией", choice == BirthConnection.Retain, controlled && linkBlock == null))
                 world.PlanConnection(BirthConnection.Retain);
             string status = !controlled ? "Возьми управление исходной клеткой"
-                : water.Paused ? "Продолжи симуляцию · P" : water.PlayerDivisionBlock(world.Controlled) ?? "Разделись · R";
-            GUI.Label(new Rect(r.x + 16, r.y + 159, r.width - 32, 59), status, micro);
+                : water.Paused ? choice == BirthConnection.Natural ? "Выбери способ, затем P" : "Продолжи симуляцию · P"
+                : water.PlayerDivisionBlock(world.Controlled) ?? "Разделись · R";
+            GUI.Label(new Rect(r.x + 16, r.y + 154, r.width - 32, 40), status, micro);
+            if (!water.IsFreshColonyOcean || world.Tick > 0)
+                DrawFreshColonyButton(new Rect(r.x + 16, r.y + 194, r.width - 32, 32), "Начать в свежем океане");
+        }
+
+        void DrawFreshColonyButton(Rect area, string label)
+        {
+            if (Button(area, label, "Испытание с начала на том же seed. Океан и результаты этой попытки остаются в памяти.",
+                false, water.CanReloadColonyOcean && !CapturesCommands)) water.StartFreshColonyOcean();
         }
     }
 }

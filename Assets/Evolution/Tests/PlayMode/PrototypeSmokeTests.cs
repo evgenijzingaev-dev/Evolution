@@ -1,6 +1,7 @@
 using System.Collections;
 using Evolution.Runtime;
 using Evolution.Core;
+using Evolution.Volume;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -70,6 +71,93 @@ namespace Evolution.Tests
                 Assert.That(water.World.Count, Is.GreaterThan(0));
             } finally {
                 SceneManager.sceneLoaded -= UseInMemoryArchive;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator FreshColonyOceanRepeatsThePausedStartAndReturnsToOrdinaryMode()
+        {
+            void ConfigureOcean(Scene scene, LoadSceneMode mode)
+            {
+                if (scene.name != "WaterPrototype3D") return;
+                var water = Object.FindFirstObjectByType<WaterPrototype>();
+                if (!water) return;
+                water.ParticleCount = 512;
+                water.SoundVolume = 0;
+                // Keep this scene-transition test isolated from the user's on-disk world.
+                water.PersistRegions = false;
+                if (!water.IsFreshColonyOcean) water.Paused = true;
+            }
+
+            SceneManager.sceneLoaded += ConfigureOcean;
+            try {
+                yield return runner.OpenOcean3D();
+                yield return null;
+                var ordinary = Object.FindFirstObjectByType<WaterPrototype>();
+                Assert.IsNotNull(ordinary);
+                Assert.IsFalse(ordinary.IsFreshColonyOcean);
+                Assert.IsNotEmpty(ordinary.RecordsPath);
+                Assert.IsTrue(ordinary.StartColonyChallenge());
+                ordinary.World.Step();
+                Assert.Greater(ordinary.World.Tick, 0);
+
+                var load = ordinary.StartFreshColonyOcean();
+                var repeatedLoad = ordinary.StartFreshColonyOcean();
+                yield return load;
+                if (repeatedLoad != null && repeatedLoad != load) yield return repeatedLoad;
+                Assert.IsNotNull(load);
+                Assert.AreSame(load, repeatedLoad);
+                yield return null;
+                var first = Object.FindFirstObjectByType<WaterPrototype>();
+                Assert.IsNotNull(first);
+                Assert.IsTrue(first.IsFreshColonyOcean);
+                Assert.IsTrue(first.Paused);
+                Assert.IsNull(first.RecordsPath);
+                int seed = first.Seed;
+                Assert.AreEqual(42, seed);
+                Assert.AreEqual(0, first.World.Tick);
+                Assert.AreEqual(EcologicalScenario.Natural, first.World.Scenario);
+                Assert.AreEqual(ColonyChallengeState.AwaitingDivision, first.ColonyAttempt.State);
+                Assert.AreEqual(first.SelectedIndex, first.World.Controlled);
+                var startingCell = first.World.Get(first.SelectedIndex);
+                Assert.AreEqual("-1_1_-2/agent/1", startingCell.Identity);
+                Assert.IsTrue(startingCell.Alive);
+                Assert.IsTrue(first.World.PlanConnection(BirthConnection.Retain));
+                first.World.Step();
+
+                var retryLoad = first.StartFreshColonyOcean();
+                Assert.IsNotNull(retryLoad);
+                yield return retryLoad;
+                yield return null;
+                var retry = Object.FindFirstObjectByType<WaterPrototype>();
+                Assert.IsNotNull(retry);
+                Assert.IsTrue(retry.IsFreshColonyOcean);
+                Assert.IsTrue(retry.Paused);
+                Assert.IsNull(retry.RecordsPath);
+                Assert.AreEqual(seed, retry.Seed);
+                Assert.AreEqual(0, retry.World.Tick);
+                Assert.AreEqual(ColonyChallengeState.AwaitingDivision, retry.ColonyAttempt.State);
+                var sameCell = retry.World.Get(retry.SelectedIndex);
+                Assert.AreEqual(startingCell.Identity, sameCell.Identity);
+                Assert.AreEqual(startingCell.Biology.Genes, sameCell.Biology.Genes);
+                Assert.AreEqual(startingCell.Biology.Energy, sameCell.Biology.Energy);
+                Assert.AreEqual(startingCell.MineralReserve, sameCell.MineralReserve);
+                Assert.AreEqual(startingCell.Position, sameCell.Position);
+                Assert.AreEqual(BirthConnection.Natural, sameCell.PlannedConnection);
+                Assert.IsTrue(retry.World.PlanConnection(BirthConnection.Separate));
+
+                var returnLoad = retry.ReturnToSavedOcean();
+                Assert.IsNotNull(returnLoad);
+                yield return returnLoad;
+                yield return null;
+                var ordinaryAgain = Object.FindFirstObjectByType<WaterPrototype>();
+                Assert.IsNotNull(ordinaryAgain);
+                Assert.IsFalse(ordinaryAgain.IsFreshColonyOcean);
+                Assert.IsFalse(ordinaryAgain.ColonyAttempt.Active);
+                Assert.IsNotEmpty(ordinaryAgain.RecordsPath);
+                Assert.AreEqual(seed, ordinaryAgain.Seed);
+            } finally {
+                SceneManager.sceneLoaded -= ConfigureOcean;
             }
         }
 

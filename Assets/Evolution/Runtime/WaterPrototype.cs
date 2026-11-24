@@ -38,9 +38,10 @@ namespace Evolution.Runtime
         int selected;bool following=true;SimulationClock clock;double lastSound=double.NegativeInfinity;
         void Start()
         {
-            IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
+            IRegionArchive archive=PersistRegions&&!IsFreshColonyOcean
+                ?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
             Ocean=new ChunkOcean(unchecked((uint)Seed),archive,EcologicalScenario.Natural);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
-            selected=ScenicSelection();
+            selected=IsFreshColonyOcean?FreshColonyFounder():ScenicSelection();
             Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
             cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
             Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.012f,.07f,.15f);
@@ -57,8 +58,9 @@ namespace Evolution.Runtime
             Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
             Milestones=new LifeMilestones();
             Tree=new LineageTree();Chronicle=new LineageChronicle();HuntEffects=new HuntConsequences();Dynasty=new DynastyGoal();
-            RecordsPath=Path.Combine(Application.persistentDataPath,"ExperimentalWater","lineage-records.tsv");
-            Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;PlaySelected();
+            RecordsPath=IsFreshColonyOcean?null:Path.Combine(Application.persistentDataPath,"ExperimentalWater","lineage-records.tsv");
+            Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;
+            if(!IsFreshColonyOcean||!StartColonyChallenge())PlaySelected();
         }
         // Time pace only: scale never changes the tick sequence for a given seed.
         public int TimeScaleIndex=>clock.ScaleIndex;
@@ -86,7 +88,11 @@ namespace Evolution.Runtime
         // Determinism makes the same seed the same ocean: a clean scene restart is the
         // base of the local records. The region archive keeps its memory of the seed.
         // The scene path works in the Editor even without Build Settings entry.
-        public void RestartSameSeed()=>UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        public void RestartSameSeed()
+        {
+            if(IsFreshColonyOcean)StartFreshColonyOcean();
+            else UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        }
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)clock.Blend),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
