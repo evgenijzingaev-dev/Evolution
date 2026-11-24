@@ -12,10 +12,10 @@ namespace Evolution.Tests
             Oxygen = 70, Nutrients = 20, NicheInitialized = true
         };
 
-        static VolumeWorld MigrationWorld(FoodCloud[] food)
+        static VolumeWorld MigrationWorld(FoodCloud[] food, V3? start = null)
         {
             var founder = new VolumeAgent {
-                Alive = true, Identity = "founder", Position = new V3(0, 24, 0), Direction = new V3(1, 0, 0),
+                Alive = true, Identity = "founder", Position = start ?? new V3(0, 24, 0), Direction = new V3(1, 0, 0),
                 NicheInitialized = true, Matter = 1, MineralReserve = .75f,
                 Biology = new Cell {
                     Id = 1, LineageId = 1, Energy = 24, Integrity = 1, Growth = 1, Age = 100,
@@ -109,6 +109,44 @@ namespace Evolution.Tests
             Assert.IsTrue(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
             descendant.Biology.Energy = Biology.Capacity(descendant.Biology.Genes);
             Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
+        }
+
+        [Test]
+        public void MigrationPrefersAReachableFoodCloudAndKeepsAFutureTargetWhenNeeded()
+        {
+            var nearer = MigrationCloud("nearer", new V3(3.2f, 16.5f, 0));
+            nearer.Radius = 2.2f;
+            var wider = MigrationCloud("wider", new V3(3.65f, 17, 0));
+            wider.Radius = 3.5f;
+            var world = MigrationWorld(new[] { nearer, wider }, new V3(0, 15, 0));
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.AreEqual(0, challenge.FounderNicheKind);
+            DivideAndFollow(world, challenge);
+
+            VolumeWorld WithReserve(float fraction)
+            {
+                var descendant = world.Get(world.Controlled);
+                descendant.Biology.Energy = Biology.Capacity(descendant.Biology.Genes) * fraction;
+                return new VolumeWorld(new[] { world.Get(0), descendant }, new[] { world.GetFood(0), world.GetFood(1) },
+                    Array.Empty<V3>(), world.Tick, default, scenario: EcologicalScenario.Natural) { Controlled = 1 };
+            }
+
+            var limited = WithReserve(.375f);
+            var swimmer = limited.Get(limited.Controlled);
+            float upkeep = PlayerReadout.Read(limited, limited.Controlled).Need;
+            Assert.Less((limited.GetFood(0).Position - swimmer.Position).Length,
+                (limited.GetFood(1).Position - swimmer.Position).Length);
+            Assert.IsTrue(LineageChallenge.MigrationNeedsReserve(swimmer, limited.GetFood(0), upkeep));
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(swimmer, limited.GetFood(1), upkeep));
+            Assert.AreEqual(1, challenge.FindMigrationFood(limited, out int niche, out bool needsReserve, upkeep));
+            Assert.AreEqual(1, niche);
+            Assert.IsFalse(needsReserve);
+
+            Assert.AreEqual(0, challenge.FindMigrationFood(WithReserve(.35f), out _, out needsReserve));
+            Assert.IsTrue(needsReserve);
+            Assert.AreEqual(0, challenge.FindMigrationFood(WithReserve(.60f), out _, out needsReserve));
+            Assert.IsFalse(needsReserve);
         }
 
         [TestCase(.30f)]

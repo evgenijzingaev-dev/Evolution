@@ -31,6 +31,7 @@ namespace Evolution.Runtime
         long eventTick;
         PlayerReadout readout;
         int migrationFood=-1, migrationNiche;
+        bool migrationNeedsReserve;
         readonly List<Notice> notices=new List<Notice>(3);
         readonly Dictionary<string,float> cooldown=new Dictionary<string,float>();
         struct Notice { public string Text, Sub; public float Until; public bool Danger; }
@@ -127,7 +128,7 @@ namespace Evolution.Runtime
             if(readWorld==water.World&&readIndex==water.SelectedIndex&&Time.unscaledTime<nextRead)return;
             nextRead=Time.unscaledTime+.5f;readWorld=water.World;readIndex=water.SelectedIndex;
             readout=PlayerReadout.Read(water.World,water.SelectedIndex);
-            migrationFood=water.Challenge.FindMigrationFood(water.World,out migrationNiche);
+            migrationFood=water.Challenge.FindMigrationFood(water.World,out migrationNiche,out migrationNeedsReserve,readout.Need);
             water.Overview.Refresh();living=0;lines.Clear();busiest=foodRegion=dangerRegion=null;
             foreach(var a in water.Overview.Survey.Agents)if(InLayer(a.Position)){living++;lines.Add(a.Lineage);}
             foreach(var r in water.Overview.Survey.Regions)if(r.Loaded&&InLayer(r.Center)){
@@ -318,18 +319,16 @@ namespace Evolution.Runtime
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nСтарт: "+challenge.FounderNicheName+" · Новая ниша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
                     if(routeFood>=0) {
-                        var food=water.World.GetFood(routeFood);
-                        var descendant=water.World.Get(water.SelectedIndex);
-                        var destination=food.Position;
-                        float rise=destination.Y-descendant.Position.Y;
-                        string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
-                        if (LineageChallenge.MigrationNeedsReserve(descendant, food, readout.Need)) {
+                        if (migrationNeedsReserve) {
                             task = "На переход может не хватить энергии";
                             string first = readout.Food >= 0 && readout.Food != routeFood
                                 && readout.FoodRate > readout.Need
                                 ? "Сначала поешь поблизости" : "Сначала найди пищу рядом";
-                            hint = first + "\nПотом к ромбу" + direction;
+                            hint = first + "\nРомб — будущая цель";
                         } else {
+                            var destination=water.World.GetFood(routeFood).Position;
+                            float rise=destination.Y-water.World.Get(water.SelectedIndex).Position.Y;
+                            string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
                             var offset=destination-VolumePainter.V(water.Rig.Focus);
                             bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
                             task="Новая ниша: "+LineageChallenge.NicheName(migrationNiche);

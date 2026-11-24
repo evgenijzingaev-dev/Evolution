@@ -349,16 +349,24 @@ namespace Evolution.Volume
         }
 
         public int FindMigrationFood(VolumeWorld world, out int niche)
+            => FindMigrationFood(world, out niche, out _);
+
+        public int FindMigrationFood(VolumeWorld world, out int niche, out bool needsReserve, float? currentUpkeep = null)
         {
             niche = 0;
+            needsReserve = false;
             if (!CanGuideMigration(world)) return -1;
             var agent = world.Get(world.Controlled);
+            float travelUpkeep = currentUpkeep ?? PlayerReadout.Read(world, world.Controlled).Need;
             int best = -1;
             float bestDistance = float.PositiveInfinity;
             for (int i = 0; i < world.FoodCount; i++) {
                 var food = world.GetFood(i);
                 float distance = (food.Position - agent.Position).Sqr;
-                if (!(food.Radius > 0) || !(distance < bestDistance)) continue;
+                if (!(food.Radius > 0) || !(distance < float.PositiveInfinity)) continue;
+                bool needsMoreEnergy = MigrationNeedsReserve(agent, food, travelUpkeep);
+                if (best >= 0 && (needsMoreEnergy && !needsReserve
+                    || needsMoreEnergy == needsReserve && distance >= bestDistance)) continue;
                 float intake = world.FoodPotential(i, agent.Biology);
                 if (!(intake > 0)) continue;
                 var environment = world.EnvironmentAt(food.Position);
@@ -370,6 +378,7 @@ namespace Evolution.Volume
                 best = i;
                 bestDistance = distance;
                 niche = kind;
+                needsReserve = needsMoreEnergy;
             }
             return best;
         }
