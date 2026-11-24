@@ -66,6 +66,49 @@ namespace Evolution.Tests
             Assert.That(((w.Get(0).Position-a)-(w.Get(1).Position-b)).Length,Is.LessThan(.0001));
             Assert.Greater(w.Get(0).Biology.Budget.Movement,0);Assert.Greater(w.Get(1).Biology.Budget.Movement,0);
         }
+        [Test] public void SingleCellControlChargesBothMotorsForActualColonyThrust()
+        {
+            var joined = Pair();
+            Assert.AreEqual(1, joined.Births);
+            Assert.AreEqual(.30f, joined.Diagnostics.Contact, 1e-6);
+            var parent = joined.Get(0);
+            var child = joined.Get(1);
+            child.Position -= parent.Position;
+            parent.Position = default;
+            parent.Velocity = child.Velocity = default;
+            var members = new[] { parent, child };
+            float mass = parent.Biology.Genes.Size + child.Biology.Genes.Size;
+
+            (VolumeWorld World, V3 Drift) Simulate(float input)
+            {
+                var world = new VolumeWorld(members, Array.Empty<FoodCloud>(), Array.Empty<V3>(),
+                    joined.Tick, default, scenario: EcologicalScenario.Natural) {
+                    Controlled = 1, Input = parent.Direction * input
+                };
+                var drift = WaterField.Relax(default, world.Current(parent.Position), mass, VolumeWorld.StepSeconds)
+                    * VolumeWorld.StepSeconds;
+                world.Step();
+                Assert.AreEqual(2, world.OrganismSize(1));
+                return (world, drift);
+            }
+
+            var full = Simulate(1);
+            foreach (float input in new[] { 0f, .5f }) {
+                var reduced = Simulate(input);
+                float effort = 1 - child.Biology.Genes.Size / mass * (1 - input);
+                for (int i = 0; i < members.Length; i++) {
+                    var reference = full.World.Get(i);
+                    var moved = reduced.World.Get(i);
+                    float fullDistance = (reference.Position - members[i].Position - full.Drift).Length;
+                    float distance = (moved.Position - members[i].Position - reduced.Drift).Length;
+                    float fullCost = reference.Biology.Budget.Swimming;
+                    Assert.Greater(fullDistance, 0);
+                    Assert.Greater(fullCost, 0);
+                    Assert.AreEqual(fullDistance * effort, distance, 1e-6);
+                    Assert.AreEqual(fullCost * effort * effort, moved.Biology.Budget.Swimming, 1e-7);
+                }
+            }
+        }
         [TestCase(CellRole.Feeding)] [TestCase(CellRole.Movement)] [TestCase(CellRole.Defense)]
         public void SpecializationsTradeRealFunctionsForOtherFunctions(CellRole role)
         {

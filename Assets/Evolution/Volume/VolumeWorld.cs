@@ -136,7 +136,6 @@ namespace Evolution.Volume
                 if(Niches&&i!=Controlled&&cloud>=0)throttle=Math.Min(1,Math.Max(.12f,(a.Position-food[cloud].Position).Length/food[cloud].Radius));
                 float speed;
                 if(members>1) {
-                    if(Niches&&!driven){if(i==root)colonyEffort[root]=throttle;throttle=colonyEffort[root];}
                     if(i==root) {
                         if(driven) {
                             float influence=ControlColony?1:agents[Controlled].Biology.Genes.Size/colonyMass[root];
@@ -144,6 +143,7 @@ namespace Evolution.Volume
                             else if(ControlColony)target=a.Direction;
                             throttle=1-influence+influence*Math.Min(1,Input.Length);
                         }
+                        colonyEffort[root]=throttle;
                         target=(target.Unit+Current(a.Position)*.15f).Unit;
                         a.Direction=V3.Turn(a.Direction,target,dt*1.6f/(float)Math.Sqrt(colonyMass[root])/(1+.1f*(members-1)));
                         speed=colonyMotor[root]/colonyMass[root]/(1+.12f*(members-1))*throttle*(driven&&Boost?1.65f:1);
@@ -152,7 +152,7 @@ namespace Evolution.Volume
                     } else {a.Velocity=colonyVelocity[root];a.Direction=colonyDirection[root];}
                     // Every cell pays its own propulsion effort; passive mass contributes drag.
                     speed=Ecology.Mobility(a.Biology.Genes)*Multicellularity.Motor(a.Biology);
-                    speed*=driven?(ControlColony?Math.Min(1,Input.Length):1):(Niches?throttle:1);
+                    speed*=colonyEffort[root];
                     if(driven&&Boost)speed*=1.65f;
                 } else {
                     if(i==Controlled && Input.Sqr>.0001f) target=Input.Unit;
