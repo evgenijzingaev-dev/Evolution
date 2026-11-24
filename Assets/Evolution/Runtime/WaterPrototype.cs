@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Evolution.Runtime
 {
-    public sealed class WaterPrototype : MonoBehaviour
+    public sealed partial class WaterPrototype : MonoBehaviour
     {
         public int ParticleCount=8192,Seed=42;
         public bool OrganismsVisible=true,ShowCurrents,ShowTemperature,FindFood,HudVisible=true;
@@ -101,8 +101,9 @@ namespace Evolution.Runtime
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F3))clock.Faster();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F4))clock.Slower();
             // Optional gameplay challenge. F5 starts with the currently selected living cell; F6 exits.
-            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5))Challenge.Begin(World,selected);
-            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6))Challenge.Stop();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5)&&Challenge.Begin(World,selected))ColonyAttempt.Stop();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6)){Challenge.Stop();ColonyAttempt.Stop();}
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.F7))StartColonyChallenge();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
             if(Input.GetKeyDown(KeyCode.Escape)){if(Hud.CloseOverlay()){}else if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
@@ -115,8 +116,8 @@ namespace Evolution.Runtime
                     else if(World.Controlled>=0) {var plane=new Plane(-Lens.transform.forward,VolumePainter.V(Selection.Position));var ray=Lens.ScreenPointToRay(Input.mousePosition);if(plane.Raycast(ray,out float along))moveTarget=ray.GetPoint(along);}}
             }
             World.Input=default;World.Boost=World.Attack=false;
-            if(!Overview.Typing&&!modal&&!Paused&&Input.GetKeyDown(KeyCode.R))World.RequestDivision();
-            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Y))FollowOffspring();
+            if(!Overview.Typing&&!modal&&!Paused&&Input.GetKeyDown(KeyCode.R))RequestPlayerDivision();
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Y))FollowPlayedOffspring();
             if(World.Controlled>=0&&!Paused&&!over&&!modal&&Application.isFocused) {
                 Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
@@ -132,7 +133,7 @@ namespace Evolution.Runtime
             if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0)following=false;}
             int steps=clock.Advance(Time.unscaledDeltaTime,Paused);
             while(steps>0) {
-                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);Milestones.Record(World,World.Controlled);
+                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);ColonyAttempt.RecordStep(World);Milestones.Record(World,World.Controlled);
                 Tree.Record(World,World.Controlled);Chronicle.Record(World,World.Controlled);
                 HuntEffects.Record(World,Ocean.Survey,Tree);Dynasty.Record(World,World.Controlled,Milestones.ChainComplete,Ocean.Survey,Tree);
                 int count=OrganismsVisible?NearestFlows():0;

@@ -274,7 +274,7 @@ namespace Evolution.Runtime
             var matrix=GUI.matrix;var oldSkin=GUI.skin;var oldColor=GUI.color;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);GUI.skin=skin;
             GUI.color=new Color(1,1,1,.75f+.25f*transition);
-            DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
+            DrawTop();DrawColonyEntry();if(!DrawColonyChallenge())DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
             if(development)DrawDevelopment();
             if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else if(chronicle)DrawChronicle();else DrawNotices();
             if(ShowObserverControls)DrawObserverLinks();
@@ -385,11 +385,12 @@ namespace Evolution.Runtime
             bool canAttack=readout.Alive&&water.World.Controlled>=0&&water.World.Get(water.SelectedIndex).Biology.Genes.Predation>.2f&&water.World.Get(water.SelectedIndex).Biology.Energy>.5f;
             string why=!readout.Alive?"Выбери живую клетку":water.World.Controlled<0?"Сначала возьми управление":water.World.Get(water.SelectedIndex).Biology.Genes.Predation<=.2f?"Эта способность отсутствует":"Недостаточно энергии";
             if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Атака расходует энергию каждую попытку, даже без попадания. Подплыви к добыче; удерживай Space или выключи режим.":why,AttackRequested,canAttack||AttackRequested))AttackRequested=!AttackRequested;
-            string blocked=water.World.DivisionBlock(water.SelectedIndex);
+            string blocked=water.PlayerDivisionBlock(water.SelectedIndex);
             if(water.Paused)blocked="Продолжи симуляцию";
             else if(water.World.Controlled!=water.SelectedIndex&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Alive)blocked="Сначала возьми управление";
             float divisionCost=0;
-            string divisionTip=blocked??"Рождение самостоятельного потомка";
+            bool retain=water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).PlannedConnection==BirthConnection.Retain;
+            string divisionTip=blocked??(retain?"Рождение связанного потомка":"Рождение самостоятельного потомка");
             if(water.SelectedIndex>=0) {
                 var c=water.World.Get(water.SelectedIndex).Biology;
                 float developmentFee=CellEvolution.Cost(c,water.World.Get(water.SelectedIndex).PlannedDevelopment);
@@ -399,7 +400,7 @@ namespace Evolution.Runtime
                 float cost=developmentFee+construction+Mathf.Min((provision-developmentFee-construction)*.5f,Biology.Capacity(c.Genes)*.5f);divisionCost=cost;
                 divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка. Развитие: +"+developmentFee.ToString("F1")+".";
             }
-            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
+            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.RequestPlayerDivision();
             if(water.SelectedIndex>=0) {
                 var energyInfo=new Rect(r.x+34,r.y-54,r.width-68,46);
                 Box(energyInfo);
