@@ -1,10 +1,12 @@
 using Evolution.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 namespace Evolution.Runtime
 {
     public sealed partial class EvolutionRunner : MonoBehaviour
     {
+        const string Ocean3DScene = "WaterPrototype3D";
         public int Seed = 42;
         public bool LivingOcean = true;
         public bool DynamicEcosystem = true;
@@ -27,6 +29,7 @@ namespace Evolution.Runtime
         MicroscopeCamera rig;
         GameObject ownedCamera;
         AudioListener ownedListener;
+        AsyncOperation oceanSceneLoad;
         double accumulator, visualTime;
         bool paused;
         int colorMode = 4, selectedId;
@@ -37,6 +40,12 @@ namespace Evolution.Runtime
         public int SelectedId => selectedId;
         public EvolutionJourney Journey { get; private set; }
         public bool IsControlling => simulation != null && simulation.ControlledId != 0;
+        bool CanOpenOcean3D => Application.CanStreamedLevelBeLoaded(Ocean3DScene);
+        public AsyncOperation OpenOcean3D()
+        {
+            if (!CanOpenOcean3D) return null;
+            return oceanSceneLoad ??= SceneManager.LoadSceneAsync(Ocean3DScene, LoadSceneMode.Single);
+        }
         public bool PlaySelected()
         {
             if (!simulation.TryControl(selectedId)) return false;

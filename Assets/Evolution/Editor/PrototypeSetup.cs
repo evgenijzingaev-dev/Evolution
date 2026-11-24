@@ -46,7 +46,10 @@ namespace Evolution.Editor
                 if (!scene.isLoaded) scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
                 UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
             }
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            EditorBuildSettings.scenes = new[] {
+                new EditorBuildSettingsScene(ScenePath, true),
+                new EditorBuildSettingsScene(WaterPrototypeSetup.ScenePath, true)
+            };
             AssetDatabase.SaveAssets();
         }
     }
