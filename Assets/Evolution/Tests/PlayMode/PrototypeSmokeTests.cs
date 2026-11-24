@@ -38,6 +38,42 @@ namespace Evolution.Tests
         }
 
         [UnityTest]
+        public IEnumerator CellPrototypeCanOpenThe3DOceanFromTheBuild()
+        {
+            Assert.That(SceneManager.GetActiveScene().buildIndex, Is.Zero);
+            WaterPrototype water = null;
+            void UseInMemoryArchive(Scene scene, LoadSceneMode mode)
+            {
+                if (scene.name != "WaterPrototype3D") return;
+                water = Object.FindFirstObjectByType<WaterPrototype>();
+                if (!water) return;
+                // The scene-loaded callback runs before Start opens the region archive.
+                water.PersistRegions = false;
+                water.ParticleCount = 512;
+                water.SoundVolume = 0;
+                water.Paused = true;
+            }
+
+            SceneManager.sceneLoaded += UseInMemoryArchive;
+            try {
+                var load = runner.OpenOcean3D();
+                var repeatLoad = runner.OpenOcean3D();
+                yield return load;
+                if (repeatLoad != null && repeatLoad != load) yield return repeatLoad;
+                Assert.That(load, Is.Not.Null);
+                Assert.AreSame(load, repeatLoad, "Repeated clicks must reuse the pending load.");
+                yield return null;
+                Assert.That(SceneManager.GetActiveScene().name, Is.EqualTo("WaterPrototype3D"));
+                Assert.That(SceneManager.GetSceneByName("CellPrototype").isLoaded, Is.False);
+                Assert.That(water, Is.Not.Null);
+                Assert.That(water.World, Is.Not.Null);
+                Assert.That(water.World.Count, Is.GreaterThan(0));
+            } finally {
+                SceneManager.sceneLoaded -= UseInMemoryArchive;
+            }
+        }
+
+        [UnityTest]
         public IEnumerator DisablingRunnerStopsSimulationUpdates()
         {
             runner.enabled = false;
@@ -142,6 +178,8 @@ namespace Evolution.Tests
             SceneManager.SetActiveScene(empty);
             var prototype = SceneManager.GetSceneByName("CellPrototype");
             if (prototype.isLoaded) yield return SceneManager.UnloadSceneAsync(prototype);
+            var ocean = SceneManager.GetSceneByName("WaterPrototype3D");
+            if (ocean.isLoaded) yield return SceneManager.UnloadSceneAsync(ocean);
             runner = null;
         }
     }

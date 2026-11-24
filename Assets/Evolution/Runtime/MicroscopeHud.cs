@@ -82,6 +82,7 @@ namespace Evolution.Runtime
             }
             GUI.backgroundColor = Color.white;
             if (GUILayout.Button(GameText.Get(TextKey.Overview), GUILayout.Width(140))) { ObserveWorld(); rig.Overview(); }
+            if (CanOpenOcean3D && GUILayout.Button(GameText.Get(TextKey.OpenOcean3D), GUILayout.Width(110))) OpenOcean3D();
             GUILayout.EndHorizontal(); GUILayout.EndArea();
             GUILayout.BeginArea(LeftPanel, panelStyle);
             BeginPanelScroll(ref environmentScroll, LeftPanel);

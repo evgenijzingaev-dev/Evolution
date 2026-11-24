@@ -8,4 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Evolution/Scenes/CellPrototype.unity
     guid: 8ee7b2f2921658dfbe8bca1e35cc5090
+  - enabled: 1
+    path: Assets/Evolution/Scenes/WaterPrototype3D.unity
+    guid: f6d9759fb36f45829ae809143df0ae46
   m_configObjects: {}
