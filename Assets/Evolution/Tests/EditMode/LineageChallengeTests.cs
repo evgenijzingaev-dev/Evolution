@@ -93,6 +93,24 @@ namespace Evolution.Tests
             Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
         }
 
+        [Test]
+        public void MigrationReserveWarningAccountsForTheSwimAndClearsWithEnoughEnergy()
+        {
+            var world = MigrationWorld(Array.Empty<FoodCloud>());
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            var descendant = world.Get(world.Controlled);
+            float upkeep = PlayerReadout.Read(world, world.Controlled).Need;
+            var nearby = MigrationCloud("nearby", descendant.Position + new V3(2.1f, 0, 0));
+            var distant = MigrationCloud("distant", descendant.Position + new V3(10, 0, 0));
+
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(descendant, nearby, upkeep));
+            Assert.IsTrue(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
+            descendant.Biology.Energy = Biology.Capacity(descendant.Biology.Genes);
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
+        }
+
         [TestCase(.30f)]
         [TestCase(.60f)]
         public void MigrationDoesNotInterruptWarningsOrOngoingSettlement(float energyFraction)

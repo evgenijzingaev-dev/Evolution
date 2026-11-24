@@ -174,6 +174,7 @@ namespace Evolution.Volume
         readonly Dictionary<string, float> nicheEntryEnergy = new Dictionary<string, float>(StringComparer.Ordinal);
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
+        const float RequiredNicheEnergy = .35f;
         // HUD must not round 14.6 seconds to a misleading 15/15 before victory.
         public static int DisplayNicheSeconds(double seconds)
             => double.IsNaN(seconds) || seconds <= 0 ? 0
@@ -204,7 +205,7 @@ namespace Evolution.Volume
             if (!inNewNiche) return "Переведи потомка в другую освещённую, тёмную или термальную нишу";
             if (float.IsNaN(energyFraction) || float.IsInfinity(energyFraction) || energyFraction < 0f || energyFraction > 1f)
                 return "Энергия потомка недостоверна: дождись корректного наблюдения";
-            if (energyFraction < .35f) return "Потомок голодает: найди доступный источник энергии";
+            if (energyFraction < RequiredNicheEnergy) return "Потомок голодает: найди доступный источник энергии";
             if (!sustainable) return "Энергия убывает: попробуй другую пищу или нишу";
             return null;
         }
@@ -246,7 +247,7 @@ namespace Evolution.Volume
         public static bool EligibleNiche(int founderKind, int currentKind, bool isDescendant, bool alive, float energyFraction)
             => isDescendant && alive && currentKind != 0 && currentKind != founderKind
                 && !float.IsNaN(energyFraction) && !float.IsInfinity(energyFraction)
-                && energyFraction >= .35f && energyFraction <= 1f;
+                && energyFraction >= RequiredNicheEnergy && energyFraction <= 1f;
         long recordedTick;
         double startedAt;
         // Player-facing outcome uses only verified observations, never guessed death causes.
@@ -373,6 +374,17 @@ namespace Evolution.Volume
             return best;
         }
 
+        public static bool MigrationNeedsReserve(VolumeAgent agent, FoodCloud food, float upkeep)
+        {
+            float distance = (food.Position - agent.Position).Length - food.Radius;
+            if (distance <= 0) return false;
+            var swimmer = agent.Biology;
+            swimmer.SwimSpeed = Ecology.Mobility(swimmer.Genes) * Multicellularity.Motor(swimmer);
+            // Approximate a direct swim to the edge at normal speed using the current upkeep.
+            float travelCost = distance / swimmer.SwimSpeed * (upkeep + CellMotion.SwimmingCost(swimmer));
+            return swimmer.Energy - travelCost < Biology.Capacity(swimmer.Genes) * RequiredNicheEnergy;
+        }
+
         public void RecordStep(VolumeWorld world)
         {
             if (!Active || world == null || world.Tick <= recordedTick
@@ -440,7 +452,7 @@ namespace Evolution.Volume
                         // becoming eligible for settlement. Explain the blocked goal.
                         if (a.Identity != FounderIdentity && kind != 0 && kind != founderNiche
                             && (float.IsNaN(energyFraction) || float.IsInfinity(energyFraction)
-                                || energyFraction < .35f || energyFraction > 1f))
+                                || energyFraction < RequiredNicheEnergy || energyFraction > 1f))
                             SettlementHint = MoreUrgentSettlementHint(SettlementHint, SettlementAdvice(true, energyFraction, true));
                         if (EligibleNiche(founderNiche, kind,
                             a.Identity != FounderIdentity, true, energyFraction)) {

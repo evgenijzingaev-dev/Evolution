@@ -318,13 +318,23 @@ namespace Evolution.Runtime
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nСтарт: "+challenge.FounderNicheName+" · Новая ниша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
                     if(routeFood>=0) {
-                        var destination=water.World.GetFood(routeFood).Position;
-                        float rise=destination.Y-water.World.Get(water.SelectedIndex).Position.Y;
+                        var food=water.World.GetFood(routeFood);
+                        var descendant=water.World.Get(water.SelectedIndex);
+                        var destination=food.Position;
+                        float rise=destination.Y-descendant.Position.Y;
                         string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
-                        var offset=destination-VolumePainter.V(water.Rig.Focus);
-                        bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
-                        task="Новая ниша: "+LineageChallenge.NicheName(migrationNiche);
-                        hint="Пищи может хватить"+direction+"\n"+(offMap?"Цель за картой · плыви к ромбу":"Плыви к ромбу · F6 — выход");
+                        if (LineageChallenge.MigrationNeedsReserve(descendant, food, readout.Need)) {
+                            task = "На переход может не хватить энергии";
+                            string first = readout.Food >= 0 && readout.Food != routeFood
+                                && readout.FoodRate > readout.Need
+                                ? "Сначала поешь поблизости" : "Сначала найди пищу рядом";
+                            hint = first + "\nПотом к ромбу" + direction;
+                        } else {
+                            var offset=destination-VolumePainter.V(water.Rig.Focus);
+                            bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
+                            task="Новая ниша: "+LineageChallenge.NicheName(migrationNiche);
+                            hint="Пищи может хватить"+direction+"\n"+(offMap?"Цель за картой · плыви к ромбу":"Плыви к ромбу · F6 — выход");
+                        }
                     }
                     else if (Event.current.type == EventType.Repaint && !CapturesCommands && !water.Overview.Typing
                         && challenge.CanPromptOffspring(water.World, water.EvolutionPlay)) {
