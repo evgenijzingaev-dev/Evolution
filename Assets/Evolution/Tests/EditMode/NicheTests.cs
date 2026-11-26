@@ -138,6 +138,33 @@ namespace Evolution.Tests
             Assert.AreEqual(count,reloaded.Survey.NicheHistory.Count);Assert.IsNotEmpty(NicheReadout.Trend(reloaded.Survey.NicheHistory));
             foreach(var r in ocean.Survey.Regions)if(r.Loaded){Assert.GreaterOrEqual(r.Nutrients,0);Assert.GreaterOrEqual(r.Oxygen,0);Assert.That(r.Light,Is.InRange(0f,1f));}
         }
+        [Test] public void NicheReadoutDoesNotNameAnEnergySourceWithoutIncomingEnergy()
+        {
+            var cell = Consumer();
+            cell.Alive = true;
+            cell.Identity = "no-income";
+            var world = new VolumeWorld(new[] { cell }, Array.Empty<FoodCloud>(), Array.Empty<V3>(), 0,
+                default, scenario: EcologicalScenario.Natural);
+            world.Step();
+            var budget = world.Get(0).Biology.Budget;
+            Assert.AreEqual(0, budget.Intake);
+            Assert.AreEqual(0, budget.Transport);
+            Assert.Greater(budget.Upkeep, 0);
+            var explanation = NicheReadout.Explain(world, 0);
+            StringAssert.Contains("Питание сейчас не покрывает расходы", explanation);
+            StringAssert.DoesNotContain("Источник:", explanation);
+        }
+        [Test] public void NicheReadoutNamesLargestIndividualEnergySource()
+        {
+            var cell = Consumer();
+            cell.Alive = true;
+            cell.Identity = "mixed-income";
+            cell.Biology.Budget = new EnergyBudget { Light = .3f, Organic = .3f, Transport = .4f };
+            var world = new VolumeWorld(new[] { cell }, Array.Empty<FoodCloud>(), Array.Empty<V3>(), 0,
+                default, scenario: EcologicalScenario.Natural);
+
+            StringAssert.Contains("Источник: обмен в колонии", NicheReadout.Explain(world, 0));
+        }
         [Test] public void FreshRegionsAreCreditedAsInitialStockRatherThanHiddenEnergy()
         {
             var ocean=new ChunkOcean(42,new MemoryRegionArchive(),EcologicalScenario.Natural);
@@ -234,6 +261,10 @@ namespace Evolution.Tests
             var f=new FoodCloud {Identity="detritus-pool",Position=default,Radius=3};
             var w=new VolumeWorld(new[]{hunter,prey},new[]{f},Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Sunlit){NutrientSupply=false};
             double initial=VolumeSnapshot.Read(w).Stored;w.Step();Assert.IsFalse(w.Get(1).Alive);Assert.Greater(w.Diagnostics.Predated,0);
+            var hunterBudget = w.Get(0).Biology.Budget;
+            Assert.Greater(hunterBudget.Prey, 0);
+            Assert.AreEqual(hunterBudget.Prey, hunterBudget.Intake);
+            StringAssert.Contains("Источник: добыча", NicheReadout.Explain(w, 0));
             Assert.AreEqual(0,w.Get(1).Matter+w.Get(1).MineralReserve);Assert.Greater(w.GetFood(0).DetritalMatter,0);
             var result=VolumeSnapshot.Read(w);Assert.AreEqual(w.Diagnostics.InitialMatter-w.Diagnostics.MatterLost,result.Matter,.0001);
             Assert.AreEqual(initial-w.Diagnostics.Dissipated,result.Stored,.0001);long events=w.Life.Latest;

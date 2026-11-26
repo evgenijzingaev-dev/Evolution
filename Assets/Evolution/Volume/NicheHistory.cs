@@ -45,12 +45,27 @@ namespace Evolution.Volume
             var a=world.Get(index);if(!a.Alive)return CellEvolution.DeathReason(a);
             var c=a.Biology;var e=world.EnvironmentAt(a.Position);var b=c.Budget;
             if(b.PredationLoss>0)return "Укусы отнимают энергию. Уходи от хищника.";
-            string source=b.Transport>b.Intake?"обмен в колонии":b.Light>=b.Organic&&b.Light>=b.Substrate?"свет":b.Organic>b.Substrate?"органика":"химический субстрат";
             string limit=a.MineralReserve<NicheMetabolism.NewbornMatter(c.Genes)?"Мало минералов для новой биомассы.":"Минералов для роста достаточно.";
             if(NicheMetabolism.Thermal(c.Genes,e.Temperature)<.6f)limit="Температура снижает усвоение и повышает расход.";
             else if(e.Oxygen<3)limit="Мало кислорода: дыхание менее эффективно.";
             else if(c.Genes.Photosynthesis>.6f&&e.Light<.18f)limit="Мало света: фотосистемы требуют содержания.";
             if(b.Intake+Math.Max(0,b.Transport)<=.00001f)return "Питание сейчас не покрывает расходы. "+limit;
+
+            string source = "свет";
+            float largestGain = b.Light;
+            if (b.Substrate > largestGain) {
+                source = "химический субстрат";
+                largestGain = b.Substrate;
+            }
+            if (b.Organic > largestGain) {
+                source = "органика";
+                largestGain = b.Organic;
+            }
+            if (b.Prey > largestGain) {
+                source = "добыча";
+                largestGain = b.Prey;
+            }
+            if (b.Transport > largestGain) source = "обмен в колонии";
             return "Источник: "+source+" · "+(b.Net>=0?"запас растёт.":"расходы выше питания.")+"\n"+limit;
         }
         public static string Trend(IReadOnlyList<NicheHistoryPoint> history)
