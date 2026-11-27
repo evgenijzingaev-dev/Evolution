@@ -152,8 +152,10 @@ namespace Evolution.Runtime
                 while(water.Milestones.ConsumeCompleted(out string milestone)) {
                     // Distinct keys: several milestones may complete on the same tick.
                     Notify("milestone-"+milestone,"Веха: "+milestone,water.Milestones.ChainComplete?"Весь путь жизни пройден":"Следующая: "+water.Milestones.CurrentTitle,false);
-                    int best=PlayerPrefs.GetInt("OceanMilestones.Best",0);
-                    if(water.Milestones.CompletedCount>best)PlayerPrefs.SetInt("OceanMilestones.Best",water.Milestones.CompletedCount);
+                    if(!water.IsFreshColonyOcean) {
+                        int best=PlayerPrefs.GetInt("OceanMilestones.Best",0);
+                        if(water.Milestones.CompletedCount>best)PlayerPrefs.SetInt("OceanMilestones.Best",water.Milestones.CompletedCount);
+                    }
                 }
             }
             if(water.Dynasty!=null&&water.Dynasty.ConsumeCompleted(out string era)) {
@@ -274,7 +276,7 @@ namespace Evolution.Runtime
             var matrix=GUI.matrix;var oldSkin=GUI.skin;var oldColor=GUI.color;
             GUI.matrix=Matrix4x4.Scale(Vector3.one*Scale);GUI.skin=skin;
             GUI.color=new Color(1,1,1,.75f+.25f*transition);
-            DrawTop();DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
+            DrawTop();DrawColonyEntry();if(!DrawColonyChallenge())DrawTasks();DrawCell();DrawMap();DrawActions();DrawFooter();
             if(development)DrawDevelopment();
             if(settings)DrawSettings();else if(HelpVisible)DrawHelp();else if(chronicle)DrawChronicle();else DrawNotices();
             if(ShowObserverControls)DrawObserverLinks();
@@ -385,11 +387,12 @@ namespace Evolution.Runtime
             bool canAttack=readout.Alive&&water.World.Controlled>=0&&water.World.Get(water.SelectedIndex).Biology.Genes.Predation>.2f&&water.World.Get(water.SelectedIndex).Biology.Energy>.5f;
             string why=!readout.Alive?"Выбери живую клетку":water.World.Controlled<0?"Сначала возьми управление":water.World.Get(water.SelectedIndex).Biology.Genes.Predation<=.2f?"Эта способность отсутствует":"Недостаточно энергии";
             if(Action(new Rect(r.x+208,r.y,cell,76),2,AttackRequested?"Атака: вкл":"Атака",canAttack?"Атака расходует энергию каждую попытку, даже без попадания. Подплыви к добыче; удерживай Space или выключи режим.":why,AttackRequested,canAttack||AttackRequested))AttackRequested=!AttackRequested;
-            string blocked=water.World.DivisionBlock(water.SelectedIndex);
+            string blocked=water.PlayerDivisionBlock(water.SelectedIndex);
             if(water.Paused)blocked="Продолжи симуляцию";
             else if(water.World.Controlled!=water.SelectedIndex&&water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).Alive)blocked="Сначала возьми управление";
             float divisionCost=0;
-            string divisionTip=blocked??"Рождение самостоятельного потомка";
+            bool retain=water.SelectedIndex>=0&&water.World.Get(water.SelectedIndex).PlannedConnection==BirthConnection.Retain;
+            string divisionTip=blocked??(retain?"Рождение связанного потомка":"Рождение самостоятельного потомка");
             if(water.SelectedIndex>=0) {
                 var c=water.World.Get(water.SelectedIndex).Biology;
                 float developmentFee=CellEvolution.Cost(c,water.World.Get(water.SelectedIndex).PlannedDevelopment);
@@ -399,7 +402,7 @@ namespace Evolution.Runtime
                 float cost=developmentFee+construction+Mathf.Min((provision-developmentFee-construction)*.5f,Biology.Capacity(c.Genes)*.5f);divisionCost=cost;
                 divisionTip+="\nРасход ≈ "+cost.ToString("F1")+": структура и запас.\nЦена зависит от генома потомка. Развитие: +"+developmentFee.ToString("F1")+".";
             }
-            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.World.RequestDivision();
+            if(Action(new Rect(r.x+312,r.y,cell,76),3,"Разделиться",divisionTip,false,blocked==null))water.RequestPlayerDivision();
             if(water.SelectedIndex>=0) {
                 var energyInfo=new Rect(r.x+34,r.y-54,r.width-68,46);
                 Box(energyInfo);
@@ -411,6 +414,7 @@ namespace Evolution.Runtime
         {
             var r=Footer;Box(r);
             string layer=water.Overview.FullDepth?"Вся толща":"Слой "+water.Overview.SliceIndex*20+"…"+(water.Overview.SliceIndex+1)*20;
+            if(water.ColonyAttempt.Finished)layer+=" · F6 — выход";
             Label(r.x+16,r.y+9,r.width-380,$"В области: {living}  ·  Линий: {lines.Count}  |  Пища: {readout.Nutrition.ToLowerInvariant()}  ·  Вода: {readout.Temperature.ToLowerInvariant()}  |  {layer}",micro);
             for(int i=0;i<SimulationClock.Scales.Length;i++)
                 if(Button(new Rect(r.xMax-306+i*38,r.y+5,34,32),"×"+SimulationClock.Scales[i].ToString("0.#"),
@@ -489,12 +493,13 @@ namespace Evolution.Runtime
         void OpenChronicle(in ChronicleSummary summary)
         {
             chronicleSummary=summary;chronicle=true;
+            chronicleRecords.Clear();
+            if(water.IsFreshColonyOcean)return;
             int best=PlayerPrefs.GetInt("LineageChronicle.Best",0);
             if(summary.Score>best)PlayerPrefs.SetInt("LineageChronicle.Best",summary.Score);
             if(!string.IsNullOrEmpty(water.RecordsPath))LineageRecords.Append(water.RecordsPath,new LineageRecord {
                 Seed=water.Seed,Name=summary.FounderName,Generations=summary.Generations,Niches=summary.Niches,
                 Divisions=summary.Divisions,Hunts=summary.Hunts,Era=summary.Era,End=(int)summary.End,Seconds=summary.Seconds});
-            chronicleRecords.Clear();
             if(!string.IsNullOrEmpty(water.RecordsPath))foreach(var record in LineageRecords.Load(water.RecordsPath))
                 if(record.Seed==water.Seed)chronicleRecords.Add(record);
         }
@@ -505,15 +510,18 @@ namespace Evolution.Runtime
             GUI.Label(new Rect(r.x+16,y,r.width-32,30),"Поколений: "+chronicleSummary.Generations+" · Делений: "+chronicleSummary.Divisions+" · Укусов: "+chronicleSummary.Hunts,text);y+=34;
             GUI.Label(new Rect(r.x+16,y,r.width-32,30),"Ниш освоено: "+chronicleSummary.Niches+"/"+DynastyGoal.NichesRequired+" · Время линии: "+chronicleSummary.Seconds.ToString("F0")+" с"+(chronicleSummary.Era?" · Эпоха вашей линии достигнута":""),text);y+=34;
             GUI.Label(new Rect(r.x+16,y,r.width-32,64),chronicleSummary.EndText,micro);y+=72;
-            GUI.Label(new Rect(r.x+16,y,r.width-32,28),"Лучший результат: "+PlayerPrefs.GetInt("LineageChronicle.Best",0)+" очков (поколения ×10 + ниши)",muted);y+=32;
-            GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Попытки на этом зерне ("+chronicleRecords.Count+"):",muted);y+=28;
-            int shown=0;
-            for(int i=chronicleRecords.Count-1;i>=0&&shown<4;i--,shown++) {
-                var record=chronicleRecords[i];
-                GUI.Label(new Rect(r.x+16,y,r.width-32,26),record.Name+" · поколений "+record.Generations+" · ниш "+record.Niches+" · "+EndShort((ChronicleEnd)record.End),micro);y+=26;
+            if(!water.IsFreshColonyOcean) {
+                GUI.Label(new Rect(r.x+16,y,r.width-32,28),"Лучший результат: "+PlayerPrefs.GetInt("LineageChronicle.Best",0)+" очков (поколения ×10 + ниши)",muted);y+=32;
+                GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Попытки на этом зерне ("+chronicleRecords.Count+"):",muted);y+=28;
+                int shown=0;
+                for(int i=chronicleRecords.Count-1;i>=0&&shown<4;i--,shown++) {
+                    var record=chronicleRecords[i];
+                    GUI.Label(new Rect(r.x+16,y,r.width-32,26),record.Name+" · поколений "+record.Generations+" · ниш "+record.Niches+" · "+EndShort((ChronicleEnd)record.End),micro);y+=26;
+                }
+                if(shown==0){GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Пока пусто — эта линия первая.",micro);y+=26;}
             }
-            if(shown==0){GUI.Label(new Rect(r.x+16,y,r.width-32,26),"Пока пусто — эта линия первая.",micro);y+=26;}
-            if(Button(new Rect(r.x+16,r.yMax-52,200,38),"Закрыть","Хроника сохранена локально рядом с миром"))chronicle=false;
+            string closeTip=water.IsFreshColonyOcean?"Хроника этой попытки хранится в памяти":"Хроника сохранена локально рядом с миром";
+            if(Button(new Rect(r.x+16,r.yMax-52,200,38),"Закрыть",closeTip))chronicle=false;
             if(Button(new Rect(r.x+r.width-260,r.yMax-52,244,38),"Сыграть этот seed снова","Мир детерминирован: то же зерно — тот же океан. Превзойди свою прошлую линию")){chronicle=false;water.RestartSameSeed();}
         }
         static string EndShort(ChronicleEnd end)=>end==ChronicleEnd.Extinct?"конец линии":end==ChronicleEnd.PlayerExit?"выход из роли":"—";

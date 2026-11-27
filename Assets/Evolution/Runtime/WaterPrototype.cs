@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Evolution.Runtime
 {
-    public sealed class WaterPrototype : MonoBehaviour
+    public sealed partial class WaterPrototype : MonoBehaviour
     {
         public int ParticleCount=8192,Seed=42;
         public bool OrganismsVisible=true,ShowCurrents,ShowTemperature,FindFood,HudVisible=true;
@@ -38,9 +38,10 @@ namespace Evolution.Runtime
         int selected;bool following=true;SimulationClock clock;double lastSound=double.NegativeInfinity;
         void Start()
         {
-            IRegionArchive archive=PersistRegions?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
+            IRegionArchive archive=PersistRegions&&!IsFreshColonyOcean
+                ?(IRegionArchive)new BinaryRegionArchive(Path.Combine(Application.persistentDataPath,"ExperimentalWater","v1-seed-"+Seed)):new MemoryRegionArchive();
             Ocean=new ChunkOcean(unchecked((uint)Seed),archive,EcologicalScenario.Natural);World=Ocean.World;selected=World.Count>0?Ocean.Nearest(default):-1;
-            selected=ScenicSelection();
+            selected=IsFreshColonyOcean?FreshColonyFounder():ScenicSelection();
             Water=new Suspension(Mathf.Clamp(ParticleCount,512,8192),unchecked((uint)Seed)^0x8913u);
             cameraObject=new GameObject("Volume water camera",typeof(Camera),typeof(AudioListener));Lens=cameraObject.GetComponent<Camera>();
             Lens.clearFlags=CameraClearFlags.SolidColor;Lens.backgroundColor=new Color(.012f,.07f,.15f);
@@ -57,8 +58,9 @@ namespace Evolution.Runtime
             Overview=gameObject.AddComponent<OceanOverview>();Overview.Initialize(this);Observe();
             Milestones=new LifeMilestones();
             Tree=new LineageTree();Chronicle=new LineageChronicle();HuntEffects=new HuntConsequences();Dynasty=new DynastyGoal();
-            RecordsPath=Path.Combine(Application.persistentDataPath,"ExperimentalWater","lineage-records.tsv");
-            Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;PlaySelected();
+            RecordsPath=IsFreshColonyOcean?null:Path.Combine(Application.persistentDataPath,"ExperimentalWater","lineage-records.tsv");
+            Hud=gameObject.AddComponent<FriendlyOceanHud>();Hud.Initialize(this);FindFood=true;
+            if(!IsFreshColonyOcean||!StartColonyChallenge())PlaySelected();
         }
         // Time pace only: scale never changes the tick sequence for a given seed.
         public int TimeScaleIndex=>clock.ScaleIndex;
@@ -86,7 +88,11 @@ namespace Evolution.Runtime
         // Determinism makes the same seed the same ocean: a clean scene restart is the
         // base of the local records. The region archive keeps its memory of the seed.
         // The scene path works in the Editor even without Build Settings entry.
-        public void RestartSameSeed()=>UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        public void RestartSameSeed()
+        {
+            if(IsFreshColonyOcean)StartFreshColonyOcean();
+            else UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path);
+        }
         public void Select(int index)=>Choose(index,true);
         public void Choose(int index,bool zoom) {if(index<0||index>=World.Count||!World.Get(index).Alive)return;Observe();selected=index;following=zoom;if(zoom)Rig.FocusOn(VolumePainter.V(World.Get(index).Position));}
         public int PickOrganism(Vector2 screen)=>painter.Pick(World,Lens.ScreenPointToRay(screen),Mathf.Clamp01((float)clock.Blend),Overview.Active&&!Overview.FullDepth?Overview.SliceIndex:int.MinValue);
@@ -101,8 +107,9 @@ namespace Evolution.Runtime
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F3))clock.Faster();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F4))clock.Slower();
             // Optional gameplay challenge. F5 starts with the currently selected living cell; F6 exits.
-            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5))Challenge.Begin(World,selected);
-            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6))Challenge.Stop();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F5)&&Challenge.Begin(World,selected))ColonyAttempt.Stop();
+            if(!Overview.Typing&&Input.GetKeyDown(KeyCode.F6)){Challenge.Stop();ColonyAttempt.Stop();}
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.F7))StartColonyChallenge();
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.H))HudVisible=!HudVisible;
             if(!Overview.Typing&&Input.GetKeyDown(KeyCode.P))Paused=!Paused;
             if(Input.GetKeyDown(KeyCode.Escape)){if(Hud.CloseOverlay()){}else if(Overview.Typing)Overview.ClearSearchFocus();else if(World.Controlled>=0||Overview.Active)Overview.Back();else Observe();}
@@ -115,8 +122,8 @@ namespace Evolution.Runtime
                     else if(World.Controlled>=0) {var plane=new Plane(-Lens.transform.forward,VolumePainter.V(Selection.Position));var ray=Lens.ScreenPointToRay(Input.mousePosition);if(plane.Raycast(ray,out float along))moveTarget=ray.GetPoint(along);}}
             }
             World.Input=default;World.Boost=World.Attack=false;
-            if(!Overview.Typing&&!modal&&!Paused&&Input.GetKeyDown(KeyCode.R))World.RequestDivision();
-            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Y))FollowOffspring();
+            if(!Overview.Typing&&!modal&&!Paused&&Input.GetKeyDown(KeyCode.R))RequestPlayerDivision();
+            if(!Overview.Typing&&!modal&&Input.GetKeyDown(KeyCode.Y))FollowPlayedOffspring();
             if(World.Controlled>=0&&!Paused&&!over&&!modal&&Application.isFocused) {
                 Vector3 command=Lens.transform.right*Input.GetAxisRaw("Horizontal")+Lens.transform.forward*Input.GetAxisRaw("Vertical");
                 if(Input.GetKey(KeyCode.E))command+=Vector3.up;if(Input.GetKey(KeyCode.Q))command-=Vector3.up;
@@ -132,7 +139,7 @@ namespace Evolution.Runtime
             if(Ocean.Stream(VolumePainter.V(Overview.Active?Rig.Focus:Lens.transform.position))) {World=Ocean.World;selected=identity!=null?Ocean.Find(identity):-1;if(selected<0)following=false;}
             int steps=clock.Advance(Time.unscaledDeltaTime,Paused);
             while(steps>0) {
-                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);Milestones.Record(World,World.Controlled);
+                World.Step();EvolutionPlay.RecordStep(World);Challenge.RecordStep(World);ColonyAttempt.RecordStep(World);Milestones.Record(World,World.Controlled);
                 Tree.Record(World,World.Controlled);Chronicle.Record(World,World.Controlled);
                 HuntEffects.Record(World,Ocean.Survey,Tree);Dynasty.Record(World,World.Controlled,Milestones.ChainComplete,Ocean.Survey,Tree);
                 int count=OrganismsVisible?NearestFlows():0;

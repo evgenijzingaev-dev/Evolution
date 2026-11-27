@@ -8,6 +8,7 @@ namespace Evolution.Volume
     public sealed class BinaryRegionArchive : IRegionArchive,ISurveyArchive,INicheArchive,INicheHistoryArchive
     {
         const int Magic=0x45564f33,Version=6;
+        const float MineralReserveRoundoff=1e-6f;
         readonly string directory;long clock;VolumeDiagnostics diagnostics=new VolumeDiagnostics();
         public BinaryRegionArchive(string directory)
         {
@@ -97,13 +98,23 @@ namespace Evolution.Volume
                 if(a.PlannedConnection<BirthConnection.Natural||a.PlannedConnection>BirthConnection.Retain||a.Biology.Role<CellRole.Generalist||a.Biology.Role>CellRole.Reproduction
                     ||!(a.Biology.Specialization>=0&&a.Biology.Specialization<=1)||a.BondIdentity!=null&&a.BondIdentity!=CellEvolution.ParentIdentity(a))throw new InvalidDataException("Invalid colony record");
             }
-            if(version>=6){a.NicheInitialized=r.ReadBoolean();a.Matter=Stock(r);a.MineralReserve=Stock(r);}
+            if(version>=6) {
+                a.NicheInitialized=r.ReadBoolean();
+                a.Matter=Stock(r);
+                // Earlier growth steps could round the amount spent above the available reserve.
+                a.MineralReserve=Stock(r,MineralReserveRoundoff);
+            }
             return a;
         }
         static Genome ReadGenome(BinaryReader r)=>new Genome {Speed=r.ReadSingle(),Size=r.ReadSingle(),Uptake=r.ReadSingle(),PreferredTemperature=r.ReadSingle(),OrganicSpecialization=r.ReadSingle(),
             Adhesion=r.ReadSingle(),ColonySize=r.ReadSingle(),Branching=r.ReadSingle(),Differentiation=r.ReadSingle(),Transport=r.ReadSingle(),RolePattern=r.ReadSingle(),
             Photosynthesis=r.ReadSingle(),Predation=r.ReadSingle(),Membrane=r.ReadSingle(),Sensitivity=r.ReadSingle(),ThermalTolerance=r.ReadSingle(),ToxinResistance=r.ReadSingle(),EnergyEfficiency=r.ReadSingle()};
-        static float Stock(BinaryReader r){float value=r.ReadSingle();if(float.IsNaN(value)||float.IsInfinity(value)||value<0)throw new InvalidDataException("Invalid niche stock");return value;}
+        static float Stock(BinaryReader r,float negativeRoundoff=0f)
+        {
+            float value=r.ReadSingle();
+            if(float.IsNaN(value)||float.IsInfinity(value)||value<-negativeRoundoff)throw new InvalidDataException("Invalid niche stock");
+            return value<0f?0f:value;
+        }
         static string ReadOptional(BinaryReader r) {string s=r.ReadString();return s.Length==0?null:s;}
     }
 }
