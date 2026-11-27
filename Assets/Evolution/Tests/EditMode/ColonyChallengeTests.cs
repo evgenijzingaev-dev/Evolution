@@ -92,6 +92,58 @@ namespace Evolution.Tests
         }
 
         [Test]
+        public void SeparateOffspringKeepsSettlingWhenItStartsItsOwnPair()
+        {
+            var ocean = new ChunkOcean(42, new MemoryRegionArchive(), EcologicalScenario.Natural);
+            var world = ocean.World;
+            int founder = ocean.Find("-1_1_-2/agent/1");
+            var attempt = new ColonyChallenge();
+            var player = new CellLineagePlay();
+            Assert.IsTrue(attempt.Begin(world, founder));
+            Assert.IsTrue(player.TakeControl(world, founder));
+            Assert.IsTrue(world.PlanConnection(BirthConnection.Separate));
+            string offspringIdentity = null;
+
+            for (int tick = 0; tick < 360; tick++) {
+                var position = world.Get(world.Controlled).Position;
+                ocean.Stream(position + new V3(0, 1, -4));
+                world = ocean.World;
+                int food = 0;
+                while (food < world.FoodCount && world.GetFood(food).Identity != "-1_1_-2/food/1") food++;
+                Assert.Less(food, world.FoodCount);
+                var delta = world.GetFood(food).Position - position;
+                world.Input = delta.Length > .45f ? delta.Unit * Math.Max(.20f, Math.Min(.60f, .15f + .22f * delta.Length)) : default;
+                if (world.Tick == 86) Assert.IsTrue(attempt.RequestDivision(world), world.DivisionBlock(world.Controlled));
+
+                world.Step();
+                player.RecordStep(world);
+                double previousResidence = attempt.ResidenceSeconds;
+                attempt.RecordStep(world);
+                if (offspringIdentity == null && attempt.State == ColonyChallengeState.Settling) {
+                    int offspring = attempt.OffspringToFollow(world, player.Identity);
+                    Assert.GreaterOrEqual(offspring, 0);
+                    Assert.AreEqual(BirthConnection.Separate, attempt.Path);
+                    Assert.Greater(world.Get(world.Controlled).Biology.Budget.Division, 0);
+                    Assert.AreEqual(1, world.OrganismSize(offspring));
+                    offspringIdentity = world.Get(offspring).Identity;
+                }
+
+                if (offspringIdentity == null) continue;
+                int index = ocean.Find(offspringIdentity);
+                Assert.GreaterOrEqual(index, 0);
+                if (world.OrganismSize(index) == 1) continue;
+                Assert.AreEqual(index, world.OrganismRoot(index));
+                Assert.Greater(previousResidence, 10);
+                Assert.AreEqual(previousResidence + VolumeWorld.StepSeconds, attempt.ResidenceSeconds, .0001);
+                Assert.AreEqual(ColonyChallengeState.Settling, attempt.State);
+                Assert.IsTrue(player.FollowOffspring(world, attempt.OffspringToFollow(world, player.Identity)));
+                Assert.AreEqual(offspringIdentity, player.Identity);
+                return;
+            }
+            Assert.Fail("Expected the paid separate offspring to start a pair while settling in Natural seed 42.");
+        }
+
+        [Test]
         public void RetainedPairMustExchangeEnergyDuringItsCreditedWindow()
         {
             var world = Ready(transport: 0);

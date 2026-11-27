@@ -46,11 +46,13 @@ namespace Evolution.Runtime
                         water.StartColonyChallenge();
                     DrawFreshColonyButton(new Rect(r.x + 16, r.y + 219, r.width - 32, 34), "Начать в свежем океане");
                 } else {
+                    bool canFollow = !CapturesCommands && !water.Overview.Typing
+                        && attempt.OffspringToFollow(water.World, water.EvolutionPlay.Identity) >= 0;
+                    string guidance = attempt.Guidance ?? "Удерживай потомка у пищи";
                     GUI.Label(new Rect(r.x + 16, r.y + 105, r.width - 32, 50),
-                        attempt.Guidance ?? "Удерживай потомка у пищи", title);
-                    if (!CapturesCommands && !water.Overview.Typing
-                        && attempt.OffspringToFollow(water.World, water.EvolutionPlay.Identity) >= 0)
-                        GUI.Label(new Rect(r.x + 16, r.y + 187, r.width - 32, 28), "Y — играть за потомка", micro);
+                        canFollow ? "Y — играть за потомка" : guidance, title);
+                    if (canFollow)
+                        GUI.Label(new Rect(r.x + 16, r.y + 187, r.width - 32, 28), guidance, micro);
                 }
                 if (attempt.Path == BirthConnection.Retain) {
                     string exchange = attempt.EnergyReceived > 0

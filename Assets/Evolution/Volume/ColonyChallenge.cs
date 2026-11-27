@@ -101,7 +101,7 @@ namespace Evolution.Volume
                 Lose(ColonyChallengeFailure.BondBroken);
                 return;
             }
-            if (Path == BirthConnection.Separate && world.OrganismSize(offspringIndex) != 1) {
+            if (Path == BirthConnection.Separate && world.OrganismRoot(offspringIndex) != offspringIndex) {
                 ResetResidence("Отдели потомка от группы");
                 return;
             }
