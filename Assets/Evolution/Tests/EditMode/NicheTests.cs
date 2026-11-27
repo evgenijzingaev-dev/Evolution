@@ -51,6 +51,62 @@ namespace Evolution.Tests
                 Assert.AreEqual(ocean.World.Diagnostics.InitialMatter,reloaded.World.Diagnostics.InitialMatter);
             } finally {if(Directory.Exists(folder))Directory.Delete(folder,true);}
         }
+        [Test] public void GrowthCannotSpendMoreMineralsThanTheCellHas()
+        {
+            var agent=Consumer();
+            agent.Alive=true;
+            agent.Identity="mineral-limited-growth";
+            agent.Biology.Genes.Size=1.24239135f;
+            agent.Biology.Energy=Biology.Capacity(agent.Biology.Genes)*.65f;
+            agent.Biology.Growth=.5f;
+            agent.MineralReserve=.0011f;
+            var world=new VolumeWorld(new[]{agent},Array.Empty<FoodCloud>(),Array.Empty<V3>(),0,default,scenario:EcologicalScenario.Natural);
+
+            world.Step();
+
+            var grown=world.Get(0);
+            Assert.Greater(grown.Biology.Growth,agent.Biology.Growth);
+            Assert.AreEqual(0f,grown.MineralReserve);
+            Assert.AreEqual(agent.Matter+agent.MineralReserve,grown.Matter);
+        }
+        [Test] public void VersionSixRestoresARegionWithMineralReserveRoundoff()
+        {
+            string folder=Path.Combine(Path.GetTempPath(),"niche-save-"+Guid.NewGuid());
+            try {
+                var archive=new BinaryRegionArchive(folder);
+                var state=new RegionState {Key=new ChunkKey(-3,1,0),LastTick=365};
+                var agent=Consumer();
+                agent.Identity="-3_1_0/agent/0/b181";
+                agent.Matter=1.08129275f;
+                agent.MineralReserve=-3.7252903e-9f;
+                state.Agents.Add(agent);
+                archive.Save(state);
+
+                Assert.IsTrue(archive.TryLoad(state.Key,out var restored));
+                Assert.AreEqual(state.LastTick,restored.LastTick);
+                agent.MineralReserve=0;
+                Assert.AreEqual(agent,restored.Agents[0]);
+            } finally {if(Directory.Exists(folder))Directory.Delete(folder,true);}
+        }
+        [TestCase(-3.7252903e-9f,0f)]
+        [TestCase(1f,-.0001f)]
+        [TestCase(1f,float.NaN)]
+        [TestCase(1f,float.PositiveInfinity)]
+        public void VersionSixStillRejectsInvalidNicheStocks(float matter,float reserve)
+        {
+            string folder=Path.Combine(Path.GetTempPath(),"niche-save-"+Guid.NewGuid());
+            try {
+                var archive=new BinaryRegionArchive(folder);
+                var state=new RegionState();
+                var agent=Consumer();
+                agent.Matter=matter;
+                agent.MineralReserve=reserve;
+                state.Agents.Add(agent);
+                archive.Save(state);
+
+                Assert.Throws<InvalidDataException>(()=>archive.TryLoad(state.Key,out _));
+            } finally {if(Directory.Exists(folder))Directory.Delete(folder,true);}
+        }
         static VolumeAgent Consumer(float photo=.8f,float organic=.2f,float optimum=23,float tolerance=.3f)
         {
             var g=new Genome {Size=1,Speed=.4f,Uptake=1.2f,Photosynthesis=photo,OrganicSpecialization=organic,PreferredTemperature=optimum,ThermalTolerance=tolerance,EnergyEfficiency=.5f};

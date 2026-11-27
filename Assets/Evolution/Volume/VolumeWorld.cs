@@ -188,7 +188,12 @@ namespace Evolution.Volume
                 c.Energy-=c.Budget.Upkeep+c.Budget.Movement;
                 if(c.Growth<1&&c.Energy>Biology.Capacity(c.Genes)*.35f) {
                     float growth=Math.Min(1-c.Growth,.15f*dt);
-                    if(Niches){growth=Math.Min(growth,a.MineralReserve/(.6f*c.Genes.Size));float matter=growth*.6f*c.Genes.Size;a.MineralReserve-=matter;a.Matter+=matter;}
+                    if(Niches) {
+                        growth=Math.Min(growth,a.MineralReserve/(.6f*c.Genes.Size));
+                        float matter=Math.Min(a.MineralReserve,growth*.6f*c.Genes.Size);
+                        a.MineralReserve-=matter;
+                        a.Matter+=matter;
+                    }
                     c.Growth+=growth;
                     c.Budget.Growth=growth*c.Genes.Size*.8f;c.Energy-=c.Budget.Growth;
                 }
