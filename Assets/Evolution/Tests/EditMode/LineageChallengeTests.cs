@@ -151,7 +151,7 @@ namespace Evolution.Tests
 
         [TestCase(.30f)]
         [TestCase(.60f)]
-        public void MigrationDoesNotInterruptWarningsOrOngoingSettlement(float energyFraction)
+        public void WarningsAndEarlySettlementDoNotHideTheMigrationTarget(float energyFraction)
         {
             var world = MigrationWorld(new[] { MigrationCloud("near-dark", new V3(0, -24, 0)) });
             var challenge = new LineageChallenge();
@@ -167,12 +167,91 @@ namespace Evolution.Tests
             challenge.RecordStep(migrated);
             if (energyFraction < .35f) StringAssert.Contains("голодает", challenge.SettlementHint);
             else Assert.Greater(challenge.CurrentNicheSeconds, 0);
-            Assert.AreEqual(-1, challenge.FindMigrationFood(migrated, out _));
+            Assert.AreEqual(0, challenge.FindMigrationFood(migrated, out _));
 
             var play = new CellLineagePlay();
             Assert.IsTrue(play.TakeControl(migrated, 0));
             Assert.IsTrue(challenge.CanPromptOffspring(migrated, play),
                 "The founder can still hand off control while the child is settling or needs food.");
+        }
+
+        [Test]
+        public void NaturalMigrationTargetStaysVisibleUntilTheDescendantCanFeed()
+        {
+            const string source = "2_0_1/food/0";
+            const string destination = "2_1_1/food/0";
+            var ocean = new ChunkOcean(42, new MemoryRegionArchive(), EcologicalScenario.Natural);
+            var world = ocean.World;
+            int founder = ocean.Find("2_0_1/agent/0");
+            var play = new CellLineagePlay();
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(play.TakeControl(world, founder));
+            Assert.IsTrue(challenge.Begin(world, founder));
+            bool paid = false, departed = false, countedOutsideFood = false, resetOutsideFood = false, fedAtDestination = false;
+
+            int Food(string identity)
+            {
+                for (int i = 0; i < world.FoodCount; i++)
+                    if (world.GetFood(i).Identity == identity) return i;
+                throw new InvalidOperationException("Expected loaded food: " + identity);
+            }
+
+            for (int step = 0; step < 850 && challenge.State != LineageChallengeState.Won; step++) {
+                var agent = world.Get(world.Controlled);
+                float range = Math.Max(2.8f, Math.Min(8, agent.Biology.Genes.Size * 3));
+                ocean.Stream(agent.Position + new V3(0, .258819f * range, -.965926f * range));
+                world = ocean.World;
+                agent = world.Get(world.Controlled);
+                Assert.IsTrue(agent.Alive);
+                if (!paid && world.DivisionBlock(world.Controlled) == null) {
+                    Assert.IsTrue(world.RequestDivision());
+                    world.Input = default;
+                    world.Step();
+                    play.RecordStep(world);
+                    challenge.RecordStep(world);
+                    Assert.Greater(world.Get(world.Controlled).Biology.Budget.Division, 0);
+                    Assert.IsTrue(challenge.CanPromptOffspring(world, play));
+                    Assert.IsTrue(play.FollowOffspring(world));
+                    paid = true;
+                    continue;
+                }
+
+                int target = Food(source);
+                if (paid) {
+                    int marker = challenge.FindMigrationFood(world, out _, out bool needsReserve);
+                    if (!departed && marker >= 0 && !needsReserve) {
+                        Assert.AreEqual(destination, world.GetFood(marker).Identity);
+                        departed = true;
+                    }
+                    if (departed) {
+                        target = Food(destination);
+                        var food = world.GetFood(target);
+                        if ((food.Position - agent.Position).Length > food.Radius) {
+                            countedOutsideFood |= challenge.CurrentNicheSeconds > 0;
+                            resetOutsideFood |= challenge.SettlementHint != null && challenge.CurrentNicheSeconds == 0;
+                            Assert.AreEqual(target, marker, "The marker must remain available on the way to food at t=" + world.Time);
+                            target = marker;
+                        } else if (challenge.CurrentNicheSeconds > 0) {
+                            var budget = agent.Biology.Budget;
+                            float localIntake = budget.Substrate + budget.Organic + budget.Light;
+                            if (localIntake > budget.Upkeep + budget.Movement + budget.Growth) {
+                                Assert.AreEqual(-1, marker, "Actual feeding now covers the descendant's costs.");
+                                fedAtDestination = true;
+                            }
+                        }
+                    }
+                }
+                var delta = world.GetFood(target).Position - agent.Position;
+                world.Input = delta.Length > .15f ? delta.Unit * Math.Min(1, delta.Length * 2) : default;
+                world.Step();
+                play.RecordStep(world);
+                challenge.RecordStep(world);
+            }
+
+            Assert.IsTrue(countedOutsideFood);
+            Assert.IsTrue(resetOutsideFood);
+            Assert.IsTrue(fedAtDestination);
+            Assert.AreEqual(LineageChallengeState.Won, challenge.State);
         }
 
         [Test]

@@ -319,21 +319,21 @@ namespace Evolution.Runtime
                     hint=outcome!=null?outcome+"\nF5 — новая попытка · F6 — выход":
                         "Рождений: "+challenge.VerifiedBirths+" · Живых: "+challenge.LivingKnown+"\nСтарт: "+challenge.FounderNicheName+" · Новая ниша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
                     if(routeFood>=0) {
+                        var destination=water.World.GetFood(routeFood).Position;
+                        float rise=destination.Y-water.World.Get(water.SelectedIndex).Position.Y;
+                        string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
+                        var offset=destination-VolumePainter.V(water.Rig.Focus);
+                        bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
+                        string route=offMap?"Ромб у края карты":"Плыви к ромбу";
                         if (migrationNeedsReserve) {
-                            task = "На переход может не хватить энергии";
-                            string first = readout.Food >= 0 && readout.Food != routeFood
+                            if (challenge.SettlementHint == null) task="На переход может не хватить энергии";
+                            route = readout.Food >= 0 && readout.Food != routeFood
                                 && readout.FoodRate > readout.Need
-                                ? "Сначала поешь поблизости" : "Сначала найди пищу рядом";
-                            hint = first + "\nРомб — будущая цель";
-                        } else {
-                            var destination=water.World.GetFood(routeFood).Position;
-                            float rise=destination.Y-water.World.Get(water.SelectedIndex).Position.Y;
-                            string direction=rise>1?" · выше (E)":rise< -1?" · ниже (Q)":"";
-                            var offset=destination-VolumePainter.V(water.Rig.Focus);
-                            bool offMap=Mathf.Abs(offset.X)>mapRange||Mathf.Abs(offset.Z)>mapRange;
+                                ? "Поешь, потом к ромбу" : "Ищи еду, потом к цели";
+                        } else if (challenge.SettlementHint == null) {
                             task="Новая ниша: "+LineageChallenge.NicheName(migrationNiche);
-                            hint="Пищи может хватить"+direction+"\n"+(offMap?"Цель за картой · плыви к ромбу":"Плыви к ромбу · F6 — выход");
                         }
+                        hint=route+direction+"\nНиша: "+LineageChallenge.DisplayNicheSeconds(challenge.CurrentNicheSeconds)+" / 15 сек · F6 — выход";
                     }
                     else if (Event.current.type == EventType.Repaint && !CapturesCommands && !water.Overview.Typing
                         && challenge.CanPromptOffspring(water.World, water.EvolutionPlay)) {

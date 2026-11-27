@@ -330,9 +330,18 @@ namespace Evolution.Volume
         }
         public bool CanGuideMigration(VolumeWorld world)
         {
-            if (State != LineageChallengeState.OffspringAlive || CurrentNicheSeconds > 0 || SettlementHint != null
+            if (State != LineageChallengeState.OffspringAlive
                 || world == null || !world.Niches || world.Controlled < 0 || world.Controlled >= world.Count) return false;
-            return IsLivingDescendant(world.Get(world.Controlled));
+            var descendant = world.Get(world.Controlled);
+            if (!IsLivingDescendant(descendant)) return false;
+            if (recordedTick == world.Tick && descendant.RenderTime == (world.Tick - 1) * (double)VolumeWorld.StepSeconds
+                && nicheResidence.ContainsKey(descendant.Identity)) {
+                // Crossing into a niche starts the clock, but only recent local feeding can replace the route.
+                var budget = descendant.Biology.Budget;
+                float localIntake = budget.Substrate + budget.Organic + budget.Light;
+                if (budget.Upkeep > 0 && localIntake >= budget.Upkeep + budget.Movement + budget.Growth) return false;
+            }
+            return true;
         }
 
         bool IsLivingDescendant(VolumeAgent agent)
