@@ -1,3 +1,4 @@
+using System;
 using Evolution.Core;
 using Evolution.Volume;
 using NUnit.Framework;
@@ -6,6 +7,404 @@ namespace Evolution.Tests
 {
     public sealed class LineageChallengeTests
     {
+        static FoodCloud MigrationCloud(string identity, V3 position, float substrate = 40) => new FoodCloud {
+            Identity = identity, Position = position, Radius = 2, Substrate = substrate,
+            Oxygen = 70, Nutrients = 20, NicheInitialized = true
+        };
+
+        static VolumeWorld MigrationWorld(FoodCloud[] food, V3? start = null)
+        {
+            var founder = new VolumeAgent {
+                Alive = true, Identity = "founder", Position = start ?? new V3(0, 24, 0), Direction = new V3(1, 0, 0),
+                NicheInitialized = true, Matter = 1, MineralReserve = .75f,
+                Biology = new Cell {
+                    Id = 1, LineageId = 1, Energy = 24, Integrity = 1, Growth = 1, Age = 100,
+                    Genes = new Genome {
+                        Size = 1, Speed = .7f, Uptake = 1.6f, PreferredTemperature = 17, ThermalTolerance = .9f
+                    }
+                }
+            };
+            var stranger = founder;
+            stranger.Identity = "stranger";
+            stranger.Position = new V3(10, 24, 0);
+            stranger.Biology.Id = stranger.Biology.LineageId = 2;
+            stranger.Biology.Energy = 12;
+            return new VolumeWorld(new[] { founder, stranger }, food, Array.Empty<V3>(), 0, default,
+                scenario: EcologicalScenario.Natural) { Controlled = 0, NutrientSupply = false };
+        }
+
+        static void DivideAndFollow(VolumeWorld world, LineageChallenge challenge)
+        {
+            var play = new CellLineagePlay();
+            Assert.IsTrue(play.TakeControl(world, 0));
+            Assert.IsTrue(world.RequestDivision(), world.DivisionBlock(0));
+            world.Step();
+            challenge.RecordStep(world);
+            Assert.AreEqual(1, challenge.VerifiedBirths);
+            Assert.IsTrue(play.FollowOffspring(world));
+        }
+
+        [Test]
+        public void MigrationTargetsNearestViableFoodInARealForeignNiche()
+        {
+            var world = MigrationWorld(new[] {
+                MigrationCloud("founder-niche", new V3(3, 24, 0)),
+                MigrationCloud("transition", new V3(0, 10, 0)),
+                MigrationCloud("depleted-vent", new V3(12, -18, -8), 0),
+                MigrationCloud("far-dark", new V3(40, -25, 0)),
+                MigrationCloud("near-dark", new V3(0, -24, 0))
+            });
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.AreEqual(1, challenge.FounderNicheKind);
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+            DivideAndFollow(world, challenge);
+
+            var descendant = world.Get(world.Controlled);
+            var cloud = world.GetFood(4);
+            long tick = world.Tick;
+            Assert.AreEqual(4, challenge.FindMigrationFood(world, out int kind));
+            Assert.AreEqual(2, kind);
+            Assert.AreEqual(descendant, world.Get(world.Controlled));
+            Assert.AreEqual(cloud, world.GetFood(4));
+            Assert.AreEqual(tick, world.Tick);
+
+            world.Controlled = 1;
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+            world.Controlled = 0;
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+            world.Controlled = 2;
+            challenge.Stop();
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+        }
+
+        [Test]
+        public void MigrationGivesNoTargetWhenOnlyForeignFoodIsInsufficient()
+        {
+            var world = MigrationWorld(new[] {
+                MigrationCloud("founder-niche", new V3(3, 24, 0)),
+                MigrationCloud("weak-dark", new V3(0, -24, 0), .05f)
+            });
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            Assert.Greater(world.FoodPotential(1, world.Get(world.Controlled).Biology), 0);
+            Assert.IsTrue(challenge.CanGuideMigration(world));
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+        }
+
+        [Test]
+        public void MigrationReserveWarningAccountsForTheSwimAndClearsWithEnoughEnergy()
+        {
+            var world = MigrationWorld(Array.Empty<FoodCloud>());
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            var descendant = world.Get(world.Controlled);
+            float upkeep = PlayerReadout.Read(world, world.Controlled).Need;
+            var nearby = MigrationCloud("nearby", descendant.Position + new V3(2.1f, 0, 0));
+            var distant = MigrationCloud("distant", descendant.Position + new V3(10, 0, 0));
+
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(descendant, nearby, upkeep));
+            Assert.IsTrue(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
+            descendant.Biology.Energy = Biology.Capacity(descendant.Biology.Genes);
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(descendant, distant, upkeep));
+        }
+
+        [Test]
+        public void MigrationPrefersAReachableFoodCloudAndKeepsAFutureTargetWhenNeeded()
+        {
+            var nearer = MigrationCloud("nearer", new V3(3.2f, 16.5f, 0));
+            nearer.Radius = 2.2f;
+            var wider = MigrationCloud("wider", new V3(3.65f, 17, 0));
+            wider.Radius = 3.5f;
+            var world = MigrationWorld(new[] { nearer, wider }, new V3(0, 15, 0));
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.AreEqual(0, challenge.FounderNicheKind);
+            DivideAndFollow(world, challenge);
+
+            VolumeWorld WithReserve(float fraction)
+            {
+                var descendant = world.Get(world.Controlled);
+                descendant.Biology.Energy = Biology.Capacity(descendant.Biology.Genes) * fraction;
+                return new VolumeWorld(new[] { world.Get(0), descendant }, new[] { world.GetFood(0), world.GetFood(1) },
+                    Array.Empty<V3>(), world.Tick, default, scenario: EcologicalScenario.Natural) { Controlled = 1 };
+            }
+
+            var limited = WithReserve(.375f);
+            var swimmer = limited.Get(limited.Controlled);
+            float upkeep = PlayerReadout.Read(limited, limited.Controlled).Need;
+            Assert.Less((limited.GetFood(0).Position - swimmer.Position).Length,
+                (limited.GetFood(1).Position - swimmer.Position).Length);
+            Assert.IsTrue(LineageChallenge.MigrationNeedsReserve(swimmer, limited.GetFood(0), upkeep));
+            Assert.IsFalse(LineageChallenge.MigrationNeedsReserve(swimmer, limited.GetFood(1), upkeep));
+            Assert.AreEqual(1, challenge.FindMigrationFood(limited, out int niche, out bool needsReserve, upkeep));
+            Assert.AreEqual(1, niche);
+            Assert.IsFalse(needsReserve);
+
+            Assert.AreEqual(0, challenge.FindMigrationFood(WithReserve(.35f), out _, out needsReserve));
+            Assert.IsTrue(needsReserve);
+            Assert.AreEqual(0, challenge.FindMigrationFood(WithReserve(.60f), out _, out needsReserve));
+            Assert.IsFalse(needsReserve);
+        }
+
+        [TestCase(.30f)]
+        [TestCase(.60f)]
+        [TestCase(1f)]
+        public void WarningsAndEarlySettlementDoNotHideTheMigrationTarget(float energyFraction)
+        {
+            var world = MigrationWorld(new[] { MigrationCloud("near-dark", new V3(0, -24, 0)) });
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            Assert.AreEqual(0, challenge.FindMigrationFood(world, out _));
+
+            var child = world.Get(world.Controlled);
+            child.Position = world.GetFood(0).Position;
+            child.Biology.Energy = Biology.Capacity(child.Biology.Genes) * energyFraction;
+            var migrated = new VolumeWorld(new[] { world.Get(0), world.Get(1), child }, new[] { world.GetFood(0) },
+                Array.Empty<V3>(), world.Tick + 1, default, scenario: EcologicalScenario.Natural) { Controlled = 2 };
+            challenge.RecordStep(migrated);
+            if (energyFraction < .35f) StringAssert.Contains("голодает", challenge.SettlementHint);
+            else Assert.Greater(challenge.CurrentNicheSeconds, 0);
+            Assert.AreEqual(0, challenge.FindMigrationFood(migrated, out _));
+
+            var play = new CellLineagePlay();
+            Assert.IsTrue(play.TakeControl(migrated, 0));
+            Assert.IsTrue(challenge.CanPromptOffspring(migrated, play),
+                "The founder can still hand off control while the child is settling or needs food.");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MigrationKeepsARecentlyValidCloudAcrossABriefNicheBoundary(bool deplete)
+        {
+            var cloud = MigrationCloud("drifting", new V3(0, -24, 0));
+            var world = MigrationWorld(new[] { cloud }, new V3(0, 10, 0));
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            Assert.AreEqual(0, challenge.UpdateMigrationFood(world, out int initialNiche, out _));
+            Assert.AreNotEqual(0, initialNiche);
+
+            var child = world.Get(world.Controlled);
+            cloud.Position = new V3(0, 10, 0);
+            VolumeWorld Crossing(long offset, FoodCloud food) => new VolumeWorld(
+                new[] { world.Get(0), child }, new[] { MigrationCloud("empty", food.Position, 0), food },
+                Array.Empty<V3>(), world.Tick + offset, default, scenario: EcologicalScenario.Natural) { Controlled = 1 };
+            var inTransit = Crossing(10, cloud);
+            Assert.AreEqual(0, LineageChallenge.NicheKind(inTransit.EnvironmentAt(cloud.Position)));
+            Assert.AreEqual(-1, challenge.FindMigrationFood(inTransit, out _), "A new route cannot start in transitional water.");
+            Assert.AreEqual(1, challenge.UpdateMigrationFood(inTransit, out int heldNiche, out _));
+            Assert.AreEqual(initialNiche, heldNiche);
+
+            if (deplete) cloud.Substrate = 0;
+            Assert.AreEqual(-1, challenge.UpdateMigrationFood(Crossing(deplete ? 11 : 65, cloud), out _, out _),
+                "A depleted or persistently transitional cloud must stop guiding the player.");
+        }
+
+        [Test]
+        public void NaturalMigrationTargetStaysVisibleUntilTheDescendantCanFeed()
+        {
+            const string source = "2_0_1/food/0";
+            const string destination = "2_1_1/food/0";
+            var ocean = new ChunkOcean(42, new MemoryRegionArchive(), EcologicalScenario.Natural);
+            var world = ocean.World;
+            int founder = ocean.Find("2_0_1/agent/0");
+            var play = new CellLineagePlay();
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(play.TakeControl(world, founder));
+            Assert.IsTrue(challenge.Begin(world, founder));
+            bool paid = false, departed = false, countedOutsideFood = false, resetOutsideFood = false, fedAtDestination = false;
+
+            int Food(string identity)
+            {
+                for (int i = 0; i < world.FoodCount; i++)
+                    if (world.GetFood(i).Identity == identity) return i;
+                throw new InvalidOperationException("Expected loaded food: " + identity);
+            }
+
+            for (int step = 0; step < 850 && challenge.State != LineageChallengeState.Won; step++) {
+                var agent = world.Get(world.Controlled);
+                float range = Math.Max(2.8f, Math.Min(8, agent.Biology.Genes.Size * 3));
+                ocean.Stream(agent.Position + new V3(0, .258819f * range, -.965926f * range));
+                world = ocean.World;
+                agent = world.Get(world.Controlled);
+                Assert.IsTrue(agent.Alive);
+                if (!paid && world.DivisionBlock(world.Controlled) == null) {
+                    Assert.IsTrue(world.RequestDivision());
+                    world.Input = default;
+                    world.Step();
+                    play.RecordStep(world);
+                    challenge.RecordStep(world);
+                    Assert.Greater(world.Get(world.Controlled).Biology.Budget.Division, 0);
+                    Assert.IsTrue(challenge.CanPromptOffspring(world, play));
+                    Assert.IsTrue(play.FollowOffspring(world));
+                    paid = true;
+                    continue;
+                }
+
+                int target = Food(source);
+                if (paid) {
+                    int marker = challenge.FindMigrationFood(world, out _, out bool needsReserve);
+                    if (!departed && marker >= 0 && !needsReserve) {
+                        Assert.AreEqual(destination, world.GetFood(marker).Identity);
+                        departed = true;
+                    }
+                    if (departed) {
+                        target = Food(destination);
+                        var food = world.GetFood(target);
+                        float distance = (food.Position - agent.Position).Length;
+                        if (distance > food.Radius) {
+                            countedOutsideFood |= challenge.CurrentNicheSeconds > 0;
+                            resetOutsideFood |= challenge.SettlementHint != null && challenge.CurrentNicheSeconds == 0;
+                            Assert.AreEqual(target, marker, "The marker must remain available on the way to food at t=" + world.Time);
+                            target = marker;
+                        } else if (challenge.CurrentNicheSeconds > 0) {
+                            var budget = agent.Biology.Budget;
+                            float localIntake = budget.Substrate + budget.Organic + budget.Light;
+                            if (localIntake > budget.Upkeep + budget.Movement + budget.Growth) {
+                                Assert.AreEqual(-1, marker, "Actual feeding now covers the descendant's costs.");
+                                fedAtDestination = true;
+                            }
+                            if (fedAtDestination && distance < .2f)
+                                Assert.AreEqual(-1, marker, "The route must stay hidden while the descendant feeds at the center at t=" + world.Time);
+                        }
+                    }
+                }
+                var delta = world.GetFood(target).Position - agent.Position;
+                world.Input = delta.Length > .15f ? delta.Unit * Math.Min(1, delta.Length * 2) : default;
+                world.Step();
+                play.RecordStep(world);
+                challenge.RecordStep(world);
+            }
+
+            Assert.IsTrue(countedOutsideFood);
+            Assert.IsTrue(resetOutsideFood);
+            Assert.IsTrue(fedAtDestination);
+            Assert.AreEqual(LineageChallengeState.Won, challenge.State);
+        }
+
+        [Test]
+        public void PaidDivisionAndGuidedMigrationCanWinInTheRealVolumeWorld()
+        {
+            var genes = new Genome {
+                Size = 1, Speed = 1.7f, Uptake = 2, Photosynthesis = .9f,
+                OrganicSpecialization = .6f, PreferredTemperature = 22,
+                ThermalTolerance = .8f, EnergyEfficiency = .9f
+            };
+            var founder = new VolumeAgent {
+                Identity = "founder", Alive = true, Position = new V3(0, 15, 0), Direction = new V3(0, 1, 0),
+                NicheInitialized = true, Matter = .4f, MineralReserve = .75f,
+                Biology = new Cell {
+                    Id = 1, LineageId = 1, Genes = genes, Energy = Biology.Capacity(genes),
+                    Age = 100, Integrity = 1, Growth = 1
+                }
+            };
+            var food = new FoodCloud {
+                Identity = "food", Position = new V3(0, 23.5f, 0), Radius = 6, Substrate = 35,
+                Organic = 55, Nutrients = 10, Dissolved = 30, Oxygen = 10, NicheInitialized = true
+            };
+            var world = new VolumeWorld(new[] { founder }, new[] { food }, Array.Empty<V3>(), 0, default,
+                scenario: EcologicalScenario.Natural);
+            var play = new CellLineagePlay();
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(play.TakeControl(world, 0));
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.AreEqual(0, challenge.FounderNicheKind);
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+            Assert.IsTrue(world.RequestDivision(), world.DivisionBlock(0));
+            world.Step();
+            challenge.RecordStep(world);
+            Assert.Greater(world.Get(0).Biology.Budget.Division, 0);
+            Assert.AreEqual(1, challenge.VerifiedBirths);
+            Assert.IsTrue(challenge.CanPromptOffspring(world, play));
+            int descendantIndex = play.PeekOffspring(world);
+            Assert.AreEqual(0, world.Controlled);
+            Assert.IsTrue(play.FollowOffspring(world));
+            Assert.AreEqual(descendantIndex, world.Controlled);
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+            int foodIndex = challenge.FindMigrationFood(world, out int kind);
+            Assert.AreEqual(0, foodIndex);
+            Assert.AreEqual(1, kind);
+
+            for (int i = 0; i < 680 && challenge.State != LineageChallengeState.Won; i++) {
+                var descendant = world.Get(descendantIndex);
+                Assert.IsTrue(descendant.Alive);
+                var toFood = world.GetFood(foodIndex).Position - descendant.Position;
+                world.Input = toFood.Length > 1.2f ? toFood.Unit : default;
+                world.Step();
+                challenge.RecordStep(world);
+                if (challenge.CurrentNicheSeconds < LineageChallenge.RequiredNicheSeconds)
+                    Assert.AreNotEqual(LineageChallengeState.Won, challenge.State);
+            }
+
+            Assert.AreEqual(LineageChallengeState.Won, challenge.State);
+            Assert.GreaterOrEqual(challenge.CurrentNicheSeconds, LineageChallenge.RequiredNicheSeconds);
+            var survivor = world.Get(descendantIndex);
+            Assert.AreEqual(kind, LineageChallenge.NicheKind(world.EnvironmentAt(survivor.Position)));
+            Assert.Greater(survivor.Biology.AssimilatedEnergy, 0);
+            Assert.AreEqual(-1, challenge.FindMigrationFood(world, out _));
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+        }
+
+        [Test]
+        public void HandoffPromptMatchesTheNextLivingChildOfTheCurrentAttempt()
+        {
+            var world = MigrationWorld(Array.Empty<FoodCloud>());
+            Assert.IsTrue(world.RequestDivision());
+            world.Step();
+            var olderChild = world.Get(2);
+            var founder = world.Get(0);
+            founder.MineralReserve = .75f;
+            founder.Biology.Energy = Biology.Capacity(founder.Biology.Genes);
+            world = new VolumeWorld(new[] { founder, world.Get(1), olderChild }, Array.Empty<FoodCloud>(),
+                Array.Empty<V3>(), world.Tick + 41, default, scenario: EcologicalScenario.Natural);
+
+            var play = new CellLineagePlay();
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(play.TakeControl(world, 0));
+            Assert.IsTrue(challenge.Begin(world, 0));
+            Assert.AreEqual(2, play.PeekOffspring(world));
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+            Assert.IsTrue(world.RequestDivision(), world.DivisionBlock(0));
+            world.Step();
+            challenge.RecordStep(world);
+            Assert.AreEqual(1, challenge.VerifiedBirths);
+            Assert.IsTrue(challenge.CanPromptOffspring(world, play));
+            Assert.IsTrue(challenge.CanPromptOffspring(world, play), "Observing the hint must not advance the Y cycle.");
+            Assert.IsTrue(play.FollowOffspring(world));
+            int youngerIndex = world.Controlled;
+            Assert.AreNotEqual(2, youngerIndex);
+
+            Assert.IsTrue(play.TakeControl(world, 1));
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+            Assert.IsTrue(play.TakeControl(world, 0));
+            Assert.AreEqual(2, play.PeekOffspring(world));
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play), "The next Y leads to a child born before this attempt.");
+            Assert.IsTrue(play.FollowOffspring(world));
+            Assert.AreEqual(2, world.Controlled);
+            Assert.IsTrue(play.TakeControl(world, 0));
+
+            var deadFounder = world.Get(0);
+            deadFounder.Alive = false;
+            var afterDeath = new VolumeWorld(new[] { deadFounder, olderChild, world.Get(youngerIndex) },
+                Array.Empty<FoodCloud>(), Array.Empty<V3>(), world.Tick + 1, default, scenario: EcologicalScenario.Natural);
+            play.RecordStep(afterDeath);
+            challenge.RecordStep(afterDeath);
+            Assert.IsTrue(challenge.CanPromptOffspring(afterDeath, play));
+            Assert.AreEqual(-1, afterDeath.Controlled);
+
+            var unloaded = new VolumeWorld(new[] { deadFounder }, Array.Empty<FoodCloud>(),
+                Array.Empty<V3>(), afterDeath.Tick + 1, default, scenario: EcologicalScenario.Natural);
+            challenge.RecordStep(unloaded);
+            Assert.AreEqual(LineageChallengeState.Unobserved, challenge.State);
+            Assert.IsFalse(challenge.CanPromptOffspring(unloaded, play));
+            Assert.IsFalse(play.FollowOffspring(unloaded));
+            Assert.AreEqual(-1, unloaded.Controlled);
+        }
+
         [Test]
         public void RequestedPaidDivisionCreatesOnlyARealVerifiedDescendant()
         {
@@ -57,9 +456,14 @@ namespace Evolution.Tests
             };
             var world = new VolumeWorld(1, 124, new[] { founder }) { Controlled = 0 };
             var challenge = new LineageChallenge();
+            var play = new CellLineagePlay();
+            Assert.IsTrue(play.TakeControl(world, 0));
             Assert.IsTrue(challenge.Begin(world, 0));
             Assert.IsNotNull(world.DivisionBlock(0), "Insufficient energy must block division.");
             Assert.IsFalse(world.RequestDivision(), "A blocked division must not queue a free daughter.");
+            Assert.IsFalse(challenge.CanPromptOffspring(world, play));
+            Assert.IsFalse(play.FollowOffspring(world));
+            Assert.AreEqual(0, world.Controlled);
             world.Step();
             challenge.RecordStep(world);
             Assert.AreEqual(0, world.Births);
