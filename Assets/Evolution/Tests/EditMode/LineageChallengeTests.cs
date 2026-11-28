@@ -151,6 +151,7 @@ namespace Evolution.Tests
 
         [TestCase(.30f)]
         [TestCase(.60f)]
+        [TestCase(1f)]
         public void WarningsAndEarlySettlementDoNotHideTheMigrationTarget(float energyFraction)
         {
             var world = MigrationWorld(new[] { MigrationCloud("near-dark", new V3(0, -24, 0)) });
@@ -173,6 +174,34 @@ namespace Evolution.Tests
             Assert.IsTrue(play.TakeControl(migrated, 0));
             Assert.IsTrue(challenge.CanPromptOffspring(migrated, play),
                 "The founder can still hand off control while the child is settling or needs food.");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MigrationKeepsARecentlyValidCloudAcrossABriefNicheBoundary(bool deplete)
+        {
+            var cloud = MigrationCloud("drifting", new V3(0, -24, 0));
+            var world = MigrationWorld(new[] { cloud }, new V3(0, 10, 0));
+            var challenge = new LineageChallenge();
+            Assert.IsTrue(challenge.Begin(world, 0));
+            DivideAndFollow(world, challenge);
+            Assert.AreEqual(0, challenge.UpdateMigrationFood(world, out int initialNiche, out _));
+            Assert.AreNotEqual(0, initialNiche);
+
+            var child = world.Get(world.Controlled);
+            cloud.Position = new V3(0, 10, 0);
+            VolumeWorld Crossing(long offset, FoodCloud food) => new VolumeWorld(
+                new[] { world.Get(0), child }, new[] { MigrationCloud("empty", food.Position, 0), food },
+                Array.Empty<V3>(), world.Tick + offset, default, scenario: EcologicalScenario.Natural) { Controlled = 1 };
+            var inTransit = Crossing(10, cloud);
+            Assert.AreEqual(0, LineageChallenge.NicheKind(inTransit.EnvironmentAt(cloud.Position)));
+            Assert.AreEqual(-1, challenge.FindMigrationFood(inTransit, out _), "A new route cannot start in transitional water.");
+            Assert.AreEqual(1, challenge.UpdateMigrationFood(inTransit, out int heldNiche, out _));
+            Assert.AreEqual(initialNiche, heldNiche);
+
+            if (deplete) cloud.Substrate = 0;
+            Assert.AreEqual(-1, challenge.UpdateMigrationFood(Crossing(deplete ? 11 : 65, cloud), out _, out _),
+                "A depleted or persistently transitional cloud must stop guiding the player.");
         }
 
         [Test]
@@ -226,7 +255,8 @@ namespace Evolution.Tests
                     if (departed) {
                         target = Food(destination);
                         var food = world.GetFood(target);
-                        if ((food.Position - agent.Position).Length > food.Radius) {
+                        float distance = (food.Position - agent.Position).Length;
+                        if (distance > food.Radius) {
                             countedOutsideFood |= challenge.CurrentNicheSeconds > 0;
                             resetOutsideFood |= challenge.SettlementHint != null && challenge.CurrentNicheSeconds == 0;
                             Assert.AreEqual(target, marker, "The marker must remain available on the way to food at t=" + world.Time);
@@ -238,6 +268,8 @@ namespace Evolution.Tests
                                 Assert.AreEqual(-1, marker, "Actual feeding now covers the descendant's costs.");
                                 fedAtDestination = true;
                             }
+                            if (fedAtDestination && distance < .2f)
+                                Assert.AreEqual(-1, marker, "The route must stay hidden while the descendant feeds at the center at t=" + world.Time);
                         }
                     }
                 }

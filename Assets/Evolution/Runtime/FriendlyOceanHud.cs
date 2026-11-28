@@ -128,7 +128,7 @@ namespace Evolution.Runtime
             if(readWorld==water.World&&readIndex==water.SelectedIndex&&Time.unscaledTime<nextRead)return;
             nextRead=Time.unscaledTime+.5f;readWorld=water.World;readIndex=water.SelectedIndex;
             readout=PlayerReadout.Read(water.World,water.SelectedIndex);
-            migrationFood=water.Challenge.FindMigrationFood(water.World,out migrationNiche,out migrationNeedsReserve,readout.Need);
+            migrationFood=water.Challenge.UpdateMigrationFood(water.World,out migrationNiche,out migrationNeedsReserve,readout.Need);
             water.Overview.Refresh();living=0;lines.Clear();busiest=foodRegion=dangerRegion=null;
             foreach(var a in water.Overview.Survey.Agents)if(InLayer(a.Position)){living++;lines.Add(a.Lineage);}
             foreach(var r in water.Overview.Survey.Regions)if(r.Loaded&&InLayer(r.Center)){

@@ -176,6 +176,10 @@ namespace Evolution.Volume
         int founderNiche;
         public const double RequiredNicheSeconds = 15;
         const float RequiredNicheEnergy = .35f;
+        const double MigrationBoundaryGraceSeconds = 3;
+        string migrationDescendant, migrationFood;
+        int migrationFoodNiche;
+        long migrationFoodTick;
         // HUD must not round 14.6 seconds to a misleading 15/15 before victory.
         public static int DisplayNicheSeconds(double seconds)
             => double.IsNaN(seconds) || seconds <= 0 ? 0
@@ -280,6 +284,7 @@ namespace Evolution.Volume
             nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             SettlementHint = null;
+            migrationFood = null;
             founderNiche = NicheKind(world.EnvironmentAt(a.Position));
             members.Add(a.Identity, new Member {
                 Id = a.Biology.Id, LineageId = a.Biology.LineageId,
@@ -303,6 +308,7 @@ namespace Evolution.Volume
             nicheEntryEnergy.Clear();
             BestNicheSeconds = CurrentNicheSeconds = 0;
             SettlementHint = null;
+            migrationFood = null;
             FounderIdentity = null;
             VerifiedBirths = LivingKnown = 0;
             State = LineageChallengeState.Inactive;
@@ -339,7 +345,11 @@ namespace Evolution.Volume
                 // Crossing into a niche starts the clock, but only recent local feeding can replace the route.
                 var budget = descendant.Biology.Budget;
                 float localIntake = budget.Substrate + budget.Organic + budget.Light;
-                if (budget.Upkeep > 0 && localIntake >= budget.Upkeep + budget.Movement + budget.Growth) return false;
+                float cost = budget.Upkeep + budget.Movement + budget.Growth;
+                float capacity = Biology.Capacity(descendant.Biology.Genes);
+                // Feeding is capped before upkeep is charged. Allow float roundoff at the cap.
+                bool filledReserve = localIntake >= capacity - budget.Start - capacity * 1e-6f;
+                if (budget.Upkeep > 0 && localIntake > 0 && (localIntake >= cost || filledReserve)) return false;
             }
             return true;
         }
@@ -362,14 +372,27 @@ namespace Evolution.Volume
             => FindMigrationFood(world, out niche, out _);
 
         public int FindMigrationFood(VolumeWorld world, out int niche, out bool needsReserve, float? currentUpkeep = null)
+            => FindMigrationFood(world, out niche, out needsReserve, currentUpkeep, rememberTarget: false);
+
+        public int UpdateMigrationFood(VolumeWorld world, out int niche, out bool needsReserve, float? currentUpkeep = null)
+            => FindMigrationFood(world, out niche, out needsReserve, currentUpkeep, rememberTarget: true);
+
+        int FindMigrationFood(VolumeWorld world, out int niche, out bool needsReserve, float? currentUpkeep, bool rememberTarget)
         {
             niche = 0;
             needsReserve = false;
-            if (!CanGuideMigration(world)) return -1;
+            if (!CanGuideMigration(world)) {
+                if (rememberTarget) migrationFood = null;
+                return -1;
+            }
             var agent = world.Get(world.Controlled);
+            long ticksSinceConfirmation = world.Tick - migrationFoodTick;
+            bool allowBoundaryGrace = rememberTarget && migrationFood != null && agent.Identity == migrationDescendant
+                && ticksSinceConfirmation >= 0 && ticksSinceConfirmation * (double)VolumeWorld.StepSeconds <= MigrationBoundaryGraceSeconds;
             float travelUpkeep = currentUpkeep ?? PlayerReadout.Read(world, world.Controlled).Need;
             int best = -1;
             float bestDistance = float.PositiveInfinity;
+            bool bestInTransit = false;
             for (int i = 0; i < world.FoodCount; i++) {
                 var food = world.GetFood(i);
                 float distance = (food.Position - agent.Position).Sqr;
@@ -381,14 +404,23 @@ namespace Evolution.Volume
                 if (!(intake > 0)) continue;
                 var environment = world.EnvironmentAt(food.Position);
                 int kind = NicheKind(environment);
-                if (kind == 0 || kind == founderNiche) continue;
+                // A drifting cloud can briefly cross a boundary without losing its food.
+                bool inTransit = kind == 0 && allowBoundaryGrace && food.Identity == migrationFood;
+                if (!inTransit && (kind == 0 || kind == founderNiche)) continue;
                 float upkeep = Multicellularity.Cost(agent.Biology, environment.Temperature)
                     + NicheMetabolism.Stress(agent.Biology, environment);
                 if (!(intake > upkeep)) continue;
                 best = i;
                 bestDistance = distance;
-                niche = kind;
+                bestInTransit = inTransit;
+                niche = inTransit ? migrationFoodNiche : kind;
                 needsReserve = needsMoreEnergy;
+            }
+            if (rememberTarget && !bestInTransit) {
+                migrationFood = best >= 0 ? world.GetFood(best).Identity : null;
+                migrationDescendant = agent.Identity;
+                migrationFoodNiche = niche;
+                migrationFoodTick = world.Tick;
             }
             return best;
         }
